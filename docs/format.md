@@ -71,7 +71,6 @@ Each metadata item header is two bytes: header id (6 bits), length (10 bits)
 
 1. type (4 bits) -- except F which means "magic"
 2. length of metadata block (12 bits)
-3. number of data blocks, or -1="unknown" (16 bits)
 
 ## Data header
 
@@ -79,7 +78,7 @@ Single byte:
 1. type field (2 bits: 00=end, 01=data, 10=container, 11=reserved)
 2. is this the last chunk? (1 bit, 1 = yes)
 
-For type=01, zint size follows. Byte 00 is the end of an "unknown length" stream of data blocks.
+For type=01, zint size follows. Byte 00 is the end of a stream of data blocks.
 
 ## Magic header
 
@@ -99,14 +98,14 @@ A magic header can appear anywhere and refers to the rest of the stream. Current
 Two files, named "hello" and "smile".
 
 - Magic header (8 bytes)
-- Bottle type 1 (file: directory): 10 26 00 02 - metadata length = 38
+- Bottle type 1 (file: directory): 10 26 - metadata length = 38
   - Metadata:
     - filename "." (04 01, '.')
     - created 1406011886_693_000_000, or: 14 09, 80 c6 c0 82 c9 8b ca c1 13
     - similarly modified & accessed, 11 bytes each
     - is folder: 28 00
-  - Data #1: a0 (container) 3c (60 bytes)
-    - Bottle type 1 (file): 10 31 00 01 - metadata length = 49
+  - Data #1: a0 (container) 3b (59 bytes)
+    - Bottle type 1 (file): 10 31 - metadata length = 49
       - Metadata:
         - filename "hello" (04 05, 'hello')
         - size 5 (0c 01, 05)
@@ -114,7 +113,8 @@ Two files, named "hello" and "smile".
         - same 33 bytes of create/modify/access times
         - is folder: 28 00
       - Data: (60 05 + 5 bytes)
+      - 00 (end)
   - Data #2: a0 3c -- same as above except "smile"
+  - 00 (end)
 
-total: 8 + 4 + 40 + 4 + 4 + 51 + 9 + 4 + 51 + 9 = 184
-total: 8 + 4 + 38 + 2 + 60 + 2 + 60 = 174
+total: 8 + 2 + 38 + 2 + 59 + 1 + 2 + 59 + 1 + 1 = 173
