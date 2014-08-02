@@ -14,16 +14,16 @@ A bottle is some metadata (header) and one or more data blocks. Each data block 
 1. File
 
     Metadata:
-    1. filename
-    2. mime type
-    3. size (bytes)
-    4. posix mode (777)
-    5. created (nanoseconds)
-    6. modified (nanoseconds)
-    7. accessed (nanoseconds)
-    8. owner username
-    9. groups (list of strings)
-    10. is folder? (data: sequence of files)
+    1. filename [string 0]
+    2. mime type [string 1]
+    3. size (bytes) [zint 0]
+    4. posix mode (777) [zint 1]
+    5. created (nanoseconds) [zint 2]
+    6. modified (nanoseconds) [zint 3]
+    7. accessed (nanoseconds) [zint 4]
+    8. owner username [string 2]
+    9. groups (list of strings) [string 3]
+    10. is folder? (data: sequence of files) [bool 0]
 
 2. Hashed data
 
@@ -60,12 +60,11 @@ A bottle is some metadata (header) and one or more data blocks. Each data block 
 
 ## Encoding of metadata
 
-Each metadata item header is two bytes: header id (6 bits), length (10 bits)
+Each metadata item header is two bytes: type (2 bits), header id (4 bits), length (10 bits)
 
-- bool: true if present (length=0), false if the field is missing
-- zint: high clear on final byte, LSB order, 7 bits per byte
-- string: utf8 data
-- list of string: series of utf8 data
+- bool (type 11): true if present (length=0), false if the field is missing
+- zint (type 10): high clear on final byte, LSB order, 7 bits per byte
+- [list of] strings (type 00): series of utf8 data, separated by \u0000
 
 ## Bottle header
 
