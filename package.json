@@ -1,0 +1,29 @@
+{
+  "name": "4q",
+  "module_name": "node_xz",
+  "version": "0.5.0",
+  "description": "the 4q archive format",
+  "main": "4q.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "npm -v test"
+  },
+  "keywords": [
+    "archive"
+  ],
+  "author": "Robey Pointer <robeypointer@gmail.com>",
+  "license": "Apache2",
+  "dependencies": {
+    "q": "^1.0.1",
+    "xz": "^1.0.1"
+  },
+  "devDependencies": {
+    "coffee-script": "^1.7",
+    "mocha": "*",
+    "mocha-sprinkles": "*",
+    "plz": "^2.0.3",
+    "should": "*"
+  }
+}
