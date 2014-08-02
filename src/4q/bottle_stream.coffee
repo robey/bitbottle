@@ -30,9 +30,16 @@ class Writable4QStream
   writeData: (length, inStream) ->
     @write(zint.encodeZint(length)).then =>
       deferred = Q.defer()
-      inStream.once "end", -> deferred.resolve()
-      inStream.pipe(@stream, end: false)
+      if length == 0
+        deferred.resolve()
+      else
+        inStream.once "end", =>
+          inStream.unpipe(@stream)
+          deferred.resolve()
+        inStream.pipe(@stream, end: false)
       deferred.promise
+
+  writeEndData: -> @writeData(0)
 
 
 class Readable4QStream

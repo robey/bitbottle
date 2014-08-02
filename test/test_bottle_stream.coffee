@@ -51,3 +51,18 @@ describe "Writable4QStream", ->
       slowStream.push data
       Q.delay(100).then ->
         slowStream.push null
+
+  it "writes several datas", future ->
+    data1 = bufferSource(fromHex("f0f0f0"))
+    data2 = bufferSource(fromHex("e0e0e0"))
+    data3 = bufferSource(fromHex("cccccc"))
+    sink = bufferSink()
+    b = new bottle_stream.Writable4QStream(sink)
+    b.writeData(3, data1).then ->
+      b.writeData(3, data2)
+    .then ->
+      b.writeData(3, data3)
+    .then ->
+      b.writeEndData()
+    .then ->
+      toHex(sink.getBuffer()).should.eql "03f0f0f003e0e0e003cccccc00"
