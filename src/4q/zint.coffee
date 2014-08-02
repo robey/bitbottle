@@ -9,7 +9,7 @@ encodeZint = (number) ->
   bytes.push number & 0x7f
   new Buffer(bytes)
 
-decodeZint = (buffer, n) ->
+decodeZint = (buffer, n = 0) ->
   rv = 0
   multiplier = 1
   while (buffer[n] & 0x80) > 0

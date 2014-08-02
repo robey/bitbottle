@@ -1,5 +1,6 @@
 Q = require 'q'
 util = require "util"
+zint = require "./zint"
 
 MAGIC = new Buffer(8)
 MAGIC.writeUInt32BE(0xf09f8dbc, 0)
@@ -25,6 +26,14 @@ class Writable4QStream
     if length > 4095 then throw new Error("Metadata too long: #{metadataBuffer.length} > 4095")
     buffers.unshift new Buffer([ (type << 4) | ((length >> 8) & 0xf), (length & 0xff) ])
     @write(Buffer.concat(buffers))
+
+  writeData: (length, inStream) ->
+    @write(zint.encodeZint(length)).then =>
+      deferred = Q.defer()
+      inStream.once "end", -> deferred.resolve()
+      inStream.pipe(@stream, end: false)
+      deferred.promise
+
 
 class Readable4QStream
   constructor: (@stream) ->

@@ -1,17 +1,10 @@
+helpers = require "./helpers"
 util = require "util"
 
 zint = require "../lib/4q/zint"
 
-toHex = (buffer) ->
-  strings = [0 ... buffer.length].map (n) ->
-    x = buffer[n].toString(16)
-    if x.length < 2 then x = "0" + x
-    x
-  strings.join("")
-
-fromHex = (str) ->
-  new Buffer([0 ... str.length / 2].map (i) -> parseInt(str[i * 2 ... (i + 1) * 2], 16))
-
+toHex = helpers.toHex
+fromHex = helpers.fromHex
 
 describe "zint", ->
   it "encode", ->
