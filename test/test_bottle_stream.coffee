@@ -34,8 +34,8 @@ describe "Writable4QStream", ->
     data = bufferSource(fromHex("ff00ff00"))
     sink = bufferSink()
     b = new bottle_stream.Writable4QStream(sink)
-    b.writeData(4, data).then ->
-      toHex(sink.getBuffer()).should.eql "04ff00ff00"
+    b.writeData(data, 4).then ->
+      toHex(sink.getBuffer()).should.eql "6004ff00ff00"
 
   it "streams data", future ->
     # just to verify that the data is written as it comes in, and the event isn't triggered until completion.
@@ -45,8 +45,8 @@ describe "Writable4QStream", ->
     slowStream.push data
     sink = bufferSink()
     b = new bottle_stream.Writable4QStream(sink)
-    b.writeData(4, slowStream).then ->
-      toHex(sink.getBuffer()).should.eql "04ff00ff00"
+    b.writeData(slowStream, 4).then ->
+      toHex(sink.getBuffer()).should.eql "6004ff00ff00"
     Q.delay(100).then ->
       slowStream.push data
       Q.delay(100).then ->
@@ -58,11 +58,11 @@ describe "Writable4QStream", ->
     data3 = bufferSource(fromHex("cccccc"))
     sink = bufferSink()
     b = new bottle_stream.Writable4QStream(sink)
-    b.writeData(3, data1).then ->
-      b.writeData(3, data2)
+    b.writeData(data1, 3).then ->
+      b.writeData(data2, 3)
     .then ->
-      b.writeData(3, data3)
+      b.writeData(data3, 3)
     .then ->
       b.writeEndData()
     .then ->
-      toHex(sink.getBuffer()).should.eql "03f0f0f003e0e0e003cccccc00"
+      toHex(sink.getBuffer()).should.eql "6003f0f0f06003e0e0e06003cccccc00"

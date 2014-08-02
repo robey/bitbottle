@@ -27,19 +27,20 @@ class Writable4QStream
     buffers.unshift new Buffer([ (type << 4) | ((length >> 8) & 0xf), (length & 0xff) ])
     @write(Buffer.concat(buffers))
 
-  writeData: (length, inStream) ->
-    @write(zint.encodeZint(length)).then =>
+  # write a stream as data. if length == 0, we assume it's a bottle (which has indeterminate length).
+  writeData: (inStream, length, final = true) ->
+    header = (if length == 0 then 0x80 else 0x40) | (if final then 0x20 else 0)
+    @write(new Buffer([ header ])).then =>
+      if length == 0 then Q() else @write(zint.encodeZint(length))
+    .then =>
       deferred = Q.defer()
-      if length == 0
+      inStream.once "end", =>
+        inStream.unpipe(@stream)
         deferred.resolve()
-      else
-        inStream.once "end", =>
-          inStream.unpipe(@stream)
-          deferred.resolve()
-        inStream.pipe(@stream, end: false)
+      inStream.pipe(@stream, end: false)
       deferred.promise
 
-  writeEndData: -> @writeData(0)
+  writeEndData: -> @write(new Buffer([ 0 ]))
 
 
 class Readable4QStream
