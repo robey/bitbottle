@@ -74,7 +74,7 @@ Each metadata item header is two bytes: type (2 bits), header id (4 bits), lengt
 ## Data header
 
 Single byte:
-1. type field (2 bits: 00=end, 01=data, 10=container, 11=reserved)
+1. type field (2 bits: 00=end, 01=data, 10=bottle, 11=reserved)
 2. is this the last chunk? (1 bit, 1 = yes)
 
 For type=01, zint size follows. Byte 00 is the end of a stream of data blocks.
