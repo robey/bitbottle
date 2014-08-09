@@ -39,9 +39,52 @@ class WritableBottleStream extends push_stream.PushStream
   writeEndData: -> @write(new Buffer([ 0 ]))
 
 
-class Readable4QStream
-  constructor: (@stream) ->
+class ReadableBottleStream
+  constructor: (@stream, magic = false) ->
+    @buffered = null
+    @active = true
+    @savedError = null
+    @waiting = null
+    @state = if magic then "magic" else "header"
+    @stream.on "readable", => @readable()
+    @stream.once "end", => @active = false
+    @stream.once "error", (err) => @throwError(err)
 
+  throwError: (err) ->
+    @active = false
+    @savedError = err
+
+  readable: ->
+    switch @state
+      when "magic" then @readMagic()
+      when "header" then @readHeader()
+      when "metadata" then @readMetadata()
+
+  readMagic: ->
+    @state = "magic"
+    return unless @active
+    buffer = @stream.read(MAGIC.length)
+    return unless buffer?
+    if buffer != MAGIC then @throwError(new Error("Invalid magic header"))
+    @readHeader()
+
+  readHeader: ->
+    @state = "header"
+    return unless @active and (not @buffered?)
+    buffer = @stream.read(2)
+    return unless buffer?
+    type = (buffer[0] >> 4) & 0xf
+    metadataLength = ((buffer[0] & 0xf) << 8) | (buffer[1] & 0xff)
+    @buffered = { type, metadataLength }
+    @readMetadata()
+
+  readMetadata: ->
+    @state = "metadata"
+    return unless @active
+    buffer = @stream.read(@buffered.metadataLength)
+    return unless buffer?
+    @buffered.metadata = metadata.unpack(buffer)
+    
 
 exports.MAGIC = MAGIC
-exports.Writable4QStream = Writable4QStream
+exports.WritableBottleStream = WritableBottleStream
