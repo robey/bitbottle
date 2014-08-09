@@ -47,7 +47,7 @@ class PushStream extends stream.Readable
     @pipe(writable)
     deferred.promise
 
-  # shunt data from another stream into this one. if byteCount is defined, demand exactly that many bytes.
+  # splice data from another stream into this one. if byteCount is defined, demand exactly that many bytes.
   spliceFrom: (inStream, byteCount) ->
     if @spliced? then throw new Error("Already shunting!")
     @spliced = inStream

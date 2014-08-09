@@ -3,8 +3,8 @@ util = require "util"
 
 metadata = require "../lib/4q/metadata"
 
-toHex = helpers.toHex
 fromHex = helpers.fromHex
+toHex = helpers.toHex
 
 describe "metadata", ->
   it "pack", ->

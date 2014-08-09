@@ -11,7 +11,7 @@ A bottle is some metadata (header) and one or more data blocks. Each data block 
 
 ## Bottle types
 
-1. File
+- File (0)
 
     Metadata:
     1. filename [string 0]

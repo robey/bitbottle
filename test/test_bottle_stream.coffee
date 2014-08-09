@@ -15,10 +15,10 @@ future = mocha_sprinkles.future
 toHex = helpers.toHex
 
 
-describe "Writable4QStream", ->
+describe "WritableBottleStream", ->
   it "writes magic", future ->
     sink = bufferSink()
-    b = new bottle_stream.Writable4QStream()
+    b = new bottle_stream.WritableBottleStream()
     promise = b.qpipe(sink)
     b.writeMagic().then ->
       b.close()
@@ -29,7 +29,7 @@ describe "Writable4QStream", ->
 
   it "writes a bottle header", future ->
     sink = bufferSink()
-    b = new bottle_stream.Writable4QStream()
+    b = new bottle_stream.WritableBottleStream()
     b.qpipe(sink)
     m = new metadata.Metadata()
     m.addNumber(0, 150)
@@ -39,16 +39,16 @@ describe "Writable4QStream", ->
   it "writes data", future ->
     data = bufferSource(fromHex("ff00ff00"))
     sink = bufferSink()
-    b = new bottle_stream.Writable4QStream()
+    b = new bottle_stream.WritableBottleStream()
     b.qpipe(sink)
     b.writeData(data, 4).then ->
       toHex(sink.getBuffer()).should.eql "6004ff00ff00"
 
   it "writes nested bottle data", future ->
     sink = bufferSink()
-    b = new bottle_stream.Writable4QStream()
+    b = new bottle_stream.WritableBottleStream()
     b.qpipe(sink)
-    b2 = new bottle_stream.Writable4QStream()
+    b2 = new bottle_stream.WritableBottleStream()
     promise = b.writeData(b2)
     b2.writeBottleHeader(14, new metadata.Metadata())
     .then ->
@@ -67,7 +67,7 @@ describe "Writable4QStream", ->
     slowStream._read = (n) ->
     slowStream.push data
     sink = bufferSink()
-    b = new bottle_stream.Writable4QStream()
+    b = new bottle_stream.WritableBottleStream()
     b.qpipe(sink)
     b.writeData(slowStream, 4).then ->
       toHex(sink.getBuffer()).should.eql "6004ff00ff00"
@@ -81,7 +81,7 @@ describe "Writable4QStream", ->
     data2 = bufferSource(fromHex("e0e0e0"))
     data3 = bufferSource(fromHex("cccccc"))
     sink = bufferSink()
-    b = new bottle_stream.Writable4QStream()
+    b = new bottle_stream.WritableBottleStream()
     b.qpipe(sink)
     b.writeData(data1, 3).then ->
       b.writeData(data2, 3)

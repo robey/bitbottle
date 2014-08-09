@@ -1,4 +1,5 @@
 Q = require "q"
+metadata = require "./metadata"
 push_stream = require "./push_stream"
 stream = require "stream"
 util = require "util"
@@ -8,7 +9,10 @@ MAGIC = new Buffer(8)
 MAGIC.writeUInt32BE(0xf09f8dbc, 0)
 MAGIC.writeUInt32BE(0, 4)
 
-class Writable4QStream extends push_stream.PushStream
+TYPE_FILE = 0
+TYPE_MAGIC = 15
+
+class WritableBottleStream extends push_stream.PushStream
   constructor: ->
     super()
 
