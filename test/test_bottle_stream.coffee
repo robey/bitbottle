@@ -1,25 +1,21 @@
-helpers = require "./helpers"
 mocha_sprinkles = require "mocha-sprinkles"
 Q = require "q"
 stream = require "stream"
 should = require "should"
+toolkit = require "stream-toolkit"
 util = require "util"
 
 bottle_stream = require "../lib/4q/bottle_stream"
 metadata = require "../lib/4q/metadata"
 
-bufferSink = helpers.bufferSink
-bufferSource = helpers.bufferSource
-fromHex = helpers.fromHex
 future = mocha_sprinkles.future
-toHex = helpers.toHex
 
 
 describe "WritableBottleStream", ->
   it "writes magic", future ->
-    sink = bufferSink()
+    sink = new toolkit.SinkStream()
     b = new bottle_stream.WritableBottleStream()
-    promise = b.qpipe(sink)
+    promise = b.pipe(sink)
     b.writeMagic().then ->
       b.close()
     .then ->
@@ -28,26 +24,26 @@ describe "WritableBottleStream", ->
       sink.getBuffer().should.eql bottle_stream.MAGIC
 
   it "writes a bottle header", future ->
-    sink = bufferSink()
+    sink = new toolkit.SinkStream()
     b = new bottle_stream.WritableBottleStream()
-    b.qpipe(sink)
+    b.pipe(sink)
     m = new metadata.Metadata()
     m.addNumber(0, 150)
     b.writeBottleHeader(10, m).then ->
-      toHex(sink.getBuffer()).should.eql "a00480029601"
+      toolkit.toHex(sink.getBuffer()).should.eql "a00480029601"
 
   it "writes data", future ->
-    data = bufferSource(fromHex("ff00ff00"))
-    sink = bufferSink()
+    data = new toolkit.SourceStream(toolkit.fromHex("ff00ff00"))
+    sink = new toolkit.SinkStream()
     b = new bottle_stream.WritableBottleStream()
-    b.qpipe(sink)
+    b.pipe(sink)
     b.writeData(data, 4).then ->
-      toHex(sink.getBuffer()).should.eql "6004ff00ff00"
+      toolkit.toHex(sink.getBuffer()).should.eql "6004ff00ff00"
 
   it "writes nested bottle data", future ->
-    sink = bufferSink()
+    sink = new toolkit.SinkStream()
     b = new bottle_stream.WritableBottleStream()
-    b.qpipe(sink)
+    b.pipe(sink)
     b2 = new bottle_stream.WritableBottleStream()
     promise = b.writeData(b2)
     b2.writeBottleHeader(14, new metadata.Metadata())
@@ -58,31 +54,31 @@ describe "WritableBottleStream", ->
     .then ->
       promise
     .then ->
-      toHex(sink.getBuffer()).should.eql "a0e00000"
+      toolkit.toHex(sink.getBuffer()).should.eql "a0e00000"
 
   it "streams data", future ->
     # just to verify that the data is written as it comes in, and the event isn't triggered until completion.
-    data = fromHex("ff00")
+    data = toolkit.fromHex("ff00")
     slowStream = new stream.Readable()
     slowStream._read = (n) ->
     slowStream.push data
-    sink = bufferSink()
+    sink = new toolkit.SinkStream()
     b = new bottle_stream.WritableBottleStream()
-    b.qpipe(sink)
+    b.pipe(sink)
     b.writeData(slowStream, 4).then ->
-      toHex(sink.getBuffer()).should.eql "6004ff00ff00"
+      toolkit.toHex(sink.getBuffer()).should.eql "6004ff00ff00"
     Q.delay(100).then ->
       slowStream.push data
       Q.delay(100).then ->
         slowStream.push null
 
   it "writes several datas", future ->
-    data1 = bufferSource(fromHex("f0f0f0"))
-    data2 = bufferSource(fromHex("e0e0e0"))
-    data3 = bufferSource(fromHex("cccccc"))
-    sink = bufferSink()
+    data1 = new toolkit.SourceStream(toolkit.fromHex("f0f0f0"))
+    data2 = new toolkit.SourceStream(toolkit.fromHex("e0e0e0"))
+    data3 = new toolkit.SourceStream(toolkit.fromHex("cccccc"))
+    sink = new toolkit.SinkStream()
     b = new bottle_stream.WritableBottleStream()
-    b.qpipe(sink)
+    b.pipe(sink)
     b.writeData(data1, 3).then ->
       b.writeData(data2, 3)
     .then ->
@@ -90,4 +86,4 @@ describe "WritableBottleStream", ->
     .then ->
       b.writeEndData()
     .then ->
-      toHex(sink.getBuffer()).should.eql "6003f0f0f06003e0e0e06003cccccc00"
+      toolkit.toHex(sink.getBuffer()).should.eql "6003f0f0f06003e0e0e06003cccccc00"

@@ -1,7 +1,7 @@
 Q = require "q"
 metadata = require "./metadata"
-push_stream = require "./push_stream"
 stream = require "stream"
+toolkit = require "stream-toolkit"
 util = require "util"
 zint = require "./zint"
 
@@ -12,7 +12,7 @@ MAGIC.writeUInt32BE(0, 4)
 TYPE_FILE = 0
 TYPE_MAGIC = 15
 
-class WritableBottleStream extends push_stream.PushStream
+class WritableBottleStream extends toolkit.QStream
   constructor: ->
     super()
 
@@ -84,7 +84,7 @@ class ReadableBottleStream
     buffer = @stream.read(@buffered.metadataLength)
     return unless buffer?
     @buffered.metadata = metadata.unpack(buffer)
-    
+
 
 exports.MAGIC = MAGIC
 exports.WritableBottleStream = WritableBottleStream
