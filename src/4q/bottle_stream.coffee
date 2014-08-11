@@ -29,14 +29,26 @@ class WritableBottleStream extends toolkit.QStream
     @write(Buffer.concat(buffers))
 
   # write a stream as data. if length == 0, we assume it's a bottle (which has indeterminate length).
-  writeData: (inStream, length, final = true) ->
-    header = (if length? then 0x40 else 0x80) | (if final then 0x20 else 0)
+  writeData: (inStream, length = 0, final = true) ->
+    header = 0
+    lengthBytes = null
+    if length > 0
+      if not final then header |= 0x40
+      lengthBytes = zint.encodePackedInt(length)
+      if lengthBytes.length > 7 then throw new Error("wtf")
+      header |= lengthBytes.length
+    else
+      header = 0x80
     @write(new Buffer([ header ])).then =>
-      if length? then @write(zint.encodeZint(length)) else Q()
+      if lengthBytes? then @write(lengthBytes) else Q()
     .then =>
-      @spliceFrom(inStream, length)
+      if length > 0
+        @spliceFrom(new toolkit.LimitStream(inStream, length))
+      else
+        @spliceFrom(inStream)
 
   writeEndData: -> @write(new Buffer([ 0 ]))
+
 
 
 class ReadableBottleStream
@@ -84,6 +96,12 @@ class ReadableBottleStream
     buffer = @stream.read(@buffered.metadataLength)
     return unless buffer?
     @buffered.metadata = metadata.unpack(buffer)
+
+  readData: ->
+    # a single data item can be composed of mulitple blocks, so build a
+    # compound stream that may have 1 or more other internal streams.
+
+  nextDataBlock: ->
 
 
 exports.MAGIC = MAGIC

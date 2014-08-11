@@ -13,7 +13,7 @@ class Metadata
     @fields.push { type: TYPE_BOOL, id, content: new Buffer(0) }
 
   addNumber: (id, number) ->
-    @fields.push { type: TYPE_ZINT, id, content: zint.encodeZint(number), number }
+    @fields.push { type: TYPE_ZINT, id, content: zint.encodePackedInt(number), number }
 
   addString: (id, str) ->
     @addStringList(id, [ str ])
@@ -50,7 +50,7 @@ unpack = (buffer) ->
     content = buffer.slice(i, i + length)
     field = { type, id }
     switch type
-      when TYPE_ZINT then field.number = zint.decodeZint(content)[0]
+      when TYPE_ZINT then field.number = zint.decodePackedInt(content)
       when TYPE_STRING then field.list = content.toString("UTF-8").split("\x00")
     metadata.fields.push field
     i += length

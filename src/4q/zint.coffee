@@ -1,24 +1,22 @@
 util = require "util"
 
-encodeZint = (number) ->
+encodePackedInt = (number) ->
+  if number < 0 then throw new Error("Unsigned ints only, plz")
   bytes = []
-  while number > 0x7f
-    bytes.push 0x80 | (number & 0x7f)
+  while number > 0xff
+    bytes.push(number & 0xff)
     # don't use >> here. js will truncate the number to a 32-bit int.
-    number /= 128
-  bytes.push number & 0x7f
+    number /= 256
+  bytes.push(number & 0xff)
   new Buffer(bytes)
 
-decodeZint = (buffer, n = 0) ->
+decodePackedInt = (buffer) ->
   rv = 0
   multiplier = 1
-  while (buffer[n] & 0x80) > 0
-    rv += (buffer[n] & 0x7f) * multiplier
-    multiplier *= 128
-    n += 1
-  rv += (buffer[n] & 0x7f) * multiplier
-  [ rv, n + 1 ]
+  [0 ... buffer.length].map (i) ->
+    rv += (buffer[i] & 0xff) * multiplier
+    multiplier *= 256
+  rv
 
-
-exports.decodeZint = decodeZint
-exports.encodeZint = encodeZint
+exports.decodePackedInt = decodePackedInt
+exports.encodePackedInt = encodePackedInt

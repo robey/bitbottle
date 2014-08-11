@@ -63,7 +63,7 @@ A bottle is some metadata (header) and one or more data blocks. Each data block 
 Each metadata item header is two bytes: type (2 bits), header id (4 bits), length (10 bits)
 
 - bool (type 11): true if present (length=0), false if the field is missing
-- zint (type 10): high clear on final byte, LSB order, 7 bits per byte
+- int (type 10): LSB order, 8 bits per byte
 - [list of] strings (type 00): series of utf8 data, separated by \u0000
 
 ## Bottle header
@@ -73,11 +73,14 @@ Each metadata item header is two bytes: type (2 bits), header id (4 bits), lengt
 
 ## Data header
 
-Single byte:
-1. type field (2 bits: 00=end, 01=data, 10=bottle, 11=reserved)
-2. is this the last chunk? (1 bit, 1 = yes)
+Single byte bitfield:
+1. container? (1 = bottle, 0 = data)
+2. 1 = not the last chunk for this block (only present for data blocks, with length > 0)
+3. 3 reserved bits
+4. 3-bit length of the size bytes to follow
 
-For type=01, zint size follows. Byte 00 is the end of a stream of data blocks.
+The lowest 3 bits indicate the number of bytes to follow with the block size.
+Byte 00 (data, length = 0) means end of data blocks for this bottle.
 
 ## Magic header
 

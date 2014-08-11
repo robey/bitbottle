@@ -30,7 +30,7 @@ describe "WritableBottleStream", ->
     m = new metadata.Metadata()
     m.addNumber(0, 150)
     b.writeBottleHeader(10, m).then ->
-      toolkit.toHex(sink.getBuffer()).should.eql "a00480029601"
+      toolkit.toHex(sink.getBuffer()).should.eql "a003800196"
 
   it "writes data", future ->
     data = new toolkit.SourceStream(toolkit.fromHex("ff00ff00"))
@@ -38,7 +38,7 @@ describe "WritableBottleStream", ->
     b = new bottle_stream.WritableBottleStream()
     b.pipe(sink)
     b.writeData(data, 4).then ->
-      toolkit.toHex(sink.getBuffer()).should.eql "6004ff00ff00"
+      toolkit.toHex(sink.getBuffer()).should.eql "0104ff00ff00"
 
   it "writes nested bottle data", future ->
     sink = new toolkit.SinkStream()
@@ -54,7 +54,7 @@ describe "WritableBottleStream", ->
     .then ->
       promise
     .then ->
-      toolkit.toHex(sink.getBuffer()).should.eql "a0e00000"
+      toolkit.toHex(sink.getBuffer()).should.eql "80e00000"
 
   it "streams data", future ->
     # just to verify that the data is written as it comes in, and the event isn't triggered until completion.
@@ -86,4 +86,4 @@ describe "WritableBottleStream", ->
     .then ->
       b.writeEndData()
     .then ->
-      toolkit.toHex(sink.getBuffer()).should.eql "6003f0f0f06003e0e0e06003cccccc00"
+      toolkit.toHex(sink.getBuffer()).should.eql "0103f0f0f00103e0e0e00103cccccc00"
