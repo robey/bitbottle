@@ -50,59 +50,55 @@ class WritableBottleStream extends toolkit.QStream
   writeEndData: -> @write(new Buffer([ 0 ]))
 
 
-
 class ReadableBottleStream
-  constructor: (@stream, magic = false) ->
+  constructor: (@stream, @hasMagic = false) ->
     @buffered = null
     @active = true
     @savedError = null
     @waiting = null
-    @state = if magic then "magic" else "header"
-    @stream.on "readable", => @readable()
     @stream.once "end", => @active = false
-    @stream.once "error", (err) => @throwError(err)
 
-  throwError: (err) ->
-    @active = false
-    @savedError = err
+  readBottle: ->
+    return null unless @active
+    (if @masMagic then @readMagic() else Q()).then =>
+      @readHeader()
 
-  readable: ->
-    switch @state
-      when "magic" then @readMagic()
-      when "header" then @readHeader()
-      when "metadata" then @readMetadata()
+  readNextData: ->
+    @readDataChunk().then (chunk) =>
+      if (not chunk?) or chunk.isBottle then return chunk
+      streamQ = [ chunk.stream ]
+      keepReading = chunk.keepReading
+      generator = =>
+        if streamQ.length > 0 then return streamQ.shift()
+        if not keepReading then return null
+        @readDataChunk().then (chunk) =>
+          keepReading = chunk.keepReading
+          chunk.stream
+      { isBottle: chunk.isBottle, stream: new toolkit.CompoundStream(generator) }
 
   readMagic: ->
-    @state = "magic"
-    return unless @active
-    buffer = @stream.read(MAGIC.length)
-    return unless buffer?
-    if buffer != MAGIC then @throwError(new Error("Invalid magic header"))
-    @readHeader()
+    toolkit.qread(@stream, MAGIC.length).then (buffer) =>
+      if buffer != MAGIC then throw new Error("Invalid magic header")
 
   readHeader: ->
-    @state = "header"
-    return unless @active and (not @buffered?)
-    buffer = @stream.read(2)
-    return unless buffer?
-    type = (buffer[0] >> 4) & 0xf
-    metadataLength = ((buffer[0] & 0xf) << 8) | (buffer[1] & 0xff)
-    @buffered = { type, metadataLength }
-    @readMetadata()
+    toolkit.qread(@stream, 2).then (buffer) =>
+      type = (buffer[0] >> 4) & 0xf
+      metadataLength = ((buffer[0] & 0xf) * 256) + (buffer[1] & 0xff)
+      toolkit.qread(@stream, metadataLength).then (b) =>
+        { type, metadata: metadata.unpack(b) }
 
-  readMetadata: ->
-    @state = "metadata"
-    return unless @active
-    buffer = @stream.read(@buffered.metadataLength)
-    return unless buffer?
-    @buffered.metadata = metadata.unpack(buffer)
-
-  readData: ->
-    # a single data item can be composed of mulitple blocks, so build a
-    # compound stream that may have 1 or more other internal streams.
-
-  nextDataBlock: ->
+  readDataChunk: ->
+    toolkit.qread(@stream, 1).then (buffer) =>
+      if buffer[0] == 0 then return null
+      isBottle = (buffer[0] & 0x80) > 0
+      if isBottle then return { isBottle, stream: @stream }
+      keepReading = (buffer[0] & 0x40) > 0
+      lengthBytes = (buffer[0] & 7)
+      toolkit.qread(@stream, lengthBytes).then (buffer) =>
+        length = zint.decodePackedInt(buffer)
+        { isBottle, keepReading, stream: new toolkit.LimitStream(@stream, length) }
 
 
 exports.MAGIC = MAGIC
+exports.ReadableBottleStream = ReadableBottleStream
 exports.WritableBottleStream = WritableBottleStream

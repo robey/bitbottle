@@ -79,6 +79,7 @@ describe "WritableBottleStream", ->
     sink = new toolkit.SinkStream()
     b = new bottle_stream.WritableBottleStream()
     b.pipe(sink)
+    b.writeBottleHeader(14, new metadata.Metadata())
     b.writeData(data1, 3).then ->
       b.writeData(data2, 3)
     .then ->
@@ -86,4 +87,39 @@ describe "WritableBottleStream", ->
     .then ->
       b.writeEndData()
     .then ->
-      toolkit.toHex(sink.getBuffer()).should.eql "0103f0f0f00103e0e0e00103cccccc00"
+      toolkit.toHex(sink.getBuffer()).should.eql "e0000103f0f0f00103e0e0e00103cccccc00"
+
+describe "ReadableBottleStream", ->
+  it "reads several datas", future ->
+    b = new bottle_stream.ReadableBottleStream(new toolkit.SourceStream(toolkit.fromHex("e0000103f0f0f00103e0e0e00103cccccc00")))
+    b.readBottle().then (bottle) ->
+      bottle.type.should.eql 14
+      bottle.metadata.fields.length.should.eql 0
+    .then ->
+      b.readNextData()
+    .then (data) ->
+      data.isBottle.should.eql false
+      sink = new toolkit.SinkStream()
+      toolkit.qpipe(data.stream, sink).then ->
+        toolkit.toHex(sink.getBuffer()).should.eql "f0f0f0"
+    .then ->
+      b.readNextData()
+    .then (data) ->
+      data.isBottle.should.eql false
+      sink = new toolkit.SinkStream()
+      toolkit.qpipe(data.stream, sink).then ->
+        toolkit.toHex(sink.getBuffer()).should.eql "e0e0e0"
+    .then ->
+      b.readNextData()
+    .then (data) ->
+      data.isBottle.should.eql false
+      sink = new toolkit.SinkStream()
+      toolkit.qpipe(data.stream, sink).then ->
+        toolkit.toHex(sink.getBuffer()).should.eql "cccccc"
+    .then ->
+      b.readNextData()
+    .then (data) ->
+      (data?).should.eql false
+
+
+
