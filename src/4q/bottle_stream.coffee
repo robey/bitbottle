@@ -5,12 +5,10 @@ toolkit = require "stream-toolkit"
 util = require "util"
 zint = require "./zint"
 
-MAGIC = new Buffer(8)
-MAGIC.writeUInt32BE(0xf09f8dbc, 0)
-MAGIC.writeUInt32BE(0, 4)
+MAGIC = new Buffer([ 0xf0, 0x9f, 0x8d, 0xbc ])
+VERSION = 0x00
 
 TYPE_FILE = 0
-TYPE_MAGIC = 15
 
 class WritableBottleStream extends toolkit.QStream
   constructor: ->
@@ -25,7 +23,13 @@ class WritableBottleStream extends toolkit.QStream
     buffers = metadata.pack()
     length = if buffers.length == 0 then 0 else buffers.map((b) -> b.length).reduce((a, b) -> a + b)
     if length > 4095 then throw new Error("Metadata too long: #{metadataBuffer.length} > 4095")
-    buffers.unshift new Buffer([ (type << 4) | ((length >> 8) & 0xf), (length & 0xff) ])
+    buffers.unshift new Buffer([
+      VERSION
+      0
+      (type << 4) | ((length >> 8) & 0xf)
+      (length & 0xff)
+    ])
+    buffers.unshift MAGIC
     @write(Buffer.concat(buffers))
 
   # write a stream as data. if length == 0, we assume it's a bottle (which has indeterminate length).

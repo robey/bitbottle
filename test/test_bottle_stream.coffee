@@ -10,19 +10,9 @@ metadata = require "../lib/4q/metadata"
 
 future = mocha_sprinkles.future
 
+HEADER_STRING = "f09f8dbc0000"
 
 describe "WritableBottleStream", ->
-  it "writes magic", future ->
-    sink = new toolkit.SinkStream()
-    b = new bottle_stream.WritableBottleStream()
-    promise = b.pipe(sink)
-    b.writeMagic().then ->
-      b.close()
-    .then ->
-      promise
-    .then ->
-      sink.getBuffer().should.eql bottle_stream.MAGIC
-
   it "writes a bottle header", future ->
     sink = new toolkit.SinkStream()
     b = new bottle_stream.WritableBottleStream()
@@ -30,7 +20,7 @@ describe "WritableBottleStream", ->
     m = new metadata.Metadata()
     m.addNumber(0, 150)
     b.writeBottleHeader(10, m).then ->
-      toolkit.toHex(sink.getBuffer()).should.eql "a003800196"
+      toolkit.toHex(sink.getBuffer()).should.eql "#{HEADER_STRING}a003800196"
 
   it "writes data", future ->
     data = new toolkit.SourceStream(toolkit.fromHex("ff00ff00"))
@@ -54,7 +44,7 @@ describe "WritableBottleStream", ->
     .then ->
       promise
     .then ->
-      toolkit.toHex(sink.getBuffer()).should.eql "80e00000"
+      toolkit.toHex(sink.getBuffer()).should.eql "80#{HEADER_STRING}e00000"
 
   it "streams data", future ->
     # just to verify that the data is written as it comes in, and the event isn't triggered until completion.
@@ -87,7 +77,7 @@ describe "WritableBottleStream", ->
     .then ->
       b.writeEndData()
     .then ->
-      toolkit.toHex(sink.getBuffer()).should.eql "e0000103f0f0f00103e0e0e00103cccccc00"
+      toolkit.toHex(sink.getBuffer()).should.eql "#{HEADER_STRING}e0000103f0f0f00103e0e0e00103cccccc00"
 
 describe "ReadableBottleStream", ->
   it "reads several datas", future ->

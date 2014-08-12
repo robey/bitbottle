@@ -68,8 +68,18 @@ Each metadata item header is two bytes: type (2 bits), header id (4 bits), lengt
 
 ## Bottle header
 
-1. type (4 bits) -- except F which means "magic"
-2. length of metadata block (12 bits)
+8 bytes total.
+
+1. magic (4 bytes): F0 9F 8D BC (f09f8dbc big-endian)
+2. version (1 byte): major (4 bits), minor (4 bits)
+  - when major changes, you should be able to "parse" the archive but some contents may be unextractable
+  - when minor changes, you should be able to extract all the contents you understand
+  - to make incompatible (format, structure) changes, change the magic
+3. reserved (0)
+4. type (4 bits)
+5. length of metadata block (12 bits)
+
+Current version is 0x00.
 
 ## Data header
 
@@ -82,41 +92,26 @@ Single byte bitfield:
 The lowest 3 bits indicate the number of bytes to follow with the block size.
 Byte 00 (data, length = 0) means end of data blocks for this bottle.
 
-## Magic header
-
-F0 9F 8D BC (f09f8dbc big-endian)
-00 00 00 00
-
-1. major / minor version (4 bits each)
-2. flags for support of new features, grouped by what you should do if you don't understand the feature flag:
-  - can read/write without problem (8 bits)
-  - can read, but not rewrite (8 bits)
-  - can't even read (8 bits)
-
-A magic header can appear anywhere and refers to the rest of the stream. Current version is 00.
-
 ## Example archive
 
 Two files, named "hello" and "smile".
 
-- Magic header (8 bytes)
-- Bottle type 1 (file: directory): 10 26 - metadata length = 38
+- Bottle type 1 (file: directory): f0 9f 8d bc 00 00 10 22 - metadata length = 34
   - Metadata:
-    - filename "." (04 01, '.')
-    - created 1406011886_693_000_000, or: 14 09, 80 c6 c0 82 c9 8b ca c1 13
-    - similarly modified & accessed, 11 bytes each
-    - is folder: 28 00
-  - Data #1: a0 (container) 3b (59 bytes)
-    - Bottle type 1 (file): 10 31 - metadata length = 49
+    - filename "." (00 01, '.')
+    - created 1406011886_693_000_000, or: 88 08, 00 23 50 90 5c 28 83 13
+    - similarly modified & accessed, 10 bytes each
+    - is folder: c0 00
+  - Data #1: 80 (container)
+    - Bottle type 1 (file): f0 9f 8d bc 00 00 10 2c - metadata length = 44
       - Metadata:
-        - filename "hello" (04 05, 'hello')
-        - size 5 (0c 01, 05)
-        - mode 0666 = 0x1b6 (10 02, 36 03)
-        - same 33 bytes of create/modify/access times
-        - is folder: 28 00
-      - Data: (60 05 + 5 bytes)
+        - filename "hello" (00 05, 'hello')
+        - size 5 (80 01, 05)
+        - mode 0666 = 0x1b6 (84 02, b6 01)
+        - same 30 bytes of create/modify/access times
+      - Data: (01 05 + 5 bytes)
       - 00 (end)
-  - Data #2: a0 3c -- same as above except "smile"
+  - Data #2: 80 -- same as above except "smile"
   - 00 (end)
 
-total: 8 + 2 + 38 + 2 + 59 + 1 + 2 + 59 + 1 + 1 = 173
+total: 8 + 34 + 1 + 8 + 44 + 8 + 1 + 8 + 44 + 8 + 1 = 165
