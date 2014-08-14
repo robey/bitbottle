@@ -14,11 +14,7 @@ class WritableBottleStream extends toolkit.QStream
   constructor: ->
     super()
 
-  writeMagic: ->
-    @write MAGIC
-
   writeBottleHeader: (type, metadata) ->
-    # bottle header: TTTTLLLL LLLLLLLL (T = type, L = metadata length)
     if type < 0 or type > 15 then throw new Error("Bottle type out of range: #{type}")
     buffers = metadata.pack()
     length = if buffers.length == 0 then 0 else buffers.map((b) -> b.length).reduce((a, b) -> a + b)
@@ -54,55 +50,78 @@ class WritableBottleStream extends toolkit.QStream
   writeEndData: -> @write(new Buffer([ 0 ]))
 
 
-class ReadableBottleStream
-  constructor: (@stream, @hasMagic = false) ->
-    @buffered = null
-    @active = true
-    @savedError = null
-    @waiting = null
-    @stream.once "end", => @active = false
+# stream that reads an underlying (buffer) stream, pulls out the metadata and
+# type, and generates data objects.
+class ReadableBottle extends stream.Readable
+  constructor: (@stream) ->
+    super(objectMode: true)
+    @type = null
+    @metadata = null
+    @metadataPromise = @_readHeader()
+    @lastPromise = @metadataPromise
 
-  readBottle: ->
-    return null unless @active
-    (if @masMagic then @readMagic() else Q()).then =>
-      @readHeader()
+  getType: ->
+    @metadataPromise.then =>
+      @type
 
-  readNextData: ->
-    @readDataChunk().then (chunk) =>
-      if (not chunk?) or chunk.isBottle then return chunk
-      streamQ = [ chunk.stream ]
-      keepReading = chunk.keepReading
-      generator = =>
-        if streamQ.length > 0 then return streamQ.shift()
-        if not keepReading then return null
-        @readDataChunk().then (chunk) =>
-          keepReading = chunk.keepReading
-          chunk.stream
-      { isBottle: chunk.isBottle, stream: new toolkit.CompoundStream(generator) }
+  getMetadata: ->
+    @metadataPromise.then =>
+      @metadata
 
-  readMagic: ->
-    toolkit.qread(@stream, MAGIC.length).then (buffer) =>
-      if buffer != MAGIC then throw new Error("Invalid magic header")
-
-  readHeader: ->
-    toolkit.qread(@stream, 2).then (buffer) =>
-      type = (buffer[0] >> 4) & 0xf
-      metadataLength = ((buffer[0] & 0xf) * 256) + (buffer[1] & 0xff)
+  _readHeader: ->
+    toolkit.qread(@stream, 8).then (buffer) =>
+      [0 ... 4].map (i) =>
+        if buffer[i] != MAGIC[i] then throw new Error("Incorrect magic header")
+      if buffer[4] != VERSION then throw new Error("Incompatible version: #{buffer[4].toString(16)}")
+      if buffer[5] != 0 then throw new Error("Incompatible flags: #{buffer[5].toString(16)}")
+      type = (buffer[6] >> 4) & 0xf
+      metadataLength = ((buffer[6] & 0xf) * 256) + (buffer[7] & 0xff)
       toolkit.qread(@stream, metadataLength).then (b) =>
-        { type, metadata: metadata.unpack(b) }
+        @type = type
+        @metadata = metadata.unpack(b)
 
-  readDataChunk: ->
+  _read: (size) ->
+    # must finish reading the last thing we generated (either the promise for reading the header, or the last data stream):
+    @lastPromise.then =>
+      @_readDataChunk()
+    .then (stream) =>
+      if not stream? then return @push null
+      if stream instanceof ReadableBottle
+        @lastPromise = qend(stream)
+        @push stream
+        return
+      stream = @_streamData(stream)
+      @lastPromise = toolkit.qend(stream)
+      @push stream
+
+  # keep reading data chunks until the "keepReading" bit is clear.
+  _streamData: (firstStream) ->
+    streamQ = [ firstStream ]
+    currentStream = firstStream
+    generator = =>
+      if streamQ.length > 0 then return streamQ.shift()
+      if not currentStream._keepReading then return null
+      @_readDataChunk().then (stream) =>
+        currentStream = stream
+        stream
+    new toolkit.CompoundStream(generator)
+
+  _readDataChunk: ->
     toolkit.qread(@stream, 1).then (buffer) =>
+      # end of data stream?
       if buffer[0] == 0 then return null
-      isBottle = (buffer[0] & 0x80) > 0
-      if isBottle then return { isBottle, stream: @stream }
-      keepReading = (buffer[0] & 0x40) > 0
+      isBottle = (buffer[0] & 0x80) != 0
+      if isBottle then return new ReadableBottle(@stream)
+      keepReading = (buffer[0] & 0x40) != 0
       lengthBytes = (buffer[0] & 7)
       toolkit.qread(@stream, lengthBytes).then (buffer) =>
         length = zint.decodePackedInt(buffer)
-        { isBottle, keepReading, stream: new toolkit.LimitStream(@stream, length) }
+        s = new toolkit.LimitStream(@stream, length)
+        s._keepReading = keepReading
+        s
+
 
 
 exports.MAGIC = MAGIC
-exports.ReadableBottleStream = ReadableBottleStream
+exports.ReadableBottle = ReadableBottle
 exports.WritableBottleStream = WritableBottleStream

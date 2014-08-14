@@ -12,6 +12,9 @@ future = mocha_sprinkles.future
 
 HEADER_STRING = "f09f8dbc0000"
 
+shouldQThrow = (promise, message) ->
+  promise.then((-> throw new Error("Expected exception, got valid promise")), ((err) -> (-> throw err).should.throw message))
+
 describe "WritableBottleStream", ->
   it "writes a bottle header", future ->
     sink = new toolkit.SinkStream()
@@ -79,37 +82,66 @@ describe "WritableBottleStream", ->
     .then ->
       toolkit.toHex(sink.getBuffer()).should.eql "#{HEADER_STRING}e0000103f0f0f00103e0e0e00103cccccc00"
 
-describe "ReadableBottleStream", ->
+
+describe "ReadableBottle", ->
+  BASIC_HEADER = "f09f8dbc00000000"
+
+  it "validates the header", future ->
+    b = new bottle_stream.ReadableBottle(new toolkit.SourceStream(toolkit.fromHex("00")))
+    shouldQThrow b.getMetadata(), /magic/
+    b = new bottle_stream.ReadableBottle(new toolkit.SourceStream(toolkit.fromHex("f09f8dbcff000000")))
+    shouldQThrow b.getMetadata(), /version/
+    b = new bottle_stream.ReadableBottle(new toolkit.SourceStream(toolkit.fromHex("f09f8dbc00ff0000")))
+    shouldQThrow b.getMetadata(), /flags/
+
+  it "reads the header", future ->
+    b = new bottle_stream.ReadableBottle(new toolkit.SourceStream(toolkit.fromHex("f09f8dbc00002000")))
+    b.getMetadata().then (m) ->
+      m.fields.length.should.eql 0
+      b.getType().then (t) ->
+        t.should.eql 2
+    b = new bottle_stream.ReadableBottle(new toolkit.SourceStream(toolkit.fromHex("f09f8dbc0000e003800196")))
+    b.getMetadata().then (m) ->
+      m.fields.length.should.eql 1
+      m.fields[0].number.should.eql 150
+      b.getType().then (t) ->
+        t.should.eql 14
+
+  it "reads a data block", future ->
+    b = new bottle_stream.ReadableBottle(new toolkit.SourceStream(toolkit.fromHex("#{BASIC_HEADER}010568656c6c6f00")))
+    toolkit.qread(b).then (data) ->
+      sink = new toolkit.SinkStream()
+      toolkit.qpipe(data, sink).then ->
+        sink.getBuffer().toString().should.eql "hello"
+        toolkit.qread(b).then (data) ->
+          (data?).should.eql false
+
+  it "reads a continuing data block", future ->
+    b = new bottle_stream.ReadableBottle(new toolkit.SourceStream(toolkit.fromHex("#{BASIC_HEADER}4102686541016c01026c6f00")))
+    toolkit.qread(b).then (data) ->
+      sink = new toolkit.SinkStream()
+      toolkit.qpipe(data, sink).then ->
+        sink.getBuffer().toString().should.eql "hello"
+        toolkit.qread(b).then (data) ->
+          (data?).should.eql false
+
   it "reads several datas", future ->
-    b = new bottle_stream.ReadableBottleStream(new toolkit.SourceStream(toolkit.fromHex("e0000103f0f0f00103e0e0e00103cccccc00")))
-    b.readBottle().then (bottle) ->
-      bottle.type.should.eql 14
-      bottle.metadata.fields.length.should.eql 0
-    .then ->
-      b.readNextData()
-    .then (data) ->
-      data.isBottle.should.eql false
+    b = new bottle_stream.ReadableBottle(new toolkit.SourceStream(toolkit.fromHex("#{BASIC_HEADER}0103f0f0f00103e0e0e00103cccccc00")))
+    toolkit.qread(b).then (data) ->
       sink = new toolkit.SinkStream()
-      toolkit.qpipe(data.stream, sink).then ->
+      toolkit.qpipe(data, sink).then ->
         toolkit.toHex(sink.getBuffer()).should.eql "f0f0f0"
-    .then ->
-      b.readNextData()
+        toolkit.qread(b)
     .then (data) ->
-      data.isBottle.should.eql false
       sink = new toolkit.SinkStream()
-      toolkit.qpipe(data.stream, sink).then ->
+      toolkit.qpipe(data, sink).then ->
         toolkit.toHex(sink.getBuffer()).should.eql "e0e0e0"
-    .then ->
-      b.readNextData()
+        toolkit.qread(b)
     .then (data) ->
-      data.isBottle.should.eql false
       sink = new toolkit.SinkStream()
-      toolkit.qpipe(data.stream, sink).then ->
+      toolkit.qpipe(data, sink).then ->
         toolkit.toHex(sink.getBuffer()).should.eql "cccccc"
-    .then ->
-      b.readNextData()
+        toolkit.qread(b)
     .then (data) ->
       (data?).should.eql false
-
-
 
