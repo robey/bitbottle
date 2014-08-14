@@ -10,11 +10,12 @@ VERSION = 0x00
 
 TYPE_FILE = 0
 
-class WritableBottleStream extends toolkit.QStream
-  constructor: ->
+class WritableBottle extends toolkit.QStream
+  constructor: (type, metadata) ->
     super()
+    @_writeHeader(type, metadata)
 
-  writeBottleHeader: (type, metadata) ->
+  _writeHeader: (type, metadata) ->
     if type < 0 or type > 15 then throw new Error("Bottle type out of range: #{type}")
     buffers = metadata.pack()
     length = if buffers.length == 0 then 0 else buffers.map((b) -> b.length).reduce((a, b) -> a + b)
@@ -28,26 +29,26 @@ class WritableBottleStream extends toolkit.QStream
     buffers.unshift MAGIC
     @write(Buffer.concat(buffers))
 
-  # write a stream as data. if length == 0, we assume it's a bottle (which has indeterminate length).
-  writeData: (inStream, length = 0, final = true) ->
-    header = 0
-    lengthBytes = null
-    if length > 0
-      if not final then header |= 0x40
+  # write a stream into the bottle.
+  # if it's a WritableBottle, then we write a nested bottle. otherwise, it's treated as data.
+  writeData: (inStream, length = 0) ->
+    if inStream instanceof WritableBottle
+      @write(new Buffer([ 0x80 ])).then =>
+        @spliceFrom(inStream)
+    else
+      header = 0
       lengthBytes = zint.encodePackedInt(length)
       if lengthBytes.length > 7 then throw new Error("wtf")
       header |= lengthBytes.length
-    else
-      header = 0x80
-    @write(new Buffer([ header ])).then =>
-      if lengthBytes? then @write(lengthBytes) else Q()
-    .then =>
-      if length > 0
+      @write(new Buffer([ header ])).then =>
+        if lengthBytes? then @write(lengthBytes) else Q()
+      .then =>
         @spliceFrom(new toolkit.LimitStream(inStream, length))
-      else
-        @spliceFrom(inStream)
 
-  writeEndData: -> @write(new Buffer([ 0 ]))
+  close: ->
+    promise = @write(new Buffer([ 0 ]))
+    WritableBottle.__super__.close.apply(@)
+    promise
 
 
 # stream that reads an underlying (buffer) stream, pulls out the metadata and
@@ -124,4 +125,4 @@ class ReadableBottle extends stream.Readable
 
 exports.MAGIC = MAGIC
 exports.ReadableBottle = ReadableBottle
-exports.WritableBottleStream = WritableBottleStream
+exports.WritableBottle = WritableBottle
