@@ -36,6 +36,14 @@ class Metadata
       buffers.push f.content
     buffers
 
+  toString: ->
+    strings = @fields.map (f) ->
+      switch f.type
+        when TYPE_BOOL then "B#{f.id}"
+        when TYPE_ZINT then "I#{f.id}=#{f.number}"
+        when TYPE_STRING then "S#{f.id}=#{util.inspect f.list}"
+    "Metadata(" + strings.join(", ") + ")"
+
 
 unpack = (buffer) ->
   metadata = new Metadata()
