@@ -5,7 +5,7 @@ TYPE_STRING = 0
 TYPE_ZINT = 2
 TYPE_BOOL = 3
 
-class Metadata
+class Header
   constructor: ->
     @fields = []
 
@@ -24,11 +24,11 @@ class Metadata
     @fields.push { type: TYPE_STRING, id, content: Buffer.concat(buffers), list }
 
   pack: ->
-    # each metadata item has a 16-bit header: TTDDDDLL LLLLLLLL (T = type, D = id#, L = length)
+    # each header item has a 16-bit prefix: TTDDDDLL LLLLLLLL (T = type, D = id#, L = length)
     buffers = []
     for f in @fields
-      if f.id > 15 or f.id < 0 then throw new Error("Metadata ID out of range: #{f.id}")
-      if f.content.length > 1023 then throw new Error("Metadata #{id} too large (#{f.content.length}, max 1023)")
+      if f.id > 15 or f.id < 0 then throw new Error("Header ID out of range: #{f.id}")
+      if f.content.length > 1023 then throw new Error("Header #{id} too large (#{f.content.length}, max 1023)")
       buffers.push new Buffer([
         (f.type << 6) | (f.id << 2) | ((f.content.length >> 8) & 0x2)
         (f.content.length & 0xff)
@@ -42,30 +42,30 @@ class Metadata
         when TYPE_BOOL then "B#{f.id}"
         when TYPE_ZINT then "I#{f.id}=#{f.number}"
         when TYPE_STRING then "S#{f.id}=#{util.inspect f.list}"
-    "Metadata(" + strings.join(", ") + ")"
+    "Header(" + strings.join(", ") + ")"
 
 
 unpack = (buffer) ->
-  metadata = new Metadata()
+  header = new Header()
   i = 0
   while i < buffer.length
-    if i + 2 > buffer.length then throw new Error("Truncated metadata")
+    if i + 2 > buffer.length then throw new Error("Truncated header")
     type = (buffer[i] & 0xc0) >> 6
     id = (buffer[i] & 0x3c) >> 2
     length = (buffer[i] & 0x3) * 256 + (buffer[i + 1] & 0xff)
     i += 2
-    if i + length > buffer.length then throw new Error("Truncated metadata")
+    if i + length > buffer.length then throw new Error("Truncated header")
     content = buffer.slice(i, i + length)
     field = { type, id }
     switch type
       when TYPE_ZINT then field.number = zint.decodePackedInt(content)
       when TYPE_STRING then field.list = content.toString("UTF-8").split("\x00")
-    metadata.fields.push field
+    header.fields.push field
     i += length
-  metadata
+  header
 
 
-exports.Metadata = Metadata
+exports.Header = Header
 exports.TYPE_BOOL = TYPE_BOOL
 exports.TYPE_STRING = TYPE_STRING
 exports.TYPE_ZINT = TYPE_ZINT

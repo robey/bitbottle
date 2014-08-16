@@ -1,5 +1,6 @@
+file_bottle = require "./file_bottle"
+bottle_header = require "./bottle_header"
 Q = require "q"
-metadata = require "./metadata"
 stream = require "stream"
 toolkit = require "stream-toolkit"
 util = require "util"
@@ -11,15 +12,15 @@ VERSION = 0x00
 TYPE_FILE = 0
 
 class WritableBottle extends toolkit.QStream
-  constructor: (type, metadata) ->
+  constructor: (type, header) ->
     super()
-    @_writeHeader(type, metadata)
+    @_writeHeader(type, header)
 
-  _writeHeader: (type, metadata) ->
+  _writeHeader: (type, header) ->
     if type < 0 or type > 15 then throw new Error("Bottle type out of range: #{type}")
-    buffers = metadata.pack()
+    buffers = header.pack()
     length = if buffers.length == 0 then 0 else buffers.map((b) -> b.length).reduce((a, b) -> a + b)
-    if length > 4095 then throw new Error("Metadata too long: #{metadataBuffer.length} > 4095")
+    if length > 4095 then throw new Error("Header too long: #{length} > 4095")
     buffers.unshift new Buffer([
       VERSION
       0
@@ -51,35 +52,40 @@ class WritableBottle extends toolkit.QStream
     promise
 
 
-# stream that reads an underlying (buffer) stream, pulls out the metadata and
+# stream that reads an underlying (buffer) stream, pulls out the header and
 # type, and generates data objects.
 class ReadableBottle extends stream.Readable
   constructor: (@stream) ->
     super(objectMode: true)
     @type = null
-    @metadata = null
-    @metadataPromise = @_readHeader()
-    @lastPromise = @metadataPromise
+    @header = null
+    @readingHeaderPromise = @_readHeader()
+    @lastPromise = @readingHeaderPromise
 
   getType: ->
-    @metadataPromise.then =>
+    @readingHeaderPromise.then =>
       @type
 
-  getMetadata: ->
-    @metadataPromise.then =>
-      @metadata
+  getHeader: ->
+    @readingHeaderPromise.then =>
+      @header
 
   _readHeader: ->
     toolkit.qread(@stream, 8).then (buffer) =>
       [0 ... 4].map (i) =>
-        if buffer[i] != MAGIC[i] then throw new Error("Incorrect magic header")
+        if buffer[i] != MAGIC[i] then throw new Error("Incorrect magic")
       if buffer[4] != VERSION then throw new Error("Incompatible version: #{buffer[4].toString(16)}")
       if buffer[5] != 0 then throw new Error("Incompatible flags: #{buffer[5].toString(16)}")
       type = (buffer[6] >> 4) & 0xf
-      metadataLength = ((buffer[6] & 0xf) * 256) + (buffer[7] & 0xff)
-      toolkit.qread(@stream, metadataLength).then (b) =>
+      headerLength = ((buffer[6] & 0xf) * 256) + (buffer[7] & 0xff)
+      toolkit.qread(@stream, headerLength).then (b) =>
         @type = type
-        @metadata = metadata.unpack(b)
+        @header = bottle_header.unpack(b)
+        @_decodeHeader()
+
+  _decodeHeader: ->
+    switch @type
+      when TYPE_FILE then @header = file_bottle.decodeFileHeader(@header)
 
   _read: (size) ->
     # must finish reading the last thing we generated (either the promise for reading the header, or the last data stream):
@@ -92,6 +98,9 @@ class ReadableBottle extends stream.Readable
         @push stream
         return
       stream = @_streamData(stream)
+      # for convenience, add the type & header, since we know them by now
+      stream.type = @type
+      stream.header = @header
       @lastPromise = toolkit.qend(stream)
       @push stream
 
@@ -122,7 +131,7 @@ class ReadableBottle extends stream.Readable
         s
 
 
-
 exports.MAGIC = MAGIC
 exports.ReadableBottle = ReadableBottle
+exports.TYPE_FILE = TYPE_FILE
 exports.WritableBottle = WritableBottle
