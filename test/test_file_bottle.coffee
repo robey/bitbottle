@@ -3,8 +3,8 @@ mocha_sprinkles = require "mocha-sprinkles"
 toolkit = require "stream-toolkit"
 util = require "util"
 
-bottle_stream = require "../lib/4q/bottle_stream"
-file_bottle = require "../lib/4q/file_bottle"
+bottle_stream = require "../lib/4q/lib4q/bottle_stream"
+file_bottle = require "../lib/4q/lib4q/file_bottle"
 
 future = mocha_sprinkles.future
 withTempFolder = mocha_sprinkles.withTempFolder

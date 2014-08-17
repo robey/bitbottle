@@ -1,7 +1,7 @@
 toolkit = require "stream-toolkit"
 util = require "util"
 
-bottle_header = require "../lib/4q/bottle_header"
+bottle_header = require "../lib/4q/lib4q/bottle_header"
 
 describe "bottle_header", ->
   it "pack", ->

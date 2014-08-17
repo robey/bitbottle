@@ -1,7 +1,7 @@
 toolkit = require "stream-toolkit"
 util = require "util"
 
-zint = require "../lib/4q/zint"
+zint = require "../lib/4q/lib4q/zint"
 
 describe "zint", ->
   it "encode", ->

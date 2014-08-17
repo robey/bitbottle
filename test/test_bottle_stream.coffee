@@ -5,8 +5,8 @@ should = require "should"
 toolkit = require "stream-toolkit"
 util = require "util"
 
-bottle_header = require "../lib/4q/bottle_header"
-bottle_stream = require "../lib/4q/bottle_stream"
+bottle_header = require "../lib/4q/lib4q/bottle_header"
+bottle_stream = require "../lib/4q/lib4q/bottle_stream"
 
 future = mocha_sprinkles.future
 
