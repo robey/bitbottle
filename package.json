@@ -16,9 +16,11 @@
   "author": "Robey Pointer <robeypointer@gmail.com>",
   "license": "Apache2",
   "dependencies": {
+    "minimist": "*",
     "posix": "^1.0.3",
     "q": "^1.0.1",
     "stream-toolkit": "^1.0.0",
+    "strftime": "*",
     "xz": "^1.0.1"
   },
   "devDependencies": {

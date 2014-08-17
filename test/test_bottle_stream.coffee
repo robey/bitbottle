@@ -138,3 +138,22 @@ describe "ReadableBottle", ->
     .then (data) ->
       (data?).should.eql false
 
+  it "reads several bottles from the same stream", future ->
+    source = new toolkit.SourceStream(toolkit.fromHex("#{BASIC_MAGIC}010363617400#{BASIC_MAGIC}010368617400"))
+    b = new bottle_stream.ReadableBottle(source)
+    toolkit.qread(b).then (data) ->
+      sink = new toolkit.SinkStream()
+      toolkit.qpipe(data, sink).then ->
+        sink.getBuffer().toString().should.eql "cat"
+        toolkit.qread(b)
+    .then (data) ->
+      (data?).should.eql false
+      b = new bottle_stream.ReadableBottle(source)
+      toolkit.qread(b)
+    .then (data) ->
+      sink = new toolkit.SinkStream()
+      toolkit.qpipe(data, sink).then ->
+        sink.getBuffer().toString().should.eql "hat"
+        toolkit.qread(b)
+    .then (data) ->
+      (data?).should.eql false

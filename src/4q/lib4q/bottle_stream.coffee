@@ -73,7 +73,7 @@ class ReadableBottle extends stream.Readable
   _readHeader: ->
     toolkit.qread(@stream, 8).then (buffer) =>
       [0 ... 4].map (i) =>
-        if buffer[i] != MAGIC[i] then throw new Error("Incorrect magic")
+        if buffer[i] != MAGIC[i] then throw new Error("Incorrect magic (not a 4Q archive)")
       if buffer[4] != VERSION then throw new Error("Incompatible version: #{buffer[4].toString(16)}")
       if buffer[5] != 0 then throw new Error("Incompatible flags: #{buffer[5].toString(16)}")
       type = (buffer[6] >> 4) & 0xf
@@ -103,6 +103,8 @@ class ReadableBottle extends stream.Readable
       stream.header = @header
       @lastPromise = toolkit.qend(stream)
       @push stream
+    .fail (err) =>
+      @emit "error", err
 
   # keep reading data chunks until the "keepReading" bit is clear.
   _streamData: (firstStream) ->
