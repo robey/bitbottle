@@ -1,11 +1,11 @@
 
 Everything is nested bottles.
 
-A bottle is some metadata (header) and one or more data blocks. Each data block can be another bottle.
+A bottle is some (small, structured) header and one or more data blocks. Each data block can be another bottle.
 
 ## Goals
 
-- Streamable: Files may be saved one at a time as the archive is read, and an archive can be written without buffering the whole thing in memory. Metadata should be small so it *can* be buffered, and data should be streamable always.
+- Streamable: Files may be saved one at a time as the archive is read, and an archive can be written without buffering the whole thing in memory. Headers should be small so they *can* be buffered, and data should be streamable always.
 - It should be possible to cat several archives together and treat them as a larger archive. (That means the magic number has to be a special header, and EOF can be implicit.)
 - There should be an optional index so you don't have to scan the file to see what's in it.
 
@@ -13,7 +13,7 @@ A bottle is some metadata (header) and one or more data blocks. Each data block 
 
 - File (0)
 
-    Metadata:
+    Header:
     1. filename [string 0]
     2. mime type [string 1]
     3. size (bytes) [zint 0]
@@ -27,7 +27,7 @@ A bottle is some metadata (header) and one or more data blocks. Each data block 
 
 2. Hashed data
 
-    Metadata:
+    Header:
     - hash name (as in SSH)
     - hash value
 
@@ -37,13 +37,15 @@ A bottle is some metadata (header) and one or more data blocks. Each data block 
 
 4. Encrypted data
 
-    Metadata:
+    Header:
     - cipher name (as in SSH) or "gnupg" for a gnupg armored blob
 
-5. Compressed data
+- Compressed data (4)
 
-    Metadata:
-    - compression type (limited list, maintained by 4q project)
+    Header:
+    1. compression type [zint 0]
+      - lzma2 [0]
+      - snappy [1]
 
 6. Alternate versions
 
@@ -51,22 +53,22 @@ A bottle is some metadata (header) and one or more data blocks. Each data block 
 
 7. Partial bottle
 
-    Metadata:
+    Header:
     - which part # is this?
     - how many parts total?
     - raid format (string)
 
-    Two data blocks: the metadata for the total reconstituted bottle, and the partial block. That is, each part has the metadata attached redundantly as a prefix data block.
+    Two data blocks: the header for the total reconstituted bottle, and the partial block. That is, each part has the header attached redundantly as a prefix data block.
 
-## Encoding of metadata
+## Encoding of headers
 
-Each metadata item header is two bytes: type (2 bits), header id (4 bits), length (10 bits)
+Each item in the header is marked by two bytes: type (2 bits), id (4 bits), length (10 bits)
 
 - bool (type 11): true if present (length=0), false if the field is missing
 - int (type 10): LSB order, 8 bits per byte
 - [list of] strings (type 00): series of utf8 data, separated by \u0000
 
-## Bottle header
+## Bottle magic
 
 8 bytes total.
 
@@ -77,11 +79,11 @@ Each metadata item header is two bytes: type (2 bits), header id (4 bits), lengt
   - to make incompatible (format, structure) changes, change the magic
 3. reserved (0)
 4. type (4 bits)
-5. length of metadata block (12 bits)
+5. length of header block (12 bits)
 
 Current version is 0x00.
 
-## Data header
+## Data
 
 Single byte bitfield:
 1. container? (1 = bottle, 0 = data)
@@ -96,14 +98,14 @@ Byte 00 (data, length = 0) means end of data blocks for this bottle.
 
 Two files, named "hello" and "smile".
 
-- Bottle type 1 (file: directory): f0 9f 8d bc 00 00 10 22 - metadata length = 34
-  - Metadata:
+- Bottle type 1 (file: directory): f0 9f 8d bc 00 00 10 22 - header length = 34
+  - Header:
     - filename "." (00 01, '.')
     - created 1406011886_693_000_000, or: 88 08, 00 23 50 90 5c 28 83 13
     - similarly modified & accessed, 10 bytes each
     - is folder: c0 00
   - Data #1: 80 (container)
-    - Bottle type 1 (file): f0 9f 8d bc 00 00 10 2c - metadata length = 44
+    - Bottle type 1 (file): f0 9f 8d bc 00 00 10 2c - header length = 44
       - Metadata:
         - filename "hello" (00 05, 'hello')
         - size 5 (80 01, 05)
