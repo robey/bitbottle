@@ -21,8 +21,17 @@ describe "writeFileBottle", ->
     sink = new toolkit.SinkStream()
     toolkit.qpipe(s, sink).then ->
       # now decode it.
-      bottle = new bottle_stream.ReadableBottle(new toolkit.SourceStream(sink.getBuffer()))
-      toolkit.qread(bottle)
+      bottle_stream.readBottleFromStream(new toolkit.SourceStream(sink.getBuffer())).then (bottle) ->
+        bottle.type.should.eql bottle_stream.TYPE_FILE
+        bottle.header.filename.should.eql "bogus.txt"
+        bottle.header.mode.should.eql 7
+        bottle.header.createdNanos.should.eql 1234567890
+        bottle.header.size.should.eql 10
+        bottle.header.username.should.eql "tyrion"
+        toolkit.qread(bottle).then (fileStream) ->
+          sink = new toolkit.SinkStream()
+          toolkit.qpipe(fileStream, sink).then ->
+            sink.getBuffer().toString().should.eql "television"
 
   it "writes and decodes an actual file", future withTempFolder (folder) ->
     fs.writeFileSync("#{folder}/test.txt", "hello!\n")
@@ -30,13 +39,12 @@ describe "writeFileBottle", ->
       sink = new toolkit.SinkStream()
       toolkit.qpipe(s, sink).then ->
         # now decode it.
-        bottle = new bottle_stream.ReadableBottle(new toolkit.SourceStream(sink.getBuffer()))
-        toolkit.qread(bottle)
-    .then (fileStream) ->
-      fileStream.type.should.eql bottle_stream.TYPE_FILE
-      fileStream.header.filename.should.eql "#{folder}/test.txt"
-      fileStream.header.folder.should.eql false
-      fileStream.header.size.should.eql 7
-      sink = new toolkit.SinkStream()
-      toolkit.qpipe(fileStream, sink).then ->
-        sink.getBuffer().toString().should.eql "hello!\n"
+        bottle_stream.readBottleFromStream(new toolkit.SourceStream(sink.getBuffer())).then (bottle) ->
+          bottle.type.should.eql bottle_stream.TYPE_FILE
+          bottle.header.filename.should.eql "#{folder}/test.txt"
+          bottle.header.folder.should.eql false
+          bottle.header.size.should.eql 7
+          toolkit.qread(bottle).then (fileStream) ->
+            sink = new toolkit.SinkStream()
+            toolkit.qpipe(fileStream, sink).then ->
+              sink.getBuffer().toString().should.eql "hello!\n"

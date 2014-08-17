@@ -77,83 +77,82 @@ describe "WritableBottle", ->
 
 
 describe "ReadableBottle", ->
-  BASIC_MAGIC = "f09f8dbc00000000"
+  BASIC_MAGIC = "f09f8dbc0000e000"
 
   it "validates the header", future ->
-    b = new bottle_stream.ReadableBottle(new toolkit.SourceStream(toolkit.fromHex("00")))
-    shouldQThrow b.getHeader(), /magic/
-    b = new bottle_stream.ReadableBottle(new toolkit.SourceStream(toolkit.fromHex("f09f8dbcff000000")))
-    shouldQThrow b.getHeader(), /version/
-    b = new bottle_stream.ReadableBottle(new toolkit.SourceStream(toolkit.fromHex("f09f8dbc00ff0000")))
-    shouldQThrow b.getHeader(), /flags/
+    b = bottle_stream.readBottleFromStream(new toolkit.SourceStream(toolkit.fromHex("00")))
+    shouldQThrow b, /magic/
+    b = bottle_stream.readBottleFromStream(new toolkit.SourceStream(toolkit.fromHex("f09f8dbcff000000")))
+    shouldQThrow b, /version/
+    b = bottle_stream.readBottleFromStream(new toolkit.SourceStream(toolkit.fromHex("f09f8dbc00ff0000")))
+    shouldQThrow b, /flags/
 
   it "reads the header", future ->
-    b = new bottle_stream.ReadableBottle(new toolkit.SourceStream(toolkit.fromHex("f09f8dbc00002000")))
-    b.getHeader().then (header) ->
-      header.fields.length.should.eql 0
-      b.getType().then (t) ->
-        t.should.eql 2
-    b = new bottle_stream.ReadableBottle(new toolkit.SourceStream(toolkit.fromHex("f09f8dbc0000e003800196")))
-    b.getHeader().then (header) ->
-      header.fields.length.should.eql 1
-      header.fields[0].number.should.eql 150
-      b.getType().then (t) ->
-        t.should.eql 14
+    bottle_stream.readBottleFromStream(new toolkit.SourceStream(toolkit.fromHex("f09f8dbc0000c000"))).then (b) ->
+      b.header.fields.length.should.eql 0
+      b.type.should.eql 12
+      bottle_stream.readBottleFromStream(new toolkit.SourceStream(toolkit.fromHex("f09f8dbc0000e003800196"))).then (b) ->
+        b.header.fields.length.should.eql 1
+        b.header.fields[0].number.should.eql 150
+        b.type.should.eql 14
 
   it "reads a data block", future ->
-    b = new bottle_stream.ReadableBottle(new toolkit.SourceStream(toolkit.fromHex("#{BASIC_MAGIC}010568656c6c6f00")))
-    toolkit.qread(b).then (data) ->
-      sink = new toolkit.SinkStream()
-      toolkit.qpipe(data, sink).then ->
-        sink.getBuffer().toString().should.eql "hello"
-        toolkit.qread(b).then (data) ->
-          (data?).should.eql false
+    bottle_stream.readBottleFromStream(new toolkit.SourceStream(toolkit.fromHex("#{BASIC_MAGIC}010568656c6c6f00"))).then (b) ->
+      toolkit.qread(b).then (data) ->
+        sink = new toolkit.SinkStream()
+        toolkit.qpipe(data, sink).then ->
+          sink.getBuffer().toString().should.eql "hello"
+          toolkit.qread(b).then (data) ->
+            (data?).should.eql false
 
   it "reads a continuing data block", future ->
-    b = new bottle_stream.ReadableBottle(new toolkit.SourceStream(toolkit.fromHex("#{BASIC_MAGIC}4102686541016c01026c6f00")))
-    toolkit.qread(b).then (data) ->
-      sink = new toolkit.SinkStream()
-      toolkit.qpipe(data, sink).then ->
-        sink.getBuffer().toString().should.eql "hello"
-        toolkit.qread(b).then (data) ->
-          (data?).should.eql false
+    bottle_stream.readBottleFromStream(new toolkit.SourceStream(toolkit.fromHex("#{BASIC_MAGIC}4102686541016c01026c6f00"))).then (b) ->
+      toolkit.qread(b).then (data) ->
+        sink = new toolkit.SinkStream()
+        toolkit.qpipe(data, sink).then ->
+          sink.getBuffer().toString().should.eql "hello"
+          toolkit.qread(b).then (data) ->
+            (data?).should.eql false
 
   it "reads several datas", future ->
-    b = new bottle_stream.ReadableBottle(new toolkit.SourceStream(toolkit.fromHex("#{BASIC_MAGIC}0103f0f0f00103e0e0e00103cccccc00")))
-    toolkit.qread(b).then (data) ->
-      sink = new toolkit.SinkStream()
-      toolkit.qpipe(data, sink).then ->
-        toolkit.toHex(sink.getBuffer()).should.eql "f0f0f0"
-        toolkit.qread(b)
-    .then (data) ->
-      sink = new toolkit.SinkStream()
-      toolkit.qpipe(data, sink).then ->
-        toolkit.toHex(sink.getBuffer()).should.eql "e0e0e0"
-        toolkit.qread(b)
-    .then (data) ->
-      sink = new toolkit.SinkStream()
-      toolkit.qpipe(data, sink).then ->
-        toolkit.toHex(sink.getBuffer()).should.eql "cccccc"
-        toolkit.qread(b)
-    .then (data) ->
-      (data?).should.eql false
+    bottle_stream.readBottleFromStream(new toolkit.SourceStream(toolkit.fromHex("#{BASIC_MAGIC}0103f0f0f00103e0e0e00103cccccc00"))).then (b) ->
+      toolkit.qread(b).then (data) ->
+        sink = new toolkit.SinkStream()
+        toolkit.qpipe(data, sink).then ->
+          toolkit.toHex(sink.getBuffer()).should.eql "f0f0f0"
+          toolkit.qread(b)
+      .then (data) ->
+        sink = new toolkit.SinkStream()
+        toolkit.qpipe(data, sink).then ->
+          toolkit.toHex(sink.getBuffer()).should.eql "e0e0e0"
+          toolkit.qread(b)
+      .then (data) ->
+        sink = new toolkit.SinkStream()
+        toolkit.qpipe(data, sink).then ->
+          toolkit.toHex(sink.getBuffer()).should.eql "cccccc"
+          toolkit.qread(b)
+      .then (data) ->
+        (data?).should.eql false
 
   it "reads several bottles from the same stream", future ->
     source = new toolkit.SourceStream(toolkit.fromHex("#{BASIC_MAGIC}010363617400#{BASIC_MAGIC}010368617400"))
-    b = new bottle_stream.ReadableBottle(source)
-    toolkit.qread(b).then (data) ->
-      sink = new toolkit.SinkStream()
-      toolkit.qpipe(data, sink).then ->
-        sink.getBuffer().toString().should.eql "cat"
-        toolkit.qread(b)
-    .then (data) ->
-      (data?).should.eql false
-      b = new bottle_stream.ReadableBottle(source)
+    bottle_stream.readBottleFromStream(source).then (b) ->
+      toolkit.qread(b).then (data) ->
+        sink = new toolkit.SinkStream()
+        toolkit.qpipe(data, sink).then ->
+          sink.getBuffer().toString().should.eql "cat"
+          toolkit.qread(b)
+      .then (data) ->
+        (data?).should.eql false
+        bottle_stream.readBottleFromStream(source)
+    .then (b) ->
       toolkit.qread(b)
-    .then (data) ->
-      sink = new toolkit.SinkStream()
-      toolkit.qpipe(data, sink).then ->
-        sink.getBuffer().toString().should.eql "hat"
-        toolkit.qread(b)
-    .then (data) ->
-      (data?).should.eql false
+      .then (data) ->
+        sink = new toolkit.SinkStream()
+        toolkit.qpipe(data, sink).then ->
+          sink.getBuffer().toString().should.eql "hat"
+          toolkit.qread(b)
+      .then (data) ->
+        (data?).should.eql false
+        bottle_stream.readBottleFromStream(source)
+    .then(((b) -> throw new Error("expected end of stream")), ((err) -> ))

@@ -52,55 +52,51 @@ class WritableBottle extends toolkit.QStream
     promise
 
 
+# read a bottle from a stream. if it's an unknown bottle type, a generic
+# "ReadableBottle" object is returned, which is a stream that provides
+# sub-streams. otherwise, a specific sub-class for the known bottle type is
+# returned.
+readBottleFromStream = (stream) ->
+  readBottleHeader(stream).then ({ type, header }) ->
+    header = switch type
+      when TYPE_FILE then file_bottle.decodeFileHeader(header)
+      else header
+    new ReadableBottle(type, header, stream)
+
+readBottleHeader = (stream) ->
+  toolkit.qread(stream, 8).then (buffer) ->
+    if not buffer? then throw new Error("End of stream")
+    [0 ... 4].map (i) =>
+      if buffer[i] != MAGIC[i] then throw new Error("Incorrect magic (not a 4Q archive)")
+    if buffer[4] != VERSION then throw new Error("Incompatible version: #{buffer[4].toString(16)}")
+    if buffer[5] != 0 then throw new Error("Incompatible flags: #{buffer[5].toString(16)}")
+    type = (buffer[6] >> 4) & 0xf
+    headerLength = ((buffer[6] & 0xf) * 256) + (buffer[7] & 0xff)
+    toolkit.qread(stream, headerLength).then (b) =>
+      { type, header: bottle_header.unpack(b) }
+
+
 # stream that reads an underlying (buffer) stream, pulls out the header and
 # type, and generates data objects.
 class ReadableBottle extends stream.Readable
-  constructor: (@stream) ->
+  constructor: (@type, @header, @stream) ->
     super(objectMode: true)
-    @type = null
-    @header = null
-    @readingHeaderPromise = @_readHeader()
-    @lastPromise = @readingHeaderPromise
+    @lastPromise = Q()
 
-  getType: ->
-    @readingHeaderPromise.then =>
-      @type
+  # default implementation of _read, to be overridden by actual bottle types
+  _read: (size) -> @_nextStream()
 
-  getHeader: ->
-    @readingHeaderPromise.then =>
-      @header
-
-  _readHeader: ->
-    toolkit.qread(@stream, 8).then (buffer) =>
-      [0 ... 4].map (i) =>
-        if buffer[i] != MAGIC[i] then throw new Error("Incorrect magic (not a 4Q archive)")
-      if buffer[4] != VERSION then throw new Error("Incompatible version: #{buffer[4].toString(16)}")
-      if buffer[5] != 0 then throw new Error("Incompatible flags: #{buffer[5].toString(16)}")
-      type = (buffer[6] >> 4) & 0xf
-      headerLength = ((buffer[6] & 0xf) * 256) + (buffer[7] & 0xff)
-      toolkit.qread(@stream, headerLength).then (b) =>
-        @type = type
-        @header = bottle_header.unpack(b)
-        @_decodeHeader()
-
-  _decodeHeader: ->
-    switch @type
-      when TYPE_FILE then @header = file_bottle.decodeFileHeader(@header)
-
-  _read: (size) ->
-    # must finish reading the last thing we generated (either the promise for reading the header, or the last data stream):
+  _nextStream: ->
+    # must finish reading the last thing we generated, if any:
     @lastPromise.then =>
       @_readDataChunk()
     .then (stream) =>
       if not stream? then return @push null
-      if stream instanceof ReadableBottle
-        @lastPromise = qend(stream)
-        @push stream
-        return
-      stream = @_streamData(stream)
-      # for convenience, add the type & header, since we know them by now
-      stream.type = @type
-      stream.header = @header
+      if not (stream instanceof ReadableBottle)
+        stream = @_streamData(stream)
+        # for convenience, add the type & header, since we know them by now
+        stream.type = @type
+        stream.header = @header
       @lastPromise = toolkit.qend(stream)
       @push stream
     .fail (err) =>
@@ -123,7 +119,7 @@ class ReadableBottle extends stream.Readable
       # end of data stream?
       if buffer[0] == 0 then return null
       isBottle = (buffer[0] & 0x80) != 0
-      if isBottle then return new ReadableBottle(@stream)
+      if isBottle then return readBottleFromStream(@stream)
       keepReading = (buffer[0] & 0x40) != 0
       lengthBytes = (buffer[0] & 7)
       toolkit.qread(@stream, lengthBytes).then (buffer) =>
@@ -135,5 +131,6 @@ class ReadableBottle extends stream.Readable
 
 exports.MAGIC = MAGIC
 exports.ReadableBottle = ReadableBottle
+exports.readBottleFromStream = readBottleFromStream
 exports.TYPE_FILE = TYPE_FILE
 exports.WritableBottle = WritableBottle
