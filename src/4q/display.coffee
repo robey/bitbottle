@@ -1,3 +1,4 @@
+sprintf = require "sprintf"
 util = require "util"
 
 HUMAN_LABELS = " KMGTPE"
@@ -28,6 +29,13 @@ roundToPrecision = (number, digits, op = "round") ->
 lpad = (s, n) ->
   if s.length >= n then s else lpad(SPACE[0 ... n - s.length] + s, n)
 
+screenWidth = ->
+  if process.stdout.isTTY then process.stdout.columns else 80
 
+displayStatus = (message = "") ->
+  process.stdout.write(sprintf("\r%-#{screenWidth() - 1}s\r%s", " ", message))
+
+
+exports.displayStatus = displayStatus
 exports.humanize = humanize
 exports.roundToPrecision = roundToPrecision
