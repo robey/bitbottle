@@ -19,6 +19,7 @@
     "minimist": "*",
     "posix": "^1.0.3",
     "q": "^1.0.1",
+    "sprintf": "*",
     "stream-toolkit": "^1.0.0",
     "strftime": "*",
     "xz": "^1.0.1"

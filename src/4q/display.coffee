@@ -30,5 +30,4 @@ lpad = (s, n) ->
 
 
 exports.humanize = humanize
-exports.lpad = lpad
 exports.roundToPrecision = roundToPrecision
