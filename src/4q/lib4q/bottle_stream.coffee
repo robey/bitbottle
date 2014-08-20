@@ -52,10 +52,8 @@ class WritableBottle extends toolkit.QStream
     promise
 
 
-# read a bottle from a stream. if it's an unknown bottle type, a generic
-# "ReadableBottle" object is returned, which is a stream that provides
-# sub-streams. otherwise, a specific sub-class for the known bottle type is
-# returned.
+# read a bottle from a stream, returning a "ReadableBottle" object, which is
+# a stream that provides sub-streams.
 readBottleFromStream = (stream) ->
   readBottleHeader(stream).then ({ type, header }) ->
     header = switch type

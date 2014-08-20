@@ -82,6 +82,7 @@ main = ->
     console.log "done."
   .fail (err) ->
     console.log "\nERROR: #{err.message}"
+    process.exit(1)
   .done()
 
 
@@ -167,9 +168,9 @@ class CountingMonster extends stream.Transform
 
   _updateDisplay: (lf = false) ->
     if @filename?
-      progress = paint.color("purple", sprintf("[%s/%s]", display.humanize(@bytes), display.humanize(@totalBytes)))
+      progress = paint.color("cyan", sprintf("[%s/%s]", display.humanize(@bytes), display.humanize(@totalBytes)))
       display.displayStatus paint("  ", progress, " ", @filename, " ")
-    if lf then process.stdout.write "\n"
+    #if lf then process.stdout.write "\n"
 
 
 exports.main = main
