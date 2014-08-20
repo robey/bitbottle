@@ -22,26 +22,31 @@ FIELDS =
     IS_FOLDER: 0
 
 
-fileHeaderFromFilename = (filename) ->
+fileHeaderFromFilename = (filename, archiveFilename) ->
   deferred = Q.defer()
   fs.stat filename, (err, stats) ->
     if err? then return deferred.reject(err)
-    stats.filename = filename
-    stats.mode = stats.mode & 0x1ff
-    stats.createdNanos = stats.ctime.getTime() * 1000000
-    stats.modifiedNanos = stats.mtime.getTime() * 1000000
-    stats.accessedNanos = stats.atime.getTime() * 1000000
-    stats.folder = stats.isDirectory()
-    stats.username = try
-      posix.getpwnam(stats.uid).name
-    catch e
-      null
-    stats.groupname = try
-      posix.getgrnam(stats.gid).name
-    catch e
-      null
+    stats = fileHeaderFromStats(filename, archiveFilename, stats)
     deferred.resolve(stats)
   deferred.promise
+
+fileHeaderFromStats = (filename, archiveFilename, stats) ->
+  # for mysterious reasons, isDirectory() must be checked first, before it decays away
+  stats.folder = stats.isDirectory()
+  stats.filename = if archiveFilename? then archiveFilename else filename
+  stats.mode = stats.mode & 0x1ff
+  stats.createdNanos = stats.ctime.getTime() * 1000000
+  stats.modifiedNanos = stats.mtime.getTime() * 1000000
+  stats.accessedNanos = stats.atime.getTime() * 1000000
+  stats.username = try
+    posix.getpwnam(stats.uid).name
+  catch e
+    null
+  stats.groupname = try
+    posix.getgrnam(stats.gid).name
+  catch e
+    null
+  stats
 
 encodeFileHeader = (stats) ->
   m = new bottle_header.Header()
@@ -82,17 +87,19 @@ decodeFileHeader = (m) ->
 
 writeFileBottle = (stats, stream) ->
   s = new bottle_stream.WritableBottle(bottle_stream.TYPE_FILE, encodeFileHeader(stats))
-  s.writeData(stream, stats.size).then ->
-    s.close()
+  if stream?
+    s.writeData(stream, stats.size).then ->
+      s.close()
   s
 
-writeFileBottleFromFile = (filename) ->
-  fileHeaderFromFilename(filename).then (stats) ->
-    writeFileBottle(stats, fs.createReadStream(filename))
+writeFileBottleFromFile = (filename, archiveFilename, stats) ->
+  (if stats? then Q(fileHeaderFromStats(filename, archiveFilename, stats)) else fileHeaderFromFilename(filename, archiveFilename)).then (stats) ->
+    writeFileBottle(stats, if stats.folder then null else fs.createReadStream(filename))
 
 
 exports.decodeFileHeader = decodeFileHeader
 exports.encodeFileHeader = encodeFileHeader
 exports.fileHeaderFromFilename = fileHeaderFromFilename
+exports.fileHeaderFromStats = fileHeaderFromStats
 exports.writeFileBottle = writeFileBottle
 exports.writeFileBottleFromFile = writeFileBottleFromFile
