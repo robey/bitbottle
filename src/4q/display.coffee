@@ -33,7 +33,9 @@ screenWidth = ->
   if process.stdout.isTTY then process.stdout.columns else 80
 
 displayStatus = (message = "") ->
-  process.stdout.write(sprintf("\r%-#{screenWidth() - 1}s\r%s", " ", message))
+  width = screenWidth() - 1
+  message = message.toString()[...width]
+  process.stdout.write(sprintf("\r%-#{width}s\r%s", " ", message))
 
 
 exports.displayStatus = displayStatus

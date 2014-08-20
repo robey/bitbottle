@@ -17,6 +17,7 @@ describe "display", ->
     display.humanize(9999).should.eql            " 9.8K"
     display.humanize(12345).should.eql           "  12K"
     display.humanize(123456).should.eql          " 121K"
+    display.humanize(1024000).should.eql         "1000K"
     display.humanize(1234567).should.eql         " 1.2M"
     display.humanize(74449000).should.eql        "  71M"
     display.humanize(Math.pow(2, 32)).should.eql "   4G"
