@@ -19,15 +19,12 @@ humanize = (number, base = 1024.0) ->
   # compensate for sloppy floating-point rounding:
   while number.indexOf(".") > 0 and number[number.length - 1] == "0"
     number = number[0 ... number.length - 1]
-  lpad(number.toString()[...4] + label, 5)
+  number.toString()[...4] + label
 
 roundToPrecision = (number, digits, op = "round") ->
   if number == 0 then return 0
   scale = digits - Math.floor(Math.log(number) / Math.log(10)) - 1
   Math[op](number * Math.pow(10, scale)) * Math.pow(10, -scale)
-
-lpad = (s, n) ->
-  if s.length >= n then s else lpad(SPACE[0 ... n - s.length] + s, n)
 
 screenWidth = ->
   if process.stdout.isTTY then process.stdout.columns else 80
