@@ -29,7 +29,7 @@ main = ->
     console.log USAGE
     process.exit(0)
   if argv.version
-    console.log VERSION
+    console.log "qls #{VERSION}"
     process.exit(0)
   if argv._.length == 0
     console.log "required: filename of 4Q archive file(s)"
@@ -60,6 +60,7 @@ dumpArchiveFile = (filename) ->
     scanBottle(bottle, "")
   .fail (err) ->
     console.log "ERROR reading #{filename}: #{err.message}"
+    console.log err.stack
     stream.close()
 
 scanBottle = (bottle, prefix) ->
@@ -115,7 +116,8 @@ summaryLineForFile = (stats, prefix) ->
   size = if stats.size? then display.humanize(stats.size) else "     "
   time = relativeDate(stats.modifiedNanos)
   filename = if stats.folder then stats.filename + "/" else stats.filename
-  sprintf("%s  %-8s %-8s %6s  %s  %s", mode, username, groupname, time, size, prefix + filename)
+  sprintf("%s  %-8s %-8s %6s  %5s  %s", mode, username, groupname, time, size, prefix + filename)
+  
 
 
 

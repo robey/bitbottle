@@ -1,7 +1,8 @@
-#!/usr/bin/env node
+#!/usr/bin/env node --trace-deprecation
 
 var path = require('path');
 var fs   = require('fs');
 var lib  = path.join(path.dirname(fs.realpathSync(__filename)), '../lib');
 
+process.maxTickDepth = 10000;
 require(lib + '/4q/qls').main();
