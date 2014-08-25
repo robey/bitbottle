@@ -15,16 +15,25 @@ DAYS_250 = 250 * 24 * 60 * 60 * 1000
 
 VERSION = "1.0.0"
 
+COLORS =
+  executable: "red"
+  mode: "088"
+  user_group: "088"
+  timestamp: "blue"
+  file_size: "green"
+
 USAGE = """
 usage: qls [options] <filename(s)...>
     displays contents of 4Q archives
 
 options:
     --help
+    -l
+        long form: display date/time, user/group, and posix permissions
 """
 
 main = ->
-  argv = minimist(process.argv[2...], boolean: [ "help", "version" ])
+  argv = minimist(process.argv[2...], boolean: [ "help", "version", "l" ])
   if argv.help or argv._.length == 0
     console.log USAGE
     process.exit(0)
@@ -34,18 +43,18 @@ main = ->
   if argv._.length == 0
     console.log "required: filename of 4Q archive file(s)"
     process.exit(1)
-  dumpArchiveFiles(argv._)
+  dumpArchiveFiles(argv._, argv.l)
   .fail (err) ->
     console.log "\nERROR: #{err.message}"
     process.exit(1)
   .done()
 
-dumpArchiveFiles = (filenames) ->
+dumpArchiveFiles = (filenames, verbose) ->
   if filenames.length == 0 then return Q()
-  dumpArchiveFile(filenames.shift()).then ->
-    dumpArchiveFiles(filenames)
+  dumpArchiveFile(filenames.shift(), verbose).then ->
+    dumpArchiveFiles(filenames, verbose)
 
-dumpArchiveFile = (filename) ->
+dumpArchiveFile = (filename, verbose) ->
   try
     fd = fs.openSync(filename, "r")
   catch err
@@ -57,15 +66,17 @@ dumpArchiveFile = (filename) ->
     console.log "ERROR reading #{filename}: #{err.message}"
     stream.close()
   lib4q.readBottleFromStream(stream).then (bottle) ->
-    scanBottle(bottle, "")
+    scanBottle(bottle, "", verbose)
   .fail (err) ->
     console.log "ERROR reading #{filename}: #{err.message}"
     console.log err.stack
     stream.close()
 
-scanBottle = (bottle, prefix) ->
+# if not argv.q then process.stdout.write "#{argv.o} (#{updater.fileCount} files, #{display.humanize(updater.totalBytes)} bytes)\n"
+
+scanBottle = (bottle, prefix, verbose) ->
   switch bottle.type
-    when lib4q.TYPE_FILE then dumpFileBottle(bottle, prefix)
+    when lib4q.TYPE_FILE then dumpFileBottle(bottle, prefix, verbose)
     else
       console.log "ERROR: unknown bottle type #{bottle.type}"
 
@@ -76,19 +87,18 @@ skipBottle = (bottle) ->
     toolkit.qpipe(s, sink).then ->
       skipBottle(bottle)
 
-dumpFileBottle = (bottle, prefix) ->
-  console.log summaryLineForFile(bottle.header, prefix)
-  if bottle.header.folder then dumpFolderBottle(bottle, prefix + bottle.header.filename + "/") else skipBottle(bottle)
+dumpFileBottle = (bottle, prefix, verbose) ->
+  console.log summaryLineForFile(bottle.header, prefix, verbose)
+  if bottle.header.folder then dumpFolderBottle(bottle, prefix + bottle.header.filename + "/", verbose) else skipBottle(bottle)
 
-dumpFolderBottle = (bottle, prefix) ->
+dumpFolderBottle = (bottle, prefix, verbose) ->
   toolkit.qread(bottle).then (s) ->
     if not s? then return Q()
     if s instanceof lib4q.ReadableBottle
-      scanBottle(s, prefix).then -> dumpFolderBottle(bottle, prefix)
+      scanBottle(s, prefix, verbose).then -> dumpFolderBottle(bottle, prefix, verbose)
 
-# -rw-r--r--   1 robey  staff    73B Aug 10 17:29 4q.sublime-project
-
-# either "13:45:30" or "10 Aug 2014"
+# either "13:45" or "10 Aug" or "2014"
+# (25 Aug 2014: this is stupid.)
 relativeDate = (nanos) ->
   d = new Date(nanos / Math.pow(10, 6))
   if d.getTime() > NOW or d.getTime() < NOW - DAYS_250
@@ -97,6 +107,10 @@ relativeDate = (nanos) ->
     strftime("%b %d", d)
   else
     strftime("%H:%M", d)
+
+fullDate = (nanos) ->
+  d = new Date(nanos / Math.pow(10, 6))
+  strftime("%Y-%m-%d %H:%M", d)
 
 # convert a numeric mode into the "-rw----" wire
 modeToWire = (mode, isFolder) ->
@@ -109,16 +123,26 @@ modeToWire = (mode, isFolder) ->
   d = if isFolder then "d" else "-"
   d + octize((mode >> 6) & 7) + octize((mode >> 3) & 7) + octize(mode & 7)
 
-summaryLineForFile = (stats, prefix) ->
+summaryLineForFile = (stats, prefix, verbose) ->
   mode = modeToWire(stats.mode or 0, stats.folder)
   username = (stats.username or "nobody")[...8]
   groupname = (stats.groupname or "nobody")[...8]
   size = if stats.size? then display.humanize(stats.size) else "     "
-  time = relativeDate(stats.modifiedNanos)
-  filename = if stats.folder then stats.filename + "/" else stats.filename
-  sprintf("%s  %-8s %-8s %6s  %5s  %s", mode, username, groupname, time, size, prefix + filename)
-  
-
+  time = fullDate(stats.modifiedNanos)
+  filename = if stats.folder
+    prefix + stats.filename + "/"
+  else if (stats.mode & 0x40) != 0
+    display.paint(display.color(COLORS.executable, prefix + stats.filename + "*"))
+  else
+    prefix + stats.filename
+  mode = display.color(COLORS.mode, mode)
+  userdata = display.color(COLORS.user_group, sprintf("%-8s %-8s", username, groupname))
+  time = display.color(COLORS.timestamp, sprintf("%6s", time))
+  size = display.color(COLORS.file_size, sprintf("%5s", size))
+  if verbose
+    display.paint(mode, "  ", userdata, " ", time, "  ", size, "  ", filename).toString()
+  else
+    display.paint("  ", size, "  ", filename).toString()
 
 
 exports.main = main
