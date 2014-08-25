@@ -31,9 +31,9 @@ class WritableBottle extends toolkit.QStream
     @write(Buffer.concat(buffers))
 
   # write a stream into the bottle.
-  # if it's a WritableBottle, then we write a nested bottle. otherwise, it's treated as data.
-  writeData: (inStream, length = 0) ->
-    if inStream instanceof WritableBottle
+  # if a length is given, we treat it as data. otherwies, it's a nested bottle.
+  writeData: (inStream, length) ->
+    if not length?
       @write(new Buffer([ 0x80 ])).then =>
         @spliceFrom(inStream)
     else
