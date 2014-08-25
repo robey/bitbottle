@@ -1,5 +1,6 @@
 fs = require "fs"
 mocha_sprinkles = require "mocha-sprinkles"
+Q = require "q"
 toolkit = require "stream-toolkit"
 util = require "util"
 
@@ -48,3 +49,34 @@ describe "writeFileBottle", ->
             sink = new toolkit.SinkStream()
             toolkit.qpipe(fileStream, sink).then ->
               sink.getBuffer().toString().should.eql "hello!\n"
+
+  it "writes a nested folder correctly", future ->
+    sink = new toolkit.SinkStream()
+    folderStream1 = file_bottle.writeFileBottle(filename: "outer", folder: true )
+    folderStream2 = file_bottle.writeFileBottle(filename: "inner", folder: true )
+    fileStream = file_bottle.writeFileBottle({ filename: "test.txt", size: 3 }, new toolkit.SourceStream("abc"))
+    # wire it up!
+    Q.all([
+      toolkit.qpipe(folderStream1, sink, end: false).then ->
+      folderStream1.writeData(folderStream2).then ->
+        folderStream1.close()
+      folderStream2.writeData(fileStream).then ->
+        folderStream2.close()
+    ]).then ->
+      toolkit.toHex(sink.getBuffer()).should.eql "f09f8dbc0000000900056f75746572c00080f09f8dbc000000090005696e6e6572c00080f09f8dbc0000000d0008746573742e7478748001030103616263000000"
+      # f09f8dbc 00000009
+      #   0005 6f75746572  // "outer"
+      #   c000             // folder
+      #   80
+      #     f09f8dbc 00000009
+      #     0005 696e6e6572  // "inner"
+      #     c000             // folder
+      #     80
+      #       f09f8dbc 0000000d
+      #       0008 746573742e747874  // "test.txt"
+      #       800103                 // size=3
+      #       01 03
+      #         616263
+      #       00
+      #     00
+      #   00
