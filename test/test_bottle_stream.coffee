@@ -22,7 +22,7 @@ describe "WritableBottle", ->
     sink = new toolkit.SinkStream()
     b = new bottle_stream.WritableBottle(10, m)
     b.close()
-    b.pipe(sink).then ->
+    toolkit.qpipe(b, sink).then ->
       toolkit.toHex(sink.getBuffer()).should.eql "#{MAGIC_STRING}a00380019600"
 
   it "writes data", future ->
