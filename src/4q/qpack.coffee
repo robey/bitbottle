@@ -10,7 +10,6 @@ util = require "util"
 
 display = require "./display"
 lib4q = require "./lib4q"
-paint = require("./paint").paint
 
 NOW = Date.now()
 
@@ -169,9 +168,10 @@ class StatusUpdater
 
   finishedFile: ->
     if not @options.verbose then return
+    @forceUpdate()
     @clear()
-    bytes = paint.color(COLORS.verbose_size, sprintf("%5s", display.humanize(@currentBytes)))
-    process.stdout.write paint("  ", bytes, "  ", @filename).toString() + "\n"
+    bytes = display.color(COLORS.verbose_size, sprintf("%5s", display.humanize(@currentBytes)))
+    process.stdout.write display.paint("  ", bytes, "  ", @filename).toString() + "\n"
 
   clear: ->
     @lastUpdate = 0
@@ -186,9 +186,13 @@ class StatusUpdater
     now = Date.now()
     if now > @lastUpdate + @frequency and @filename?
       @lastUpdate = now
-      count = paint.color(COLORS.status_count, sprintf("%6s", @fileCount))
-      progress = paint.color(COLORS.status_size, sprintf("%5s/%5s", display.humanize(@currentBytes), display.humanize(@totalBytes)))
-      display.displayStatus paint(count, ": (", progress, ")  ", @filename, " ")
+      count = display.color(COLORS.status_count, sprintf("%6s", @fileCount))
+      sizes = if @currentBytes == 0
+        sprintf("%6s%5s", " ", display.humanize(@totalBytes))
+      else
+        sprintf("%5s/%5s", display.humanize(@currentBytes), display.humanize(@totalBytes))
+      progress = display.color(COLORS.status_size, sizes)
+      display.displayStatus display.paint(count, ": (", progress, ")  ", @filename, " ")
 
 
 exports.main = main
