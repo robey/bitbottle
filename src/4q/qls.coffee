@@ -30,10 +30,12 @@ options:
     --help
     -l
         long form: display date/time, user/group, and posix permissions
+    --no-color
+        turn off cool console colors
 """
 
 main = ->
-  argv = minimist(process.argv[2...], boolean: [ "help", "version", "l" ])
+  argv = minimist(process.argv[2...], boolean: [ "help", "version", "l", "color" ], default: { color: true })
   if argv.help or argv._.length == 0
     console.log USAGE
     process.exit(0)
@@ -43,18 +45,19 @@ main = ->
   if argv._.length == 0
     console.log "required: filename of 4Q archive file(s)"
     process.exit(1)
-  dumpArchiveFiles(argv._, argv.l)
+  if not argv.color then display.noColor()
+  dumpArchiveFiles(argv._, argv)
   .fail (err) ->
     console.log "\nERROR: #{err.message}"
     process.exit(1)
   .done()
 
-dumpArchiveFiles = (filenames, verbose) ->
+dumpArchiveFiles = (filenames, argv) ->
   if filenames.length == 0 then return Q()
-  dumpArchiveFile(filenames.shift(), verbose).then ->
-    dumpArchiveFiles(filenames, verbose)
+  dumpArchiveFile(filenames.shift(), argv).then ->
+    dumpArchiveFiles(filenames, argv)
 
-dumpArchiveFile = (filename, verbose) ->
+dumpArchiveFile = (filename, argv) ->
   try
     fd = fs.openSync(filename, "r")
   catch err
@@ -65,18 +68,26 @@ dumpArchiveFile = (filename, verbose) ->
   stream.on "error", (err) ->
     console.log "ERROR reading #{filename}: #{err.message}"
     stream.close()
-  lib4q.readBottleFromStream(stream).then (bottle) ->
-    scanBottle(bottle, "", verbose)
+
+  # count total bytes packed away
+  state = { totalBytesIn: 0, totalBytes: 0, totalFiles: 0, verbose: argv.l }
+
+  countingInStream = new toolkit.CountingStream()
+  countingInStream.on "count", (n) ->
+    state.totalBytesIn = n
+  stream.pipe(countingInStream)
+
+  lib4q.readBottleFromStream(countingInStream).then (bottle) ->
+    scanBottle(bottle, "", state).then ->
+      process.stdout.write "#{filename} (#{state.totalFiles} files, #{display.humanize(state.totalBytesIn)} -> #{display.humanize(state.totalBytes)} bytes)\n"
   .fail (err) ->
     console.log "ERROR reading #{filename}: #{err.message}"
     console.log err.stack
     stream.close()
 
-# if not argv.q then process.stdout.write "#{argv.o} (#{updater.fileCount} files, #{display.humanize(updater.totalBytes)} bytes)\n"
-
-scanBottle = (bottle, prefix, verbose) ->
+scanBottle = (bottle, prefix, state) ->
   switch bottle.type
-    when lib4q.TYPE_FILE then dumpFileBottle(bottle, prefix, verbose)
+    when lib4q.TYPE_FILE then dumpFileBottle(bottle, prefix, state)
     else
       console.log "ERROR: unknown bottle type #{bottle.type}"
 
@@ -87,15 +98,20 @@ skipBottle = (bottle) ->
     toolkit.qpipe(s, sink).then ->
       skipBottle(bottle)
 
-dumpFileBottle = (bottle, prefix, verbose) ->
-  console.log summaryLineForFile(bottle.header, prefix, verbose)
-  if bottle.header.folder then dumpFolderBottle(bottle, prefix + bottle.header.filename + "/", verbose) else skipBottle(bottle)
+dumpFileBottle = (bottle, prefix, state) ->
+  process.stdout.write summaryLineForFile(bottle.header, prefix, state.verbose) + "\n"
+  if bottle.header.folder
+    dumpFolderBottle(bottle, prefix + bottle.header.filename + "/", state)
+  else
+    state.totalFiles += 1
+    state.totalBytes += bottle.header.size
+    skipBottle(bottle)
 
-dumpFolderBottle = (bottle, prefix, verbose) ->
+dumpFolderBottle = (bottle, prefix, state) ->
   toolkit.qread(bottle).then (s) ->
     if not s? then return Q()
     if s instanceof lib4q.ReadableBottle
-      scanBottle(s, prefix, verbose).then -> dumpFolderBottle(bottle, prefix, verbose)
+      scanBottle(s, prefix, state).then -> dumpFolderBottle(bottle, prefix, state)
 
 # either "13:45" or "10 Aug" or "2014"
 # (25 Aug 2014: this is stupid.)

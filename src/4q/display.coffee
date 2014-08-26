@@ -7,6 +7,8 @@ SPACE = "         "
 
 useColor = process.stdout.isTTY
 
+noColor = -> useColor = false
+
 humanize = (number, base = 1024.0) ->
   index = HUMAN_LABELS.indexOf(" ")
   number = Math.abs(number)
@@ -64,5 +66,6 @@ color = (colorName, spans...) ->
 exports.color = color
 exports.displayStatus = displayStatus
 exports.humanize = humanize
+exports.noColor = noColor
 exports.paint = paint
 exports.roundToPrecision = roundToPrecision
