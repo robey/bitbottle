@@ -70,6 +70,11 @@ main = ->
     updater.update()
   countingOutStream.pipe(outStream)
 
+  state =
+    outStream: countingOutStream
+    updater: updater
+    prefix: null
+
   promise = if argv._.length > 1
     # multiple files: just make a fake folder
     folderName = path.join(path.dirname(argv.o), path.basename(argv.o, ".4q"))
@@ -81,18 +86,13 @@ main = ->
       createdNanos: nowNanos
       modifiedNanos: nowNanos
       accessedNanos: nowNanos
-    s = lib4q.writeFileBottle(stats, null)
-    Q.all([
-      pushBottle(countingOutStream, s)
-      archiveFiles(s, updater, null, argv._, folderName).then ->
-        s.close()
-    ])
+    archiveFolderOfFiles(copy(state, prefix: folderName), null, stats, argv._)
   else
-    archiveFile(countingOutStream, updater, argv._[0], null).then ->
-      countingOutStream.end()
-      toolkit.qfinish(countingOutStream)
+    archiveFile(state, argv._[0])
   promise.then ->
-    toolkit.qfinish(outStream)
+    countingOutStream.end()
+    toolkit.qfinish(countingOutStream).then ->
+      toolkit.qfinish(outStream)
   .then ->
     updater.clear()
     if not argv.q then process.stdout.write "#{argv.o} (#{updater.fileCount} files, #{display.humanize(updater.totalBytes)} bytes)\n"
@@ -102,41 +102,44 @@ main = ->
   .done()
 
 
-archiveFiles = (outStream, updater, folder, filenames, prefix) ->
+archiveFiles = (state, folder, filenames) ->
   if filenames.length == 0 then return Q()
   filename = filenames.shift()
   filepath = if folder? then path.join(folder, filename) else filename
-  archiveFile(outStream, updater, filepath, prefix).then ->
-    archiveFiles(outStream, updater, folder, filenames, prefix)
+  archiveFile(state, filepath).then ->
+    archiveFiles(state, folder, filenames)
 
-archiveFile = (outStream, updater, filename, prefix) ->
+archiveFile = (state, filename) ->
   basename = path.basename(filename)
   qify(fs.stat)(filename).then (stats) ->
     stats = lib4q.fileHeaderFromStats(filename, basename, stats)
-    displayName = if prefix? then path.join(prefix, basename) else basename
-    updater.setName(displayName)
+    displayName = if state.prefix? then path.join(state.prefix, basename) else basename
+    state.updater.setName(displayName)
     if stats.folder
-      archiveFolder(outStream, updater, filename, prefix, stats, displayName)
+      archiveFolder(copy(state, prefix: displayName), filename, stats)
     else
-      updater.fileCount += 1
+      state.updater.fileCount += 1
       qify(fs.open)(filename, "r").then (fd) ->
         fileStream = fs.createReadStream(filename, fd: fd)
         countingFileStream = new toolkit.CountingStream()
         countingFileStream.on "count", (n) ->
-          updater.currentBytes = n
-          updater.update()
+          state.updater.currentBytes = n
+          state.updater.update()
         fileStream.pipe(countingFileStream)
-        pushBottle(outStream, lib4q.writeFileBottle(stats, countingFileStream)).then ->
-          updater.finishedFile()
+        pushBottle(state.outStream, lib4q.writeFileBottle(stats, countingFileStream)).then ->
+          state.updater.finishedFile()
 
-archiveFolder = (outStream, updater, folder, prefix, stats, displayName) ->
-  folderOutStream = lib4q.writeFileBottle(stats, null)
+archiveFolder = (state, folder, stats) ->
   qify(fs.readdir)(folder).then (files) ->
-    Q.all([
-      pushBottle(outStream, folderOutStream)
-      archiveFiles(folderOutStream, updater, folder, files, displayName).then ->
-        folderOutStream.close()
-    ])
+    archiveFolderOfFiles(state, folder, stats, files)
+
+archiveFolderOfFiles = (state, folder, stats, files) ->
+  folderOutStream = lib4q.writeFileBottle(stats, null)
+  Q.all([
+    pushBottle(state.outStream, folderOutStream)
+    archiveFiles(copy(state, outStream: folderOutStream), folder, files).then ->
+      folderOutStream.close()
+  ])
 
 pushBottle = (outStream, bottle) ->
   if outStream instanceof lib4q.WritableBottle
@@ -151,6 +154,13 @@ qify = (f) ->
       if err? then return deferred.reject(err)
       deferred.resolve(rv)
     deferred.promise
+
+# this really should be part of js. :/
+copy = (obj, fields) ->
+  rv = {}
+  for k, v of obj then rv[k] = v
+  for k, v of fields then rv[k] = v
+  rv
 
 
 class StatusUpdater
