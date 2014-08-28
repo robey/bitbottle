@@ -86,6 +86,8 @@ main = ->
       createdNanos: nowNanos
       modifiedNanos: nowNanos
       accessedNanos: nowNanos
+    state.updater.setName(folderName + "/")
+    state.updater.finishedFile(true)
     archiveFolderOfFiles(copy(state, prefix: folderName), null, stats, argv._)
   else
     archiveFile(state, argv._[0])
@@ -95,7 +97,7 @@ main = ->
       toolkit.qfinish(outStream)
   .then ->
     updater.clear()
-    if not argv.q then process.stdout.write "#{argv.o} (#{updater.fileCount} files, #{display.humanize(updater.totalBytes)} bytes)\n"
+    if not argv.q then process.stdout.write "#{argv.o} (#{updater.fileCount} files, #{display.humanize(updater.totalBytesIn)} -> #{display.humanize(updater.totalBytes)} bytes)\n"
   .fail (err) ->
     console.log "\nERROR: #{err.message}"
     process.exit(1)
@@ -114,11 +116,14 @@ archiveFile = (state, filename) ->
   qify(fs.stat)(filename).then (stats) ->
     stats = lib4q.fileHeaderFromStats(filename, basename, stats)
     displayName = if state.prefix? then path.join(state.prefix, basename) else basename
-    state.updater.setName(displayName)
+    state.updater.setName(if stats.folder then displayName + "/" else displayName)
     if stats.folder
-      archiveFolder(copy(state, prefix: displayName), filename, stats)
+      # display the folder name before the files
+      state.updater.finishedFile(true)
+      archiveFolder(copy(state, prefix: displayName), filename, stats).then ->
     else
       state.updater.fileCount += 1
+      state.updater.totalBytesIn += stats.size
       qify(fs.open)(filename, "r").then (fd) ->
         fileStream = fs.createReadStream(filename, fd: fd)
         countingFileStream = new toolkit.CountingStream()
@@ -167,6 +172,7 @@ class StatusUpdater
   constructor: (@options) ->
     @totalBytes = 0
     @currentBytes = 0
+    @totalBytesIn = 0
     @fileCount = 0
     @lastUpdate = 0
     @frequency = 500
@@ -176,11 +182,11 @@ class StatusUpdater
     @filename = filename
     @forceUpdate()
 
-  finishedFile: ->
+  finishedFile: (isFolder = false) ->
     if not @options.verbose then return
     @forceUpdate()
     @clear()
-    bytes = display.color(COLORS.verbose_size, sprintf("%5s", display.humanize(@currentBytes)))
+    bytes = if isFolder then "     " else display.color(COLORS.verbose_size, sprintf("%5s", display.humanize(@currentBytes)))
     process.stdout.write display.paint("  ", bytes, "  ", @filename).toString() + "\n"
 
   clear: ->
