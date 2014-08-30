@@ -108,10 +108,10 @@ dumpFileBottle = (bottle, prefix, state) ->
     skipBottle(bottle)
 
 dumpFolderBottle = (bottle, prefix, state) ->
-  toolkit.qread(bottle).then (s) ->
-    if not s? then return Q()
-    if s instanceof lib4q.ReadableBottle
-      scanBottle(s, prefix, state).then -> dumpFolderBottle(bottle, prefix, state)
+  toolkit.qread(bottle).then (dataStream) ->
+    if not dataStream? then return Q()
+    lib4q.readBottleFromStream(dataStream).then (nestedBottle) ->
+      scanBottle(nestedBottle, prefix, state).then -> dumpFolderBottle(bottle, prefix, state)
 
 # either "13:45" or "10 Aug" or "2014"
 # (25 Aug 2014: this is stupid.)

@@ -148,7 +148,7 @@ archiveFolderOfFiles = (state, folder, stats, files) ->
 
 pushBottle = (outStream, bottle) ->
   if outStream instanceof lib4q.WritableBottle
-    outStream.writeData(bottle)
+    outStream.writeStream(bottle)
   else
     toolkit.qpipe(bottle, outStream, end: false)
 
