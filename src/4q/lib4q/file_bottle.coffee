@@ -4,7 +4,6 @@ fs = require "fs"
 posix = require "posix"
 Q = require "q"
 util = require "util"
-zint = require "./zint"
 
 FIELDS =
   STRINGS:

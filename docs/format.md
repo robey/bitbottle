@@ -81,18 +81,19 @@ Each item in the header is marked by two bytes: type (2 bits), id (4 bits), leng
 4. type (4 bits)
 5. length of header block (12 bits)
 
-Current version is 0x00.
+Current version is (0, 0).
 
 ## Data
 
-Single byte bitfield:
-1. container? (1 = bottle, 0 = data)
-2. 1 = not the last chunk for this block (only present for data blocks, with length > 0)
-3. 3 reserved bits
-4. 3-bit length of the size bytes to follow
+A data block is made up of frames. Each frame consists of:
+1. 1 byte length prefix: how many length bytes are there?
+2. length bytes for this frame
+3. data bytes
 
-The lowest 3 bits indicate the number of bytes to follow with the block size.
-Byte 00 (data, length = 0) means end of data blocks for this bottle.
+A prefix byte of 0x00 is the final (empty) frame marking the end of the data block.
+
+A prefix byte of 0xff marks the end of the bottle.
+
 
 ## Example archive
 
@@ -104,7 +105,7 @@ Two files, named "hello" and "smile".
     - created 1406011886_693_000_000, or: 88 08, 00 23 50 90 5c 28 83 13
     - similarly modified & accessed, 10 bytes each
     - is folder: c0 00
-  - Data #1: 80 (container)
+  - Data #1: 01 3c (60 bytes)
     - Bottle type 1 (file): f0 9f 8d bc 00 00 10 2c - header length = 44
       - Metadata:
         - filename "hello" (00 05, 'hello')
@@ -113,7 +114,7 @@ Two files, named "hello" and "smile".
         - same 30 bytes of create/modify/access times
       - Data: (01 05 + 5 bytes)
       - 00 (end)
-  - Data #2: 80 -- same as above except "smile"
+  - Data #2: 01 3c -- same as above except "smile"
   - 00 (end)
 
-total: 8 + 34 + 1 + 8 + 44 + 8 + 1 + 8 + 44 + 8 + 1 = 165
+total: 8 + 34 + 2 + 60 + 2 + 60 + 1 = 167
