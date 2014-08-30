@@ -87,7 +87,7 @@ decodeFileHeader = (m) ->
 writeFileBottle = (stats, stream) ->
   s = new bottle_stream.WritableBottle(bottle_stream.TYPE_FILE, encodeFileHeader(stats))
   if stream?
-    s.writeData(stream, stats.size).then ->
+    s.writeStream(stream).then ->
       s.close()
   s
 
