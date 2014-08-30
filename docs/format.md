@@ -25,11 +25,15 @@ A bottle is some (small, structured) header and one or more data streams. Each d
     9. groups (list of strings) [string 3]
     10. is folder? (data: sequence of files) [bool 0]
 
-2. Hashed data
+- Hashed data (1)
 
     Header:
-    - hash name (as in SSH)
-    - hash value
+    1. hash type [zint 0]
+      - sha-512 [0]
+
+    Data:
+    1. actual data
+    2. hash value
 
 3. Signed data
 
