@@ -1,7 +1,7 @@
 
 Everything is nested bottles.
 
-A bottle is some (small, structured) header and one or more data blocks. Each data block can be another bottle.
+A bottle is some (small, structured) header and one or more data streams. Each data stream can be another bottle. A data stream is made up of zero or more frames (blocks).
 
 ## Goals
 

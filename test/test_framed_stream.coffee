@@ -52,3 +52,10 @@ describe "ReadableFramedStream", ->
     s = new framed_stream.ReadableFramedStream(new toolkit.SourceStream(new Buffer("010468656c6c01056f2073616901036c6f7200", "hex")))
     toolkit.qpipeToBuffer(s).then (data) ->
       data.toString().should.eql "hello sailor"
+
+  it "can pipe two framed streams from the same source", ->
+    source = new toolkit.SourceStream(new Buffer("010568656c6c6f0001067361696c6f7200", "hex"))
+    toolkit.qpipeToBuffer(new framed_stream.ReadableFramedStream(source)).then (data) ->
+      data.toString().should.eql "hello"
+      toolkit.qpipeToBuffer(new framed_stream.ReadableFramedStream(source)).then (data) ->
+        data.toString().should.eql "sailor"
