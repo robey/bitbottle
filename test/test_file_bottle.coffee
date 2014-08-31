@@ -52,10 +52,10 @@ describe "writeFileBottle", ->
     fileStream = file_bottle.writeFileBottle({ filename: "test.txt", size: 3 }, new toolkit.SourceStream("abc"))
     # wire it up!
     Q.all([
-      folderStream1.writeStream(folderStream2).then ->
-        folderStream1.close()
-      folderStream2.writeStream(fileStream).then ->
-        folderStream2.close()
+      folderStream1.write(folderStream2)
+      folderStream1.end()
+      folderStream2.write(fileStream)
+      folderStream2.end()
     ])
     toolkit.qpipeToBuffer(folderStream1).then (data) ->
       data.toString("hex").should.eql "f09f8dbc0000000900056f75746572c0000131f09f8dbc000000090005696e6e6572c000011cf09f8dbc0000000d0008746573742e747874800103010361626300ff00ff00ff"

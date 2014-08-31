@@ -2,9 +2,9 @@ bottle_stream = require "./lib4q/bottle_stream"
 file_bottle = require "./lib4q/file_bottle"
 hash_bottle = require "./lib4q/hash_bottle"
 
+exports.BottleWriter = bottle_stream.BottleWriter
 exports.ReadableBottle = bottle_stream.ReadableBottle
 exports.readBottleFromStream = bottle_stream.readBottleFromStream
-exports.WritableBottle = bottle_stream.WritableBottle
 
 exports.fileHeaderFromStats = file_bottle.fileHeaderFromStats
 exports.writeFileBottle = file_bottle.writeFileBottle

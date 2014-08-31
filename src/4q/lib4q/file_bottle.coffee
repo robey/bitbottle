@@ -85,10 +85,10 @@ decodeFileHeader = (m) ->
   rv
 
 writeFileBottle = (stats, stream) ->
-  s = new bottle_stream.WritableBottle(bottle_stream.TYPE_FILE, encodeFileHeader(stats))
+  s = new bottle_stream.BottleWriter(bottle_stream.TYPE_FILE, encodeFileHeader(stats))
   if stream?
-    s.writeStream(stream).then ->
-      s.close()
+    s.write(stream)
+    s.end()
   s
 
 writeFileBottleFromFile = (filename, archiveFilename, stats) ->

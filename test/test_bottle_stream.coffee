@@ -16,29 +16,29 @@ shouldQThrow = (promise, message) ->
   promise.then((-> throw new Error("Expected exception, got valid promise")), ((err) -> (-> throw err).should.throw message))
 
 
-describe "WritableBottle", ->
+describe "BottleWriter", ->
   it "writes a bottle header", future ->
     m = new bottle_header.Header()
     m.addNumber(0, 150)
-    b = new bottle_stream.WritableBottle(10, m)
-    b.close()
+    b = new bottle_stream.BottleWriter(10, m)
+    b.end()
     toolkit.qpipeToBuffer(b).then (data) ->
       data.toString("hex").should.eql "#{MAGIC_STRING}a003800196ff"
 
   it "writes data", future ->
     data = new toolkit.SourceStream(new Buffer("ff00ff00", "hex"))
-    b = new bottle_stream.WritableBottle(10, new bottle_header.Header())
-    b.writeStream(data).then ->
-      b.close()
+    b = new bottle_stream.BottleWriter(10, new bottle_header.Header())
+    b.write(data)
+    b.end()
     toolkit.qpipeToBuffer(b).then (data) ->
       data.toString("hex").should.eql "#{MAGIC_STRING}a0000104ff00ff0000ff"
 
   it "writes nested bottle data", future ->
-    b = new bottle_stream.WritableBottle(10, new bottle_header.Header())
-    b2 = new bottle_stream.WritableBottle(14, new bottle_header.Header())
-    b.writeStream(b2).then ->
-      b.close()
-    b2.close()
+    b = new bottle_stream.BottleWriter(10, new bottle_header.Header())
+    b2 = new bottle_stream.BottleWriter(14, new bottle_header.Header())
+    b.write(b2)
+    b.end()
+    b2.end()
     toolkit.qpipeToBuffer(b).then (data) ->
       data.toString("hex").should.eql "#{MAGIC_STRING}a0000109#{MAGIC_STRING}e000ff00ff"
 
@@ -48,13 +48,13 @@ describe "WritableBottle", ->
     slowStream = new stream.Readable()
     slowStream._read = (n) ->
     slowStream.push data
-    b = new bottle_stream.WritableBottle(14, new bottle_header.Header())
+    b = new bottle_stream.BottleWriter(14, new bottle_header.Header())
     Q.delay(100).then ->
       slowStream.push data
       Q.delay(100).then ->
         slowStream.push null
-    b.writeStream(slowStream, 4).then ->
-      b.close()
+    b.write(slowStream)
+    b.end()
     toolkit.qpipeToBuffer(b).then (data) ->
       data.toString("hex").should.eql "#{MAGIC_STRING}e0000104c44cc44c00ff"
 
@@ -62,13 +62,11 @@ describe "WritableBottle", ->
     data1 = new toolkit.SourceStream(new Buffer("f0f0f0", "hex"))
     data2 = new toolkit.SourceStream(new Buffer("e0e0e0", "hex"))
     data3 = new toolkit.SourceStream(new Buffer("cccccc", "hex"))
-    b = new bottle_stream.WritableBottle(14, new bottle_header.Header())
-    b.writeStream(data1, 3).then ->
-      b.writeStream(data2, 3)
-    .then ->
-      b.writeStream(data3, 3)
-    .then ->
-      b.close()
+    b = new bottle_stream.BottleWriter(14, new bottle_header.Header())
+    b.write(data1)
+    b.write(data2)
+    b.write(data3)
+    b.end()
     toolkit.qpipeToBuffer(b).then (data) ->
       data.toString("hex").should.eql "#{MAGIC_STRING}e0000103f0f0f0000103e0e0e0000103cccccc00ff"
 

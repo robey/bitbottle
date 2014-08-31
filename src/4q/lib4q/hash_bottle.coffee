@@ -35,16 +35,23 @@ hashStreamForType = (hashType) ->
     when HASH_SHA512 then new HashingStream("sha512")
     else throw new Error("Unknown hash type: #{hashType}")
 
-writeHashBottle = (hashType, stream) ->
-  hashStream = hashStreamForType(hashType)
-  stream.pipe(hashStream)
-  h = new bottle_header.Header()
-  h.addNumber(FIELDS.NUMBERS.HASH_TYPE, hashType)
-  s = new bottle_stream.WritableBottle(bottle_stream.TYPE_HASHED, h)
-  s.writeStream(hashStream).then ->
-    s.writeStream(new toolkit.SourceStream(hashStream.digest), hashStream.digest.length).then ->
-      s.close()
-  s
+
+# Takes a Readable stream (usually a WritableBottleStream) and produces a new
+# Readable stream containing the original and its hash digest.
+class HashBottleWriter extends bottle_stream.BottleWriter
+  constructor: (@hashType) ->
+    header = new bottle_header.Header()
+    header.addNumber(FIELDS.NUMBERS.HASH_TYPE, @hashType)
+    super(bottle_stream.TYPE_HASHED, header)
+
+  _transform: (inStream, _, callback) ->
+    hashStream = inStream.pipe(hashStreamForType(@hashType))
+    @_process(hashStream).then =>
+      @_process(new toolkit.SourceStream(hashStream.digest)).then ->
+        callback()
+    .fail (error) ->
+      callback(error)
+
 
 decodeHashHeader = (h) ->
   rv = { }
@@ -54,6 +61,7 @@ decodeHashHeader = (h) ->
         switch field.id
           when FIELDS.NUMBERS.HASH_TYPE then rv.hashType = field.number
   rv
+
 
 # returns a promise: { stream, valid }
 # - bottle: the inner stream (another bottle)
@@ -74,4 +82,4 @@ validateHashBottle = (bottle) ->
 exports.decodeHashHeader = decodeHashHeader
 exports.HASH_SHA512 = HASH_SHA512
 exports.validateHashBottle = validateHashBottle
-exports.writeHashBottle = writeHashBottle
+exports.HashBottleWriter = HashBottleWriter

@@ -143,12 +143,12 @@ archiveFolderOfFiles = (state, folder, stats, files) ->
   Q.all([
     pushBottle(state.outStream, folderOutStream)
     archiveFiles(copy(state, outStream: folderOutStream), folder, files).then ->
-      folderOutStream.close()
+      folderOutStream.end()
   ])
 
 pushBottle = (outStream, bottle) ->
-  if outStream instanceof lib4q.WritableBottle
-    outStream.writeStream(bottle)
+  if outStream instanceof lib4q.BottleWriter
+    toolkit.qwrite(outStream, bottle)
   else
     toolkit.qpipe(bottle, outStream, end: false)
 

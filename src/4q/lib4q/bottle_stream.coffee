@@ -1,7 +1,5 @@
 bottle_header = require "./bottle_header"
-file_bottle = require "./file_bottle"
 framed_stream = require "./framed_stream"
-hash_bottle = require "./hash_bottle"
 Q = require "q"
 stream = require "stream"
 toolkit = require "stream-toolkit"
@@ -17,9 +15,13 @@ TYPE_HASHED = 1
 BOTTLE_END = 0xff
 
 
-class WritableBottle extends toolkit.QStream
+# Converts (Readable) stream objects into a stream of framed data blocks with
+# a 4Q bottle header/footer. Write Readable streams, read buffers.
+class BottleWriter extends stream.Transform
   constructor: (type, header) ->
     super()
+    @_writableState.objectMode = true
+    @_readableState.objectMode = false
     @_writeHeader(type, header)
 
   _writeHeader: (type, header) ->
@@ -27,30 +29,45 @@ class WritableBottle extends toolkit.QStream
     buffers = header.pack()
     length = if buffers.length == 0 then 0 else buffers.map((b) -> b.length).reduce((a, b) -> a + b)
     if length > 4095 then throw new Error("Header too long: #{length} > 4095")
-    buffers.unshift new Buffer([
+    @push MAGIC
+    @push new Buffer([
       VERSION
       0
       (type << 4) | ((length >> 8) & 0xf)
       (length & 0xff)
     ])
-    buffers.unshift MAGIC
-    @write(Buffer.concat(buffers))
+    buffers.map (b) => @push b
+
+  _transform: (inStream, _, callback) ->
+    @_process(inStream).then ->
+      callback()
+    .fail (error) ->
+      callback(error)
 
   # write a data stream into this bottle.
-  writeStream: (inStream) ->
+  # ("subclasses" may use this to handle their own magic)
+  _process: (inStream) ->
     framedStream = new framed_stream.WritableFramedStream()
     inStream.pipe(framedStream)
-    @spliceFrom(framedStream)
+    # create a small transform to pipe framedStream back into meeeee
+    plumbing = new stream.Transform()
+    plumbing._transform = (data, _, cb) =>
+      @push data
+      cb()
+    toolkit.qpipe(framedStream, plumbing)
 
-  close: ->
-    promise = @write(new Buffer([ BOTTLE_END ]))
-    WritableBottle.__super__.close.apply(@)
-    promise
+  _flush: (callback) ->
+    @push new Buffer([ BOTTLE_END ])
+    callback()
 
 
 # read a bottle from a stream, returning a "ReadableBottle" object, which is
 # a stream that provides sub-streams.
 readBottleFromStream = (stream) ->
+  # avoid import loops.
+  file_bottle = require "./file_bottle"
+  hash_bottle = require "./hash_bottle"
+
   readBottleHeader(stream).then ({ type, header, buffer }) ->
     header = switch type
       when TYPE_FILE then file_bottle.decodeFileHeader(header)
@@ -72,7 +89,7 @@ readBottleHeader = (stream) ->
 
 
 # stream that reads an underlying (buffer) stream, pulls out the header and
-# type, and generates data objects.
+# type, and generates data streams.
 class ReadableBottle extends stream.Readable
   constructor: (@type, @header, @headerBuffer, @stream) ->
     super(objectMode: true)
@@ -100,9 +117,9 @@ class ReadableBottle extends stream.Readable
       new framed_stream.ReadableFramedStream(@stream)
 
 
+exports.BottleWriter = BottleWriter
 exports.MAGIC = MAGIC
 exports.ReadableBottle = ReadableBottle
 exports.readBottleFromStream = readBottleFromStream
 exports.TYPE_FILE = TYPE_FILE
 exports.TYPE_HASHED = TYPE_HASHED
-exports.WritableBottle = WritableBottle
