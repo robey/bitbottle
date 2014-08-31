@@ -79,7 +79,9 @@ dumpArchiveFile = (filename, argv) ->
 
   lib4q.readBottleFromStream(countingInStream).then (bottle) ->
     scanBottle(bottle, "", state).then ->
-      process.stdout.write "#{filename} (#{state.totalFiles} files, #{display.humanize(state.totalBytesIn)} -> #{display.humanize(state.totalBytes)} bytes)\n"
+      byteTraffic = "#{display.humanize(state.totalBytesIn)} -> #{display.humanize(state.totalBytes)} bytes"
+      hashStatus = if state.validHash? then "[#{state.validHash}] " else ""
+      process.stdout.write "#{filename} #{hashStatus}(#{state.totalFiles} files, #{byteTraffic})\n"
   .fail (err) ->
     console.log "ERROR reading #{filename}: #{err.message}"
     console.log err.stack
@@ -88,6 +90,7 @@ dumpArchiveFile = (filename, argv) ->
 scanBottle = (bottle, prefix, state) ->
   switch bottle.type
     when lib4q.TYPE_FILE then dumpFileBottle(bottle, prefix, state)
+    when lib4q.TYPE_HASHED then dumpHashBottle(bottle, prefix, state)
     else
       console.log "ERROR: unknown bottle type #{bottle.type}"
 
@@ -97,6 +100,14 @@ skipBottle = (bottle) ->
     sink = new toolkit.NullSinkStream(objectMode: true)
     toolkit.qpipe(s, sink).then ->
       skipBottle(bottle)
+
+dumpHashBottle = (bottle, prefix, state) ->
+  lib4q.validateHashBottle(bottle).then ({ bottle: nextBottle, valid: promise }) ->
+    scanBottle(nextBottle, prefix, state).then ->
+      promise.then (valid) ->
+        if not valid then throw new Error("Invalid hash; archive is probably corrupt.")
+        # FIXME display something if this is per-file
+        if prefix == "" then state.validHash = bottle.header.hashName
 
 dumpFileBottle = (bottle, prefix, state) ->
   process.stdout.write summaryLineForFile(bottle.header, prefix, state.verbose) + "\n"

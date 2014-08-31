@@ -70,8 +70,11 @@ main = ->
     updater.update()
   countingOutStream.pipe(outStream)
 
+  hashBottle = new lib4q.HashBottleWriter(lib4q.HASH_SHA512)
+  hashBottle.pipe(countingOutStream)
+
   state =
-    outStream: countingOutStream
+    writer: hashBottle
     updater: updater
     prefix: null
 
@@ -92,9 +95,10 @@ main = ->
   else
     archiveFile(state, argv._[0])
   promise.then ->
-    countingOutStream.end()
-    toolkit.qfinish(countingOutStream).then ->
-      toolkit.qfinish(outStream)
+    hashBottle.end()
+    toolkit.qfinish(hashBottle).then ->
+      toolkit.qfinish(countingOutStream).then ->
+        toolkit.qfinish(outStream)
   .then ->
     updater.clear()
     if not argv.q then process.stdout.write "#{argv.o} (#{updater.fileCount} files, #{display.humanize(updater.totalBytesIn)} -> #{display.humanize(updater.totalBytes)} bytes)\n"
@@ -131,7 +135,7 @@ archiveFile = (state, filename) ->
           state.updater.currentBytes = n
           state.updater.update()
         fileStream.pipe(countingFileStream)
-        pushBottle(state.outStream, lib4q.writeFileBottle(stats, countingFileStream)).then ->
+        toolkit.qwrite(state.writer, lib4q.writeFileBottle(stats, countingFileStream)).then ->
           state.updater.finishedFile()
 
 archiveFolder = (state, folder, stats) ->
@@ -139,18 +143,12 @@ archiveFolder = (state, folder, stats) ->
     archiveFolderOfFiles(state, folder, stats, files)
 
 archiveFolderOfFiles = (state, folder, stats, files) ->
-  folderOutStream = lib4q.writeFileBottle(stats, null)
+  folderBottle = lib4q.writeFileBottle(stats, null)
   Q.all([
-    pushBottle(state.outStream, folderOutStream)
-    archiveFiles(copy(state, outStream: folderOutStream), folder, files).then ->
-      folderOutStream.end()
+    toolkit.qwrite(state.writer, folderBottle)
+    archiveFiles(copy(state, writer: folderBottle), folder, files).then ->
+      folderBottle.end()
   ])
-
-pushBottle = (outStream, bottle) ->
-  if outStream instanceof lib4q.BottleWriter
-    toolkit.qwrite(outStream, bottle)
-  else
-    toolkit.qpipe(bottle, outStream, end: false)
 
 qify = (f) ->
   (arg...) ->

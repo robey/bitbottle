@@ -12,6 +12,9 @@ FIELDS =
 
 HASH_SHA512 = 0
 
+HASH_NAMES = {}
+HASH_NAMES[HASH_SHA512] = "SHA-512"
+
 
 # crypto's streaming hash doesn't quite work: https://github.com/joyent/node/issues/5216
 # but it's simple to replace, so just do that.
@@ -60,6 +63,8 @@ decodeHashHeader = (h) ->
       when bottle_header.TYPE_ZINT
         switch field.id
           when FIELDS.NUMBERS.HASH_TYPE then rv.hashType = field.number
+  if not rv.hashType? then rv.hashType = HASH_SHA512
+  rv.hashName = HASH_NAMES[rv.hashType]
   rv
 
 

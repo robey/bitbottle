@@ -11,7 +11,7 @@ exports.writeFileBottle = file_bottle.writeFileBottle
 exports.writeFileBottleFromFile = file_bottle.writeFileBottleFromFile
 
 exports.validateHashBottle = hash_bottle.validateHashBottle
-exports.writeHashBottle = hash_bottle.writeHashBottle
+exports.HashBottleWriter = hash_bottle.HashBottleWriter
 
 exports.TYPE_FILE = bottle_stream.TYPE_FILE
 exports.TYPE_HASHED = bottle_stream.TYPE_HASHED
