@@ -10,7 +10,7 @@ hash_bottle = require "../lib/4q/lib4q/hash_bottle"
 future = mocha_sprinkles.future
 
 writeTinyFile = (filename, data) ->
-  file_bottle.writeFileBottle({ filename: filename, size: data.length }, new toolkit.SourceStream(data))
+  new toolkit.SourceStream(data).pipe(new file_bottle.FileBottleWriter(filename: filename, size: data.length))
 
 readTinyFile = (bottle, filename) ->
   toolkit.qread(bottle).then (fileStream) ->

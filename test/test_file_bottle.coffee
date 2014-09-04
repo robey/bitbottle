@@ -10,16 +10,17 @@ file_bottle = require "../lib/4q/lib4q/file_bottle"
 future = mocha_sprinkles.future
 withTempFolder = mocha_sprinkles.withTempFolder
 
-describe "writeFileBottle", ->
+describe "FileBottleWriter", ->
   it "writes and decodes from data", future ->
-    stats = 
+    header = 
       filename: "bogus.txt"
       mode: 7
       size: 10
       createdNanos: 1234567890
       username: "tyrion"
-    s = file_bottle.writeFileBottle(stats, new toolkit.SourceStream("television"))
-    toolkit.qpipeToBuffer(s).then (data) ->
+    bottle = new file_bottle.FileBottleWriter(header)
+    new toolkit.SourceStream("television").pipe(bottle)
+    toolkit.qpipeToBuffer(bottle).then (data) ->
       # now decode it.
       bottle_stream.readBottleFromStream(new toolkit.SourceStream(data)).then (bottle) ->
         bottle.type.should.eql bottle_stream.TYPE_FILE
@@ -33,31 +34,33 @@ describe "writeFileBottle", ->
             data.toString().should.eql "television"
 
   it "writes and decodes an actual file", future withTempFolder (folder) ->
-    fs.writeFileSync("#{folder}/test.txt", "hello!\n")
-    file_bottle.writeFileBottleFromFile("#{folder}/test.txt").then (s) ->
-      toolkit.qpipeToBuffer(s).then (data) ->
-        # now decode it.
-        bottle_stream.readBottleFromStream(new toolkit.SourceStream(data)).then (bottle) ->
-          bottle.type.should.eql bottle_stream.TYPE_FILE
-          bottle.header.filename.should.eql "#{folder}/test.txt"
-          bottle.header.folder.should.eql false
-          bottle.header.size.should.eql 7
-          toolkit.qread(bottle).then (fileStream) ->
-            toolkit.qpipeToBuffer(fileStream).then (data) ->
-              data.toString().should.eql "hello!\n"
+    filename = "#{folder}/test.txt"
+    fs.writeFileSync(filename, "hello!\n")
+    stats = fs.statSync(filename)
+    bottle = new file_bottle.FileBottleWriter(file_bottle.fileHeaderFromStats(filename, stats))
+    fs.createReadStream(filename).pipe(bottle)
+    toolkit.qpipeToBuffer(bottle).then (data) ->
+      # now decode it.
+      bottle_stream.readBottleFromStream(new toolkit.SourceStream(data)).then (bottle) ->
+        bottle.type.should.eql bottle_stream.TYPE_FILE
+        bottle.header.filename.should.eql "#{folder}/test.txt"
+        bottle.header.folder.should.eql false
+        bottle.header.size.should.eql 7
+        toolkit.qread(bottle).then (fileStream) ->
+          toolkit.qpipeToBuffer(fileStream).then (data) ->
+            data.toString().should.eql "hello!\n"
 
   it "writes a nested folder correctly", future ->
-    folderStream1 = file_bottle.writeFileBottle(filename: "outer", folder: true )
-    folderStream2 = file_bottle.writeFileBottle(filename: "inner", folder: true )
-    fileStream = file_bottle.writeFileBottle({ filename: "test.txt", size: 3 }, new toolkit.SourceStream("abc"))
+    bottle1 = new file_bottle.FolderBottleWriter(filename: "outer", folder: true)
+    bottle2 = new file_bottle.FolderBottleWriter(filename: "inner", folder: true)
+    bottle3 = new file_bottle.FileBottleWriter(filename: "test.txt", size: 3)
+    new toolkit.SourceStream("abc").pipe(bottle3)
     # wire it up!
-    Q.all([
-      folderStream1.write(folderStream2)
-      folderStream1.end()
-      folderStream2.write(fileStream)
-      folderStream2.end()
-    ])
-    toolkit.qpipeToBuffer(folderStream1).then (data) ->
+    bottle1.write(bottle2)
+    bottle1.end()
+    bottle2.write(bottle3)
+    bottle2.end()
+    toolkit.qpipeToBuffer(bottle1).then (data) ->
       data.toString("hex").should.eql "f09f8dbc0000000900056f75746572c0000131f09f8dbc000000090005696e6e6572c000011cf09f8dbc0000000d0008746573742e747874800103010361626300ff00ff00ff"
       # f09f8dbc 00000009
       #   0005 6f75746572  // "outer"

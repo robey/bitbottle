@@ -11,6 +11,7 @@ VERSION = 0x00
 
 TYPE_FILE = 0
 TYPE_HASHED = 1
+TYPE_COMPRESSED = 4
 
 BOTTLE_END = 0xff
 
@@ -18,10 +19,10 @@ BOTTLE_END = 0xff
 # Converts (Readable) stream objects into a stream of framed data blocks with
 # a 4Q bottle header/footer. Write Readable streams, read buffers.
 class BottleWriter extends stream.Transform
-  constructor: (type, header) ->
-    super()
-    @_writableState.objectMode = true
-    @_readableState.objectMode = false
+  constructor: (type, header, options = {}) ->
+    super(options)
+    @_writableState.objectMode = if options.objectModeWrite? then options.objectModeWrite else true
+    @_readableState.objectMode = if options.objectModeRead? then options.objectModeRead else false
     @_writeHeader(type, header)
 
   _writeHeader: (type, header) ->
@@ -49,16 +50,40 @@ class BottleWriter extends stream.Transform
   _process: (inStream) ->
     framedStream = new framed_stream.WritableFramedStream()
     inStream.pipe(framedStream)
-    # create a small transform to pipe framedStream back into meeeee
+    @_plumbFramedStream(framedStream)
+
+  _flush: (callback) ->
+    @push new Buffer([ BOTTLE_END ])
+    callback()
+
+  # plumb a framed stream so that it pumps its output back into meeeee.
+  _plumbFramedStream: (framedStream) ->
     plumbing = new stream.Transform()
     plumbing._transform = (data, _, cb) =>
       @push data
       cb()
     toolkit.qpipe(framedStream, plumbing)
 
+
+# Converts a Readable stream into a framed data stream with a 4Q bottle
+# header/footer. Write buffers, read buffers. This is a convenience version
+# of BottleWriter for the case (like a compression stream) where there will
+# be exactly one nested bottle.
+class LoneBottleWriter extends BottleWriter
+  constructor: (type, header, options = {}) ->
+    if not options.objectModeRead? then options.objectModeRead = false
+    if not options.objectModeWrite? then options.objectModeWrite = false
+    super(type, header, options)
+    # make a single framed stream that we channel
+    @framedStream = new framed_stream.WritableFramedStream()
+    @_plumbFramedStream(@framedStream)
+
+  _transform: (data, _, callback) ->
+    @framedStream.write(data, _, callback)
+
   _flush: (callback) ->
+    @framedStream.end(callback)
     @push new Buffer([ BOTTLE_END ])
-    callback()
 
 
 # read a bottle from a stream, returning a "ReadableBottle" object, which is
@@ -118,8 +143,10 @@ class ReadableBottle extends stream.Readable
 
 
 exports.BottleWriter = BottleWriter
+exports.LoneBottleWriter = LoneBottleWriter
 exports.MAGIC = MAGIC
 exports.ReadableBottle = ReadableBottle
 exports.readBottleFromStream = readBottleFromStream
 exports.TYPE_FILE = TYPE_FILE
 exports.TYPE_HASHED = TYPE_HASHED
+exports.TYPE_COMPRESSED = TYPE_COMPRESSED
