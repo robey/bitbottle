@@ -82,8 +82,10 @@ class LoneBottleWriter extends BottleWriter
     @framedStream.write(data, _, callback)
 
   _flush: (callback) ->
-    @framedStream.end(callback)
-    @push new Buffer([ BOTTLE_END ])
+    @framedStream.end()
+    @framedStream.on "end", =>
+      @push new Buffer([ BOTTLE_END ])
+      callback()
 
 
 # read a bottle from a stream, returning a "ReadableBottle" object, which is
@@ -92,11 +94,13 @@ readBottleFromStream = (stream) ->
   # avoid import loops.
   file_bottle = require "./file_bottle"
   hash_bottle = require "./hash_bottle"
+  compressed_bottle = require "./compressed_bottle"
 
   readBottleHeader(stream).then ({ type, header, buffer }) ->
     header = switch type
       when TYPE_FILE then file_bottle.decodeFileHeader(header)
       when TYPE_HASHED then hash_bottle.decodeHashHeader(header)
+      when TYPE_COMPRESSED then compressed_bottle.decodeCompressedHeader(header)
       else header
     new ReadableBottle(type, header, buffer, stream)
 

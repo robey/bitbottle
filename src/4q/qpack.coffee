@@ -73,8 +73,12 @@ main = ->
   hashBottle = new lib4q.HashBottleWriter(lib4q.HASH_SHA512)
   hashBottle.pipe(countingOutStream)
 
+  compressedBottle = new lib4q.CompressedBottleWriter(lib4q.COMPRESSION_LZMA2)
+  hashBottle.write(compressedBottle)
+  hashBottle.end()
+
   state =
-    writer: hashBottle
+    writer: compressedBottle
     updater: updater
     prefix: null
 
@@ -95,10 +99,8 @@ main = ->
   else
     archiveFile(state, argv._[0])
   promise.then ->
-    hashBottle.end()
-    toolkit.qfinish(hashBottle).then ->
-      toolkit.qfinish(countingOutStream).then ->
-        toolkit.qfinish(outStream)
+    compressedBottle.end()
+    toolkit.qfinish(outStream)
   .then ->
     updater.clear()
     if not argv.q then process.stdout.write "#{argv.o} (#{updater.fileCount} files, #{display.humanize(updater.totalBytesIn)} -> #{display.humanize(updater.totalBytes)} bytes)\n"
@@ -118,24 +120,24 @@ archiveFiles = (state, folder, filenames) ->
 archiveFile = (state, filename) ->
   basename = path.basename(filename)
   qify(fs.stat)(filename).then (stats) ->
-    stats = lib4q.fileHeaderFromStats(filename, basename, stats)
+    header = lib4q.fileHeaderFromStats(basename, stats)
     displayName = if state.prefix? then path.join(state.prefix, basename) else basename
     state.updater.setName(if stats.folder then displayName + "/" else displayName)
-    if stats.folder
+    if header.folder
       # display the folder name before the files
       state.updater.finishedFile(true)
-      archiveFolder(copy(state, prefix: displayName), filename, stats).then ->
+      archiveFolder(copy(state, prefix: displayName), filename, header).then ->
     else
       state.updater.fileCount += 1
-      state.updater.totalBytesIn += stats.size
+      state.updater.totalBytesIn += header.size
       qify(fs.open)(filename, "r").then (fd) ->
-        fileStream = fs.createReadStream(filename, fd: fd)
         countingFileStream = new toolkit.CountingStream()
         countingFileStream.on "count", (n) ->
           state.updater.currentBytes = n
           state.updater.update()
-        fileStream.pipe(countingFileStream)
-        toolkit.qwrite(state.writer, lib4q.writeFileBottle(stats, countingFileStream)).then ->
+        fileBottle = new lib4q.FileBottleWriter(header)
+        fs.createReadStream(filename, fd: fd).pipe(countingFileStream).pipe(fileBottle)
+        toolkit.qwrite(state.writer, fileBottle).then ->
           state.updater.finishedFile()
 
 archiveFolder = (state, folder, stats) ->
@@ -143,7 +145,7 @@ archiveFolder = (state, folder, stats) ->
     archiveFolderOfFiles(state, folder, stats, files)
 
 archiveFolderOfFiles = (state, folder, stats, files) ->
-  folderBottle = lib4q.writeFileBottle(stats, null)
+  folderBottle = new lib4q.FolderBottleWriter(stats)
   Q.all([
     toolkit.qwrite(state.writer, folderBottle)
     archiveFiles(copy(state, writer: folderBottle), folder, files).then ->
