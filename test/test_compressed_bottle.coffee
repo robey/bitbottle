@@ -15,38 +15,34 @@ writeTinyFile = (filename, data) ->
 readTinyFile = (bottle, filename) ->
   toolkit.qread(bottle).then (fileStream) ->
     bottle_stream.readBottleFromStream(fileStream).then (fileBottle) ->
-      fileBottle.type.should.eql bottle_stream.TYPE_FILE
-      fileBottle.header.filename.should.eql filename
-      toolkit.qread(fileBottle).then (dataStream) ->
-        toolkit.qpipeToBuffer(dataStream).then (buffer) ->
-          { header: fileBottle.header, data: buffer }
+      validateTinyFile(fileBottle, filename)
+
+validateTinyFile = (fileBottle, filename) ->
+  fileBottle.type.should.eql bottle_stream.TYPE_FILE
+  fileBottle.header.filename.should.eql filename
+  toolkit.qread(fileBottle).then (dataStream) ->
+    toolkit.qpipeToBuffer(dataStream).then (buffer) ->
+      { header: fileBottle.header, data: buffer }
 
 
 describe "CompressedBottleWriter", ->
-  it "writes and hashes a file stream", future ->
+  it "compresses a file stream", future ->
     file = writeTinyFile("file.txt", new Buffer("the new pornographers"))
     toolkit.qpipeToBuffer(file).then (fileBuffer) ->
       # quick verification that we're hashing what we think we are.
       fileBuffer.toString("hex").should.eql "f09f8dbc0000000d000866696c652e7478748001150115746865206e657720706f726e6f677261706865727300ff"
-
-      zStream = new compressed_bottle.CompressedBottleWriter(compressed_bottle.COMPRESSION_LZMA2)
-      zStream.write(new toolkit.SourceStream(fileBuffer))
-      zStream.end()
-      toolkit.qpipeToBuffer(zStream).then (buffer) ->
+      [ zStream, bottle ] = compressed_bottle.writeCompressedBottle(compressed_bottle.COMPRESSION_LZMA2)
+      new toolkit.SourceStream(fileBuffer).pipe(zStream)
+      toolkit.qpipeToBuffer(bottle).then (buffer) ->
         # now decode it.
         bottle_stream.readBottleFromStream(new toolkit.SourceStream(buffer))
-    .then (bottle) ->
-      bottle.type.should.eql bottle_stream.TYPE_COMPRESSED
-      bottle.header.compressionType.should.eql compressed_bottle.COMPRESSION_LZMA2
-      toolkit.qread(bottle).then (fileStream) ->
-        toolkit.qpipeToBuffer(fileStream).then (data) ->
-          data.length.should.eql 96
-#       readTinyFile(bottle, "file.txt").then (file) ->
-#         file.data.toString().should.eql "the new pornographers"
-#       .then ->
-#         toolkit.qread(bottle).then (hashStream) ->
-#           toolkit.qpipeToBuffer(hashStream).then (buffer) ->
-#             buffer.toString("hex").should.eql "b62fa61779952e57ae6d1353a027a9001ca3345150632f64bff005f9174b088acef5fd9c066ec9dde0bf16d5e19cab5e832c1b19dc56a29fd6bf5de17885890e"
+    .then (zbottle) ->
+      zbottle.type.should.eql bottle_stream.TYPE_COMPRESSED
+      zbottle.header.compressionType.should.eql compressed_bottle.COMPRESSION_LZMA2
+      compressed_bottle.readCompressedBottle(zbottle).then (bottle) ->
+        validateTinyFile(bottle, "file.txt").then ({ header, data }) ->
+          data.toString().should.eql "the new pornographers"
+
 
 # describe "validateHashBottle", ->
 #   it "reads a hashed stream", future ->

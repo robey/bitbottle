@@ -1,5 +1,6 @@
 bottle_header = require "./bottle_header"
 bottle_stream = require "./bottle_stream"
+duplexer = require "duplexer"
 Q = require "q"
 stream = require "stream"
 toolkit = require "stream-toolkit"
@@ -29,19 +30,19 @@ decompressionStreamForType = (compressionType) ->
 
 # Takes a Readable stream (usually a WritableBottleStream) and produces a new
 # Readable stream containing the compressed content.
-class CompressedBottleWriter extends bottle_stream.BottleWriter
+class CompressedBottleWriter extends bottle_stream.LoneBottleWriter
   constructor: (@compressionType) ->
     header = new bottle_header.Header()
     header.addNumber(FIELDS.NUMBERS.COMPRESSION_TYPE, @compressionType)
     super(bottle_stream.TYPE_COMPRESSED, header)
 
-  _transform: (inStream, _, callback) ->
-    zStream = inStream.pipe(compressionStreamForType(@compressionType))
-    @_process(zStream).then ->
-      callback()
-    .fail (error) ->
-      callback(error)
-
+# returns a transform stream: write data in, read compressed bottle out.
+writeCompressedBottle = (compressionType) ->
+  zStream = compressionStreamForType(compressionType)
+  bottleStream = new CompressedBottleWriter(compressionType)
+  zStream.pipe(bottleStream)
+  # duplexer(zStream, bottleStream)
+  [ zStream, bottleStream ]
 
 decodeCompressedHeader = (h) ->
   rv = { }
@@ -55,6 +56,17 @@ decodeCompressedHeader = (h) ->
   rv
 
 
+# returns a promise for a compressed bottle
+readCompressedBottle = (bottle) ->
+  zStream = decompressionStreamForType(bottle.header.compressionType)
+  toolkit.qread(bottle).then (innerBottleStream) ->
+    innerBottleStream.pipe(zStream)
+#    toolkit.qpipeToBuffer(zStream).then (x) -> console.log x.toString("hex")
+    bottle_stream.readBottleFromStream(zStream)
+
+
 exports.decodeCompressedHeader = decodeCompressedHeader
 exports.COMPRESSION_LZMA2 = COMPRESSION_LZMA2
 exports.CompressedBottleWriter = CompressedBottleWriter
+exports.readCompressedBottle = readCompressedBottle
+exports.writeCompressedBottle = writeCompressedBottle
