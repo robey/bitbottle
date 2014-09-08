@@ -18,21 +18,21 @@ readTinyFile = (bottle, filename) ->
       fileBottle.type.should.eql bottle_stream.TYPE_FILE
       fileBottle.header.filename.should.eql filename
       toolkit.qread(fileBottle).then (dataStream) ->
-        toolkit.qpipeToBuffer(dataStream).then (buffer) ->
+        toolkit.pipeToBuffer(dataStream).then (buffer) ->
           { header: fileBottle.header, data: buffer }
 
 
 describe "HashBottleWriter", ->
   it "writes and hashes a file stream", future ->
     file = writeTinyFile("file.txt", new Buffer("the new pornographers"))
-    toolkit.qpipeToBuffer(file).then (fileBuffer) ->
+    toolkit.pipeToBuffer(file).then (fileBuffer) ->
       # quick verification that we're hashing what we think we are.
       fileBuffer.toString("hex").should.eql "f09f8dbc0000000d000866696c652e7478748001150115746865206e657720706f726e6f677261706865727300ff"
 
       hashStream = new hash_bottle.HashBottleWriter(hash_bottle.HASH_SHA512)
       hashStream.write(new toolkit.SourceStream(fileBuffer))
       hashStream.end()
-      toolkit.qpipeToBuffer(hashStream).then (buffer) ->
+      toolkit.pipeToBuffer(hashStream).then (buffer) ->
         # now decode it.
         bottle_stream.readBottleFromStream(new toolkit.SourceStream(buffer))
     .then (bottle) ->
@@ -42,7 +42,7 @@ describe "HashBottleWriter", ->
         file.data.toString().should.eql "the new pornographers"
       .then ->
         toolkit.qread(bottle).then (hashStream) ->
-          toolkit.qpipeToBuffer(hashStream).then (buffer) ->
+          toolkit.pipeToBuffer(hashStream).then (buffer) ->
             buffer.toString("hex").should.eql "b62fa61779952e57ae6d1353a027a9001ca3345150632f64bff005f9174b088acef5fd9c066ec9dde0bf16d5e19cab5e832c1b19dc56a29fd6bf5de17885890e"
 
 describe "validateHashBottle", ->
@@ -50,7 +50,7 @@ describe "validateHashBottle", ->
     hashStream = new hash_bottle.HashBottleWriter(hash_bottle.HASH_SHA512)
     hashStream.write(writeTinyFile("file.txt", new Buffer("the new pornographers")))
     hashStream.end()
-    toolkit.qpipeToBuffer(hashStream).then (buffer) ->
+    toolkit.pipeToBuffer(hashStream).then (buffer) ->
       # now decode it.
       bottle_stream.readBottleFromStream(new toolkit.SourceStream(buffer))
     .then (bottle) ->
@@ -59,7 +59,7 @@ describe "validateHashBottle", ->
       hash_bottle.validateHashBottle(bottle).then ({ bottle, valid }) ->
         bottle.header.filename.should.eql "file.txt"
         toolkit.qread(bottle).then (dataStream) ->
-          toolkit.qpipeToBuffer(dataStream).then (data) ->
+          toolkit.pipeToBuffer(dataStream).then (data) ->
             data.toString().should.eql "the new pornographers"
         .then ->
           toolkit.qread(bottle).then (dataStream) ->

@@ -40,10 +40,8 @@ class CompressedBottleWriter extends bottle_stream.LoneBottleWriter
 writeCompressedBottle = (compressionType) ->
   zStream = compressionStreamForType(compressionType)
   bottleStream = new CompressedBottleWriter(compressionType)
-  zStream.pipe(bottleStream)
-  # duplexer(zStream, bottleStream)
-  [ zStream, bottleStream ]
-
+  toolkit.weld(zStream, bottleStream)
+  
 decodeCompressedHeader = (h) ->
   rv = { }
   for field in h.fields
@@ -61,7 +59,6 @@ readCompressedBottle = (bottle) ->
   zStream = decompressionStreamForType(bottle.header.compressionType)
   toolkit.qread(bottle).then (innerBottleStream) ->
     innerBottleStream.pipe(zStream)
-#    toolkit.qpipeToBuffer(zStream).then (x) -> console.log x.toString("hex")
     bottle_stream.readBottleFromStream(zStream)
 
 

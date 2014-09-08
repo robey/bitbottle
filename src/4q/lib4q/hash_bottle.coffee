@@ -79,7 +79,7 @@ validateHashBottle = (bottle) ->
     bottle_stream.readBottleFromStream(hashStream).then (innerBottle) ->
       promise = toolkit.qend(innerBottle).then ->
         toolkit.qread(bottle).then (digestStream) ->
-          toolkit.qpipeToBuffer(digestStream).then (digestBuffer) ->
+          toolkit.pipeToBuffer(digestStream).then (digestBuffer) ->
             digestBuffer.toString("hex") == hashStream.digest.toString("hex")
       { bottle: innerBottle, valid: promise }
 

@@ -20,7 +20,7 @@ describe "FileBottleWriter", ->
       username: "tyrion"
     bottle = new file_bottle.FileBottleWriter(header)
     new toolkit.SourceStream("television").pipe(bottle)
-    toolkit.qpipeToBuffer(bottle).then (data) ->
+    toolkit.pipeToBuffer(bottle).then (data) ->
       # now decode it.
       bottle_stream.readBottleFromStream(new toolkit.SourceStream(data)).then (bottle) ->
         bottle.type.should.eql bottle_stream.TYPE_FILE
@@ -30,7 +30,7 @@ describe "FileBottleWriter", ->
         bottle.header.size.should.eql 10
         bottle.header.username.should.eql "tyrion"
         toolkit.qread(bottle).then (fileStream) ->
-          toolkit.qpipeToBuffer(fileStream).then (data) ->
+          toolkit.pipeToBuffer(fileStream).then (data) ->
             data.toString().should.eql "television"
 
   it "writes and decodes an actual file", future withTempFolder (folder) ->
@@ -39,7 +39,7 @@ describe "FileBottleWriter", ->
     stats = fs.statSync(filename)
     bottle = new file_bottle.FileBottleWriter(file_bottle.fileHeaderFromStats(filename, stats))
     fs.createReadStream(filename).pipe(bottle)
-    toolkit.qpipeToBuffer(bottle).then (data) ->
+    toolkit.pipeToBuffer(bottle).then (data) ->
       # now decode it.
       bottle_stream.readBottleFromStream(new toolkit.SourceStream(data)).then (bottle) ->
         bottle.type.should.eql bottle_stream.TYPE_FILE
@@ -47,7 +47,7 @@ describe "FileBottleWriter", ->
         bottle.header.folder.should.eql false
         bottle.header.size.should.eql 7
         toolkit.qread(bottle).then (fileStream) ->
-          toolkit.qpipeToBuffer(fileStream).then (data) ->
+          toolkit.pipeToBuffer(fileStream).then (data) ->
             data.toString().should.eql "hello!\n"
 
   it "writes a nested folder correctly", future ->
@@ -60,7 +60,7 @@ describe "FileBottleWriter", ->
     bottle1.end()
     bottle2.write(bottle3)
     bottle2.end()
-    toolkit.qpipeToBuffer(bottle1).then (data) ->
+    toolkit.pipeToBuffer(bottle1).then (data) ->
       data.toString("hex").should.eql "f09f8dbc0000000900056f75746572c0000131f09f8dbc000000090005696e6e6572c000011cf09f8dbc0000000d0008746573742e747874800103010361626300ff00ff00ff"
       # f09f8dbc 00000009
       #   0005 6f75746572  // "outer"

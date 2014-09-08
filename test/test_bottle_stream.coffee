@@ -22,7 +22,7 @@ describe "BottleWriter", ->
     m.addNumber(0, 150)
     b = new bottle_stream.BottleWriter(10, m)
     b.end()
-    toolkit.qpipeToBuffer(b).then (data) ->
+    toolkit.pipeToBuffer(b).then (data) ->
       data.toString("hex").should.eql "#{MAGIC_STRING}a003800196ff"
 
   it "writes data", future ->
@@ -30,7 +30,7 @@ describe "BottleWriter", ->
     b = new bottle_stream.BottleWriter(10, new bottle_header.Header())
     b.write(data)
     b.end()
-    toolkit.qpipeToBuffer(b).then (data) ->
+    toolkit.pipeToBuffer(b).then (data) ->
       data.toString("hex").should.eql "#{MAGIC_STRING}a0000104ff00ff0000ff"
 
   it "writes nested bottle data", future ->
@@ -39,7 +39,7 @@ describe "BottleWriter", ->
     b.write(b2)
     b.end()
     b2.end()
-    toolkit.qpipeToBuffer(b).then (data) ->
+    toolkit.pipeToBuffer(b).then (data) ->
       data.toString("hex").should.eql "#{MAGIC_STRING}a0000109#{MAGIC_STRING}e000ff00ff"
 
   it "streams data", future ->
@@ -55,7 +55,7 @@ describe "BottleWriter", ->
         slowStream.push null
     b.write(slowStream)
     b.end()
-    toolkit.qpipeToBuffer(b).then (data) ->
+    toolkit.pipeToBuffer(b).then (data) ->
       data.toString("hex").should.eql "#{MAGIC_STRING}e0000104c44cc44c00ff"
 
   it "writes several datas", future ->
@@ -67,7 +67,7 @@ describe "BottleWriter", ->
     b.write(data2)
     b.write(data3)
     b.end()
-    toolkit.qpipeToBuffer(b).then (data) ->
+    toolkit.pipeToBuffer(b).then (data) ->
       data.toString("hex").should.eql "#{MAGIC_STRING}e0000103f0f0f0000103e0e0e0000103cccccc00ff"
 
 
@@ -94,7 +94,7 @@ describe "ReadableBottle", ->
   it "reads a data block", future ->
     bottle_stream.readBottleFromStream(new toolkit.SourceStream(new Buffer("#{BASIC_MAGIC}010568656c6c6f00ff", "hex"))).then (b) ->
       toolkit.qread(b).then (dataStream) ->
-        toolkit.qpipeToBuffer(dataStream).then (data) ->
+        toolkit.pipeToBuffer(dataStream).then (data) ->
           data.toString().should.eql "hello"
           toolkit.qread(b).then (dataStream) ->
             (dataStream?).should.eql false
@@ -102,7 +102,7 @@ describe "ReadableBottle", ->
   it "reads a continuing data block", future ->
     bottle_stream.readBottleFromStream(new toolkit.SourceStream(new Buffer("#{BASIC_MAGIC}0102686501016c01026c6f00ff", "hex"))).then (b) ->
       toolkit.qread(b).then (dataStream) ->
-        toolkit.qpipeToBuffer(dataStream).then (data) ->
+        toolkit.pipeToBuffer(dataStream).then (data) ->
           data.toString().should.eql "hello"
           toolkit.qread(b).then (data) ->
             (data?).should.eql false
@@ -110,15 +110,15 @@ describe "ReadableBottle", ->
   it "reads several datas", future ->
     bottle_stream.readBottleFromStream(new toolkit.SourceStream(new Buffer("#{BASIC_MAGIC}0103f0f0f0000103e0e0e0000103cccccc00ff", "hex"))).then (b) ->
       toolkit.qread(b).then (dataStream) ->
-        toolkit.qpipeToBuffer(dataStream).then (data) ->
+        toolkit.pipeToBuffer(dataStream).then (data) ->
           data.toString("hex").should.eql "f0f0f0"
           toolkit.qread(b)
       .then (dataStream) ->
-        toolkit.qpipeToBuffer(dataStream).then (data) ->
+        toolkit.pipeToBuffer(dataStream).then (data) ->
           data.toString("hex").should.eql "e0e0e0"
           toolkit.qread(b)
       .then (dataStream) ->
-        toolkit.qpipeToBuffer(dataStream).then (data) ->
+        toolkit.pipeToBuffer(dataStream).then (data) ->
           data.toString("hex").should.eql "cccccc"
           toolkit.qread(b)
       .then (dataStream) ->
@@ -128,7 +128,7 @@ describe "ReadableBottle", ->
     source = new toolkit.SourceStream(new Buffer("#{BASIC_MAGIC}010363617400ff#{BASIC_MAGIC}010368617400ff", "hex"))
     bottle_stream.readBottleFromStream(source).then (b) ->
       toolkit.qread(b).then (dataStream) ->
-        toolkit.qpipeToBuffer(dataStream).then (data) ->
+        toolkit.pipeToBuffer(dataStream).then (data) ->
           data.toString().should.eql "cat"
           toolkit.qread(b)
       .then (dataStream) ->
@@ -137,7 +137,7 @@ describe "ReadableBottle", ->
     .then (b) ->
       toolkit.qread(b)
       .then (dataStream) ->
-        toolkit.qpipeToBuffer(dataStream).then (data) ->
+        toolkit.pipeToBuffer(dataStream).then (data) ->
           data.toString().should.eql "hat"
           toolkit.qread(b)
       .then (dataStream) ->
