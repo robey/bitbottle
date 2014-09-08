@@ -49,20 +49,13 @@ class BottleWriter extends stream.Transform
   # ("subclasses" may use this to handle their own magic)
   _process: (inStream) ->
     framedStream = new framed_stream.WritableFramedStream()
+    framedStream.on "data", (data) => @push data
     inStream.pipe(framedStream)
-    @_plumbFramedStream(framedStream)
+    toolkit.qend(framedStream)
 
   _flush: (callback) ->
     @push new Buffer([ BOTTLE_END ])
     callback()
-
-  # plumb a framed stream so that it pumps its output back into meeeee.
-  _plumbFramedStream: (framedStream) ->
-    plumbing = new stream.Transform()
-    plumbing._transform = (data, _, cb) =>
-      @push data
-      cb()
-    toolkit.qpipe(framedStream, plumbing)
 
 
 # Converts a Readable stream into a framed data stream with a 4Q bottle
@@ -76,7 +69,7 @@ class LoneBottleWriter extends BottleWriter
     super(type, header, options)
     # make a single framed stream that we channel
     @framedStream = new framed_stream.WritableFramedStream()
-    @_plumbFramedStream(@framedStream)
+    @framedStream.on "data", (data) => @push data
 
   _transform: (data, _, callback) ->
     @framedStream.write(data, _, callback)

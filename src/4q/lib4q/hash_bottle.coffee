@@ -45,15 +45,21 @@ class HashBottleWriter extends bottle_stream.BottleWriter
   constructor: (@hashType) ->
     header = new bottle_header.Header()
     header.addNumber(FIELDS.NUMBERS.HASH_TYPE, @hashType)
-    super(bottle_stream.TYPE_HASHED, header)
+    super(bottle_stream.TYPE_HASHED, header, objectModeRead: false, objectModeWrite: false)
+    # make a single framed stream that we channel
+    @hashStream = hashStreamForType(@hashType)
+    @_process(@hashStream)
+ 
+  _transform: (data, _, callback) ->
+    @hashStream.write(data, _, callback)
 
-  _transform: (inStream, _, callback) ->
-    hashStream = inStream.pipe(hashStreamForType(@hashType))
-    @_process(hashStream).then =>
-      @_process(new toolkit.SourceStream(hashStream.digest)).then ->
+  _flush: (callback) ->
+    @hashStream.end()
+    @hashStream.on "end", =>
+      @_process(new toolkit.SourceStream(@hashStream.digest)).then ->
         callback()
-    .fail (error) ->
-      callback(error)
+      .fail (error) ->
+        callback(error)
 
 
 decodeHashHeader = (h) ->
@@ -74,8 +80,8 @@ decodeHashHeader = (h) ->
 #     true if the hash validated correctly, false if not
 validateHashBottle = (bottle) ->
   hashStream = hashStreamForType(bottle.header.hashType)
-  toolkit.qread(bottle).then (innerBottleStream) ->
-    innerBottleStream.pipe(hashStream)
+  toolkit.qread(bottle).then (innerStream) ->
+    innerStream.pipe(hashStream)
     bottle_stream.readBottleFromStream(hashStream).then (innerBottle) ->
       promise = toolkit.qend(innerBottle).then ->
         toolkit.qread(bottle).then (digestStream) ->

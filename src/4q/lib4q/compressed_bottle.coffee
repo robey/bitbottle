@@ -29,18 +29,23 @@ decompressionStreamForType = (compressionType) ->
 
 
 # Takes a Readable stream (usually a WritableBottleStream) and produces a new
-# Readable stream containing the compressed content.
+# Readable stream containing the compressed bottle.
 class CompressedBottleWriter extends bottle_stream.LoneBottleWriter
   constructor: (@compressionType) ->
     header = new bottle_header.Header()
     header.addNumber(FIELDS.NUMBERS.COMPRESSION_TYPE, @compressionType)
-    super(bottle_stream.TYPE_COMPRESSED, header)
+    super(bottle_stream.TYPE_COMPRESSED, header, objectModeRead: false, objectModeWrite: false)
+    @zStream = compressionStreamForType(@compressionType)
+    @_process(@zStream)
 
-# returns a transform stream: write data in, read compressed bottle out.
-writeCompressedBottle = (compressionType) ->
-  zStream = compressionStreamForType(compressionType)
-  bottleStream = new CompressedBottleWriter(compressionType)
-  toolkit.weld(zStream, bottleStream)
+  _transform: (data, _, callback) ->
+    @zStream.write(data, _, callback)
+
+  _flush: (callback) ->
+    @zStream.end()
+    @zStream.on "end", =>
+      callback()
+
   
 decodeCompressedHeader = (h) ->
   rv = { }
@@ -57,8 +62,8 @@ decodeCompressedHeader = (h) ->
 # returns a promise for a compressed bottle
 readCompressedBottle = (bottle) ->
   zStream = decompressionStreamForType(bottle.header.compressionType)
-  toolkit.qread(bottle).then (innerBottleStream) ->
-    innerBottleStream.pipe(zStream)
+  toolkit.qread(bottle).then (compressedStream) ->
+    compressedStream.pipe(zStream)
     bottle_stream.readBottleFromStream(zStream)
 
 
@@ -66,4 +71,3 @@ exports.decodeCompressedHeader = decodeCompressedHeader
 exports.COMPRESSION_LZMA2 = COMPRESSION_LZMA2
 exports.CompressedBottleWriter = CompressedBottleWriter
 exports.readCompressedBottle = readCompressedBottle
-exports.writeCompressedBottle = writeCompressedBottle

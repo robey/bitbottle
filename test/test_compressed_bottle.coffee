@@ -26,7 +26,7 @@ describe "CompressedBottleWriter", ->
     toolkit.pipeToBuffer(file).then (fileBuffer) ->
       # quick verification that we're hashing what we think we are.
       fileBuffer.toString("hex").should.eql "f09f8dbc0000000d000866696c652e7478748001150115746865206e657720706f726e6f677261706865727300ff"
-      x = compressed_bottle.writeCompressedBottle(compressed_bottle.COMPRESSION_LZMA2)
+      x = new compressed_bottle.CompressedBottleWriter(compressed_bottle.COMPRESSION_LZMA2)
       new toolkit.SourceStream(fileBuffer).pipe(x)
       toolkit.pipeToBuffer(x).then (buffer) ->
         # now decode it.
