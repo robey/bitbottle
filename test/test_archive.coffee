@@ -9,12 +9,12 @@ archive = require "../lib/4q/lib4q/archive"
 future = mocha_sprinkles.future
 withTempFolder = mocha_sprinkles.withTempFolder
 
-
 archiveWriter = ->
   w = new archive.ArchiveWriter()
   w.collectedEvents = []
   w.on "filename", (filename, stats) -> w.collectedEvents.push { event: "filename", filename, stats }
   w.on "status", (filename, byteCount) -> w.collectedEvents.push { event: "status", filename, byteCount }
+
 
 describe "ArchiveWriter", ->
   it "processes a file", future withTempFolder (folder) ->

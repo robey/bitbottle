@@ -71,9 +71,13 @@ main = ->
 
   hashBottle = new lib4q.HashBottleWriter(lib4q.HASH_SHA512)
 
-  compressedBottle = new lib4q.CompressedBottleWriter(lib4q.COMPRESSION_LZMA2)
+  hashBottle.pipe(countingOutStream).pipe(outStream)
+  targetStream = hashBottle
 
-  compressedBottle.pipe(hashBottle).pipe(countingOutStream).pipe(outStream)
+  if false
+    compressedBottle = new lib4q.CompressedBottleWriter(lib4q.COMPRESSION_LZMA2)
+    compressedBottle.pipe(targetStream)
+    targetStream = compressedBottle
 
   writer = new lib4q.ArchiveWriter()
   writer.on "filename", (filename, header) ->
@@ -89,11 +93,6 @@ main = ->
     console.log err.stack
     process.exit(1)
 
-  state =
-    writer: compressedBottle
-    updater: updater
-    prefix: null
-
   promise = if argv._.length > 1
     # multiple files: just make a fake folder
     folderName = path.join(path.dirname(argv.o), path.basename(argv.o, ".4q"))
@@ -101,7 +100,7 @@ main = ->
   else
     writer.archiveFile(argv._[0])
   promise.then (bottle) ->
-    bottle.pipe(compressedBottle)
+    bottle.pipe(targetStream)
     toolkit.qfinish(outStream)
   .then ->
     updater.done()
