@@ -68,14 +68,26 @@ main = ->
   countingOutStream.on "count", (n) ->
     updater.totalBytes = n
     updater.update()
-  countingOutStream.pipe(outStream)
 
   hashBottle = new lib4q.HashBottleWriter(lib4q.HASH_SHA512)
-  hashBottle.pipe(countingOutStream)
 
   compressedBottle = new lib4q.CompressedBottleWriter(lib4q.COMPRESSION_LZMA2)
-  hashBottle.write(compressedBottle)
-  hashBottle.end()
+
+  compressedBottle.pipe(hashBottle).pipe(countingOutStream).pipe(outStream)
+
+  writer = new lib4q.ArchiveWriter()
+  writer.on "filename", (filename, header) ->
+    updater.setName(filename)
+    if not header.folder
+      updater.fileCount += 1
+      updater.totalBytesIn += header.size
+  writer.on "status", (filename, byteCount) ->
+    updater.currentBytes = byteCount
+    updater.update()
+  writer.on "error", (error) ->
+    console.log "\nERROR: #{error.message}"
+    console.log err.stack
+    process.exit(1)
 
   state =
     writer: compressedBottle
@@ -85,80 +97,22 @@ main = ->
   promise = if argv._.length > 1
     # multiple files: just make a fake folder
     folderName = path.join(path.dirname(argv.o), path.basename(argv.o, ".4q"))
-    nowNanos = Date.now() * Math.pow(10, 6)
-    stats =
-      folder: true
-      filename: folderName
-      mode: 0x1c0
-      createdNanos: nowNanos
-      modifiedNanos: nowNanos
-      accessedNanos: nowNanos
-    state.updater.setName(folderName + "/")
-    state.updater.finishedFile(true)
-    archiveFolderOfFiles(copy(state, prefix: folderName), null, stats, argv._)
+    writer.archiveFiles(folderName, argv._)
   else
-    archiveFile(state, argv._[0])
-  promise.then ->
-    compressedBottle.end()
+    writer.archiveFile(argv._[0])
+  promise.then (bottle) ->
+    bottle.pipe(compressedBottle)
     toolkit.qfinish(outStream)
   .then ->
+    updater.done()
     updater.clear()
     if not argv.q then process.stdout.write "#{argv.o} (#{updater.fileCount} files, #{display.humanize(updater.totalBytesIn)} -> #{display.humanize(updater.totalBytes)} bytes)\n"
   .fail (err) ->
     console.log "\nERROR: #{err.message}"
+    console.log err.stack
     process.exit(1)
   .done()
 
-
-archiveFiles = (state, folder, filenames) ->
-  if filenames.length == 0 then return Q()
-  filename = filenames.shift()
-  filepath = if folder? then path.join(folder, filename) else filename
-  archiveFile(state, filepath).then ->
-    archiveFiles(state, folder, filenames)
-
-archiveFile = (state, filename) ->
-  basename = path.basename(filename)
-  qify(fs.stat)(filename).then (stats) ->
-    header = lib4q.fileHeaderFromStats(basename, stats)
-    displayName = if state.prefix? then path.join(state.prefix, basename) else basename
-    state.updater.setName(if stats.folder then displayName + "/" else displayName)
-    if header.folder
-      # display the folder name before the files
-      state.updater.finishedFile(true)
-      archiveFolder(copy(state, prefix: displayName), filename, header).then ->
-    else
-      state.updater.fileCount += 1
-      state.updater.totalBytesIn += header.size
-      qify(fs.open)(filename, "r").then (fd) ->
-        countingFileStream = new toolkit.CountingStream()
-        countingFileStream.on "count", (n) ->
-          state.updater.currentBytes = n
-          state.updater.update()
-        fileBottle = new lib4q.FileBottleWriter(header)
-        fs.createReadStream(filename, fd: fd).pipe(countingFileStream).pipe(fileBottle)
-        toolkit.qwrite(state.writer, fileBottle).then ->
-          state.updater.finishedFile()
-
-archiveFolder = (state, folder, stats) ->
-  qify(fs.readdir)(folder).then (files) ->
-    archiveFolderOfFiles(state, folder, stats, files)
-
-archiveFolderOfFiles = (state, folder, stats, files) ->
-  folderBottle = new lib4q.FolderBottleWriter(stats)
-  Q.all([
-    toolkit.qwrite(state.writer, folderBottle)
-    archiveFiles(copy(state, writer: folderBottle), folder, files).then ->
-      folderBottle.end()
-  ])
-
-qify = (f) ->
-  (arg...) ->
-    deferred = Q.defer()
-    f arg..., (err, rv) ->
-      if err? then return deferred.reject(err)
-      deferred.resolve(rv)
-    deferred.promise
 
 # this really should be part of js. :/
 copy = (obj, fields) ->
@@ -177,16 +131,21 @@ class StatusUpdater
     @lastUpdate = 0
     @frequency = 500
 
-  setName: (filename) ->
+  setName: (filename, isFolder) ->
+    if @filename? then @_finishedFile()
     @currentBytes = 0
     @filename = filename
+    @isFolder = isFolder
     @forceUpdate()
 
-  finishedFile: (isFolder = false) ->
+  done: ->
+    if @filename? then @_finishedFile()
+
+  _finishedFile: ->
     if not @options.verbose then return
     @forceUpdate()
     @clear()
-    bytes = if isFolder then "     " else display.color(COLORS.verbose_size, sprintf("%5s", display.humanize(@currentBytes)))
+    bytes = if @isFolder then "     " else display.color(COLORS.verbose_size, sprintf("%5s", display.humanize(@currentBytes)))
     process.stdout.write display.paint("  ", bytes, "  ", @filename).toString() + "\n"
 
   clear: ->

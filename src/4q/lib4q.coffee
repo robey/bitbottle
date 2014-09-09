@@ -1,7 +1,10 @@
+archive = require "./lib4q/archive"
 bottle_stream = require "./lib4q/bottle_stream"
 compressed_bottle = require "./lib4q/compressed_bottle"
 file_bottle = require "./lib4q/file_bottle"
 hash_bottle = require "./lib4q/hash_bottle"
+
+exports.ArchiveWriter = archive.ArchiveWriter
 
 exports.BottleWriter = bottle_stream.BottleWriter
 exports.ReadableBottle = bottle_stream.ReadableBottle

@@ -10,7 +10,7 @@ util = require "util"
 # higher-level API for maniplating 4Q archives of files & folders.
 
 # Create a file or folder bottle stream, emitting events for:
-#   - "filename", (filename, stats) -> begin processing a new file
+#   - "filename", (filename, header) -> begin processing a new file
 #   - "status", (filename, byteCount) -> current # of bytes read from the current file
 #   - "error", (error) -> an error occurred during the data streaming
 class ArchiveWriter extends events.EventEmitter
@@ -29,14 +29,17 @@ class ArchiveWriter extends events.EventEmitter
   # Create a fake folder with the given name, and archive a list of files
   # into it, as with `archiveFile`.
   archiveFiles: (folderName, filenames) ->
-    @_processFolder(null, folderName, @_makeFakeFolderHeader(folderName), filenames)
+    header = @_makeFakeFolderHeader(folderName)
+    prefix = folderName + "/"
+    @emit "filename", prefix, header
+    @_processFolder(null, prefix, header, filenames)
 
   _processFile: (filename, prefix) ->
     basename = path.basename(filename)
     qify(fs.stat)(filename).then (stats) =>
       header = file_bottle.fileHeaderFromStats(basename, stats)
       displayName = (if prefix? then path.join(prefix, basename) else basename) + (if header.folder then "/" else "")
-      @emit "filename", displayName, stats
+      @emit "filename", displayName, header
       if header.folder then return @_processFolder(filename, displayName, header)
       qify(fs.open)(filename, "r").then (fd) =>
         countingFileStream = new toolkit.CountingStream()
