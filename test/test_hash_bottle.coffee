@@ -36,6 +36,7 @@ describe "HashBottleWriter", ->
     .then (bottle) ->
       bottle.type.should.eql bottle_stream.TYPE_HASHED
       bottle.header.hashType.should.eql hash_bottle.HASH_SHA512
+      bottle.typeName().should.eql "hashed/SHA-512"
       readTinyFile(bottle, "file.txt").then (file) ->
         file.data.toString().should.eql "the new pornographers"
       .then ->
@@ -43,7 +44,7 @@ describe "HashBottleWriter", ->
           toolkit.pipeToBuffer(hashStream).then (buffer) ->
             buffer.toString("hex").should.eql "b62fa61779952e57ae6d1353a027a9001ca3345150632f64bff005f9174b088acef5fd9c066ec9dde0bf16d5e19cab5e832c1b19dc56a29fd6bf5de17885890e"
 
-describe "validateHashBottle", ->
+describe "HashBottleReader", ->
   it "reads a hashed stream", future ->
     hashStream = new hash_bottle.HashBottleWriter(hash_bottle.HASH_SHA512)
     writeTinyFile("file.txt", new Buffer("the new pornographers")).pipe(hashStream)
@@ -53,7 +54,7 @@ describe "validateHashBottle", ->
     .then (bottle) ->
       bottle.type.should.eql bottle_stream.TYPE_HASHED
       bottle.header.hashType.should.eql hash_bottle.HASH_SHA512
-      hash_bottle.validateHashBottle(bottle).then ({ bottle, valid }) ->
+      bottle.validate().then ({ bottle, valid }) ->
         bottle.header.filename.should.eql "file.txt"
         toolkit.qread(bottle).then (dataStream) ->
           toolkit.pipeToBuffer(dataStream).then (data) ->

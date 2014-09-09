@@ -71,7 +71,7 @@ describe "BottleWriter", ->
       data.toString("hex").should.eql "#{MAGIC_STRING}e0000103f0f0f0000103e0e0e0000103cccccc00ff"
 
 
-describe "ReadableBottle", ->
+describe "BottleReader", ->
   BASIC_MAGIC = "f09f8dbc0000e000"
 
   it "validates the header", future ->

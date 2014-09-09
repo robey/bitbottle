@@ -73,24 +73,30 @@ decodeHashHeader = (h) ->
   rv.hashName = HASH_NAMES[rv.hashType]
   rv
 
+class HashBottleReader extends bottle_stream.BottleReader
+  constructor: (header, stream) ->
+    super(bottle_stream.TYPE_HASHED, header, stream)
 
-# returns a promise: { stream, valid }
-# - bottle: the inner stream (another bottle)
-# - valid: a promise resolving to true/false after the bottle is finished,
-#     true if the hash validated correctly, false if not
-validateHashBottle = (bottle) ->
-  hashStream = hashStreamForType(bottle.header.hashType)
-  toolkit.qread(bottle).then (innerStream) ->
-    innerStream.pipe(hashStream)
-    bottle_stream.readBottleFromStream(hashStream).then (innerBottle) ->
-      promise = toolkit.qend(innerBottle).then ->
-        toolkit.qread(bottle).then (digestStream) ->
-          toolkit.pipeToBuffer(digestStream).then (digestBuffer) ->
-            digestBuffer.toString("hex") == hashStream.digest.toString("hex")
-      { bottle: innerBottle, valid: promise }
+  typeName: ->
+    "hashed/#{HASH_NAMES[@header.hashType]}"
+
+  # returns a promise: { bottle: BottleReader, valid: Promise(Bool) }
+  # - bottle: the inner stream (another bottle)
+  # - valid: a promise resolving to true/false after the bottle is finished,
+  #     true if the hash validated correctly, false if not
+  validate: ->
+    hashStream = hashStreamForType(@header.hashType)
+    toolkit.qread(@).then (innerStream) =>
+      innerStream.pipe(hashStream)
+      bottle_stream.readBottleFromStream(hashStream).then (innerBottle) =>
+        promise = toolkit.qend(innerBottle).then =>
+          toolkit.qread(@).then (digestStream) =>
+            toolkit.pipeToBuffer(digestStream).then (digestBuffer) ->
+              digestBuffer.toString("hex") == hashStream.digest.toString("hex")
+        { bottle: innerBottle, valid: promise }
 
 
 exports.decodeHashHeader = decodeHashHeader
 exports.HASH_SHA512 = HASH_SHA512
-exports.validateHashBottle = validateHashBottle
+exports.HashBottleReader = HashBottleReader
 exports.HashBottleWriter = HashBottleWriter

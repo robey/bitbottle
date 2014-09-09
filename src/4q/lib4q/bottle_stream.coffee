@@ -81,7 +81,7 @@ class LoneBottleWriter extends BottleWriter
       callback()
 
 
-# read a bottle from a stream, returning a "ReadableBottle" object, which is
+# read a bottle from a stream, returning a BottleReader object, which is
 # a stream that provides sub-streams.
 readBottleFromStream = (stream) ->
   # avoid import loops.
@@ -90,12 +90,15 @@ readBottleFromStream = (stream) ->
   compressed_bottle = require "./compressed_bottle"
 
   readBottleHeader(stream).then ({ type, header, buffer }) ->
-    header = switch type
-      when TYPE_FILE then file_bottle.decodeFileHeader(header)
-      when TYPE_HASHED then hash_bottle.decodeHashHeader(header)
-      when TYPE_COMPRESSED then compressed_bottle.decodeCompressedHeader(header)
-      else header
-    new ReadableBottle(type, header, buffer, stream)
+    switch type
+      when TYPE_FILE
+        new BottleReader(type, file_bottle.decodeFileHeader(header), stream)
+      when TYPE_HASHED
+        new hash_bottle.HashBottleReader(hash_bottle.decodeHashHeader(header), stream)
+      # when TYPE_COMPRESSED
+      #    compressed_bottle.decodeCompressedHeader(header)
+      else
+        new BottleReader(type, header, stream)
 
 readBottleHeader = (stream) ->
   toolkit.qread(stream, 8).then (buffer) ->
@@ -112,10 +115,17 @@ readBottleHeader = (stream) ->
 
 # stream that reads an underlying (buffer) stream, pulls out the header and
 # type, and generates data streams.
-class ReadableBottle extends stream.Readable
-  constructor: (@type, @header, @headerBuffer, @stream) ->
+class BottleReader extends stream.Readable
+  constructor: (@type, @header, @stream) ->
     super(objectMode: true)
     @lastPromise = Q()
+
+  # usually subclasses will override this.
+  typeName: ->
+    switch @type
+      when TYPE_FILE
+        if @header.folder then "folder" else "file"
+      else "unknown(#{@type})"
 
   _read: (size) ->
     @_nextStream()
@@ -139,10 +149,10 @@ class ReadableBottle extends stream.Readable
       new framed_stream.ReadableFramedStream(@stream)
 
 
+exports.BottleReader = BottleReader
 exports.BottleWriter = BottleWriter
 exports.LoneBottleWriter = LoneBottleWriter
 exports.MAGIC = MAGIC
-exports.ReadableBottle = ReadableBottle
 exports.readBottleFromStream = readBottleFromStream
 exports.TYPE_FILE = TYPE_FILE
 exports.TYPE_HASHED = TYPE_HASHED

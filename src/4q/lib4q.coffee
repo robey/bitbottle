@@ -7,7 +7,6 @@ hash_bottle = require "./lib4q/hash_bottle"
 exports.ArchiveWriter = archive.ArchiveWriter
 
 exports.BottleWriter = bottle_stream.BottleWriter
-exports.ReadableBottle = bottle_stream.ReadableBottle
 exports.readBottleFromStream = bottle_stream.readBottleFromStream
 
 exports.CompressedBottleWriter = compressed_bottle.CompressedBottleWriter
