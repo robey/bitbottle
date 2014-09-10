@@ -74,7 +74,7 @@ main = ->
   hashBottle.pipe(countingOutStream).pipe(outStream)
   targetStream = hashBottle
 
-  if false
+  if true
     compressedBottle = new lib4q.CompressedBottleWriter(lib4q.COMPRESSION_LZMA2)
     compressedBottle.pipe(targetStream)
     targetStream = compressedBottle
