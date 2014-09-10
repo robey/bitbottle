@@ -30,12 +30,14 @@ options:
     --help
     -l
         long form: display date/time, user/group, and posix permissions
+    --structure
+        show the bottle structure of the archive, instead of the listing
     --no-color
         turn off cool console colors
 """
 
 main = ->
-  argv = minimist(process.argv[2...], boolean: [ "help", "version", "l", "color" ], default: { color: true })
+  argv = minimist(process.argv[2...], boolean: [ "help", "version", "l", "color", "structure" ], default: { color: true })
   if argv.help or argv._.length == 0
     console.log USAGE
     process.exit(0)
@@ -46,11 +48,52 @@ main = ->
     console.log "required: filename of 4Q archive file(s)"
     process.exit(1)
   if not argv.color then display.noColor()
-  dumpArchiveFiles(argv._, argv)
-  .fail (err) ->
-    console.log "\nERROR: #{err.message}"
+
+  (if argv.structure then dumpArchiveStructures(argv._) else dumpArchiveFiles(argv._, argv)).fail (err) ->
+    console.log "\nERROR: #{err.message} #{err.stack}"
     process.exit(1)
   .done()
+
+dumpArchiveStructures = (filenames) ->
+  foreachSerial filenames, (filename) ->
+    dumpArchiveStructure(filename)
+
+dumpArchiveStructure = (filename) ->
+  indent = 0
+  pad = -> [0 ... indent].map((x) -> " ").join("")
+
+  reader = new lib4q.ArchiveReader()
+  reader.on "start-bottle", (bottle) ->
+    typeName = display.color("purple", bottle.typeName())
+    extra = switch bottle.typeName()
+      when "file" then "#{bottle.header.filename} (#{bottle.header.size})"
+      when "folder" then bottle.header.filename
+      else ""
+    process.stdout.write display.paint(pad(), "+ ", typeName, " ", extra).toString() + "\n"
+    indent += 2
+  reader.on "end-bottle", (bottle) ->
+    indent -= 2
+  reader.on "hash", (isValid, hex) ->
+    validString = if isValid then display.color("green", "valid") else display.color("red", "INVALID")
+    process.stdout.write display.paint(pad(), "[", validString, " hash: ", hex, "]").toString() + "\n"
+
+  reader.scanStream(readStream(filename))
+
+readStream = (filename) ->
+  try
+    fd = fs.openSync(filename, "r")
+  catch err
+    console.log "ERROR reading #{filename}: #{err.message}"
+    process.exit(1)
+  
+  stream = fs.createReadStream(filename, fd: fd)
+  stream.on "error", (err) ->
+    console.log "ERROR reading #{filename}: #{err.message}"
+    stream.close()
+  stream
+
+
+
 
 dumpArchiveFiles = (filenames, argv) ->
   if filenames.length == 0 then return Q()
@@ -92,7 +135,7 @@ scanBottle = (bottle, prefix, state) ->
     when lib4q.TYPE_FILE then dumpFileBottle(bottle, prefix, state)
     when lib4q.TYPE_HASHED then dumpHashBottle(bottle, prefix, state)
     else
-      console.log "ERROR: unknown bottle type #{bottle.type}"
+      throw new Error "unknown bottle type #{bottle.type}"
 
 skipBottle = (bottle) ->
   toolkit.qread(bottle).then (s) ->
@@ -171,5 +214,13 @@ summaryLineForFile = (stats, prefix, verbose) ->
   else
     display.paint("  ", size, "  ", filename).toString()
 
+
+
+# given a list, and a map function that returns promises, do them one at a time.
+foreachSerial = (list, f) ->
+  if list.length == 0 then return Q()
+  item = list.shift()
+  f(item).then ->
+    foreachSerial(list, f)
 
 exports.main = main
