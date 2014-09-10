@@ -1,3 +1,4 @@
+bottle_stream = require "./bottle_stream"
 events = require "events"
 file_bottle = require "./file_bottle"
 fs = require "fs"
@@ -75,6 +76,63 @@ class ArchiveWriter extends events.EventEmitter
     stats
 
 
+class ArchiveReader extends events.EventEmitter
+  constructor: ->
+    super()
+
+  scanStream: (inStream) ->
+    bottle_stream.readBottleFromStream(inStream).then (bottle) =>
+      @scan(bottle)
+
+  scan: (bottle) ->
+    @emit "start-bottle", bottle
+    promise = switch bottle.type
+      when bottle_stream.TYPE_FILE
+        if bottle.header.folder then @_scanFolder(bottle) else @_scanFile(bottle)
+      when bottle_stream.TYPE_HASHED then @_scanHashed(bottle)
+      when bottle_stream.TYPE_COMPRESSED then @_scanCompressed(bottle)
+      else
+        @_skipBottle(bottle)
+    promise.then =>
+      @emit "end-bottle", bottle
+
+  # scan each internal stream recursively
+  _scanFolder: (bottle) ->
+    toolkit.qread(bottle).then (nextStream) =>
+      if not nextStream? then return
+      @scanStream(nextStream).then =>
+        @_scanFolder(bottle)
+
+  _scanFile: (bottle) ->
+    toolkit.qread(bottle).then (nextStream) =>
+      if not nextStream? then return
+      @processFile(nextStream).then =>
+        @_scanFile(bottle)
+
+  # override this method to do something besides just skip the stream and move on.
+  processFile: (dataStream) ->
+    sink = new toolkit.NullSinkStream()
+    dataStream.pipe(sink)
+    toolkit.qend(sink)
+
+  _scanHashed: (bottle) ->
+    bottle.validate().then ({ bottle: innerBottle, valid: validPromise }) =>
+      @scan(innerBottle).then =>
+        validPromise.then (isValid) =>
+          @emit "hash-valid", isValid
+
+  _scanCompressed: (bottle) ->
+    bottle.decompress().then (nextBottle) =>
+      @scan(nextBottle)
+
+  _skipBottle: (bottle) ->
+    toolkit.qread(bottle).then (s) ->
+      if not s? then return
+      sink = new toolkit.NullSinkStream()
+      toolkit.qpipe(s, sink).then ->
+        skipBottle(bottle)
+
+
 # take a node function that takes a callback, and return a form that returns a promise.
 qify = (f) ->
   (arg...) ->
@@ -92,4 +150,5 @@ foreachSerial = (list, f) ->
     foreachSerial(list, f)
 
 
+exports.ArchiveReader = ArchiveReader
 exports.ArchiveWriter = ArchiveWriter

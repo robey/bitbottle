@@ -61,6 +61,9 @@ class CompressedBottleReader extends bottle_stream.BottleReader
   constructor: (header, stream) ->
     super(bottle_stream.TYPE_COMPRESSED, header, stream)
 
+  typeName: ->
+    "compressed/#{COMPRESSION_NAMES[@header.compressionType]}"
+
   decompress: ->
     zStream = decompressionStreamForType(@header.compressionType)
     toolkit.qread(@).then (compressedStream) ->
