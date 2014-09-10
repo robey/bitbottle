@@ -34,6 +34,6 @@ describe "CompressedBottleWriter", ->
     .then (zbottle) ->
       zbottle.type.should.eql bottle_stream.TYPE_COMPRESSED
       zbottle.header.compressionType.should.eql compressed_bottle.COMPRESSION_LZMA2
-      compressed_bottle.readCompressedBottle(zbottle).then (bottle) ->
+      zbottle.decompress().then (bottle) ->
         validateTinyFile(bottle, "file.txt").then ({ header, data }) ->
           data.toString().should.eql "the new pornographers"

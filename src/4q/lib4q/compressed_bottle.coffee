@@ -1,6 +1,5 @@
 bottle_header = require "./bottle_header"
 bottle_stream = require "./bottle_stream"
-duplexer = require "duplexer"
 Q = require "q"
 stream = require "stream"
 toolkit = require "stream-toolkit"
@@ -58,16 +57,18 @@ decodeCompressedHeader = (h) ->
   rv.compressionName = COMPRESSION_NAMES[rv.compressionType]
   rv
 
+class CompressedBottleReader extends bottle_stream.BottleReader
+  constructor: (header, stream) ->
+    super(bottle_stream.TYPE_COMPRESSED, header, stream)
 
-# returns a promise for a compressed bottle
-readCompressedBottle = (bottle) ->
-  zStream = decompressionStreamForType(bottle.header.compressionType)
-  toolkit.qread(bottle).then (compressedStream) ->
-    compressedStream.pipe(zStream)
-    bottle_stream.readBottleFromStream(zStream)
+  decompress: ->
+    zStream = decompressionStreamForType(@header.compressionType)
+    toolkit.qread(@).then (compressedStream) ->
+      compressedStream.pipe(zStream)
+      bottle_stream.readBottleFromStream(zStream)
 
 
 exports.decodeCompressedHeader = decodeCompressedHeader
 exports.COMPRESSION_LZMA2 = COMPRESSION_LZMA2
+exports.CompressedBottleReader = CompressedBottleReader
 exports.CompressedBottleWriter = CompressedBottleWriter
-exports.readCompressedBottle = readCompressedBottle

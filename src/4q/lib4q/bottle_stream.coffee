@@ -95,8 +95,8 @@ readBottleFromStream = (stream) ->
         new BottleReader(type, file_bottle.decodeFileHeader(header), stream)
       when TYPE_HASHED
         new hash_bottle.HashBottleReader(hash_bottle.decodeHashHeader(header), stream)
-      # when TYPE_COMPRESSED
-      #    compressed_bottle.decodeCompressedHeader(header)
+      when TYPE_COMPRESSED
+        new compressed_bottle.CompressedBottleReader(compressed_bottle.decodeCompressedHeader(header), stream)
       else
         new BottleReader(type, header, stream)
 
