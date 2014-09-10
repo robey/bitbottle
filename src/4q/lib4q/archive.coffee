@@ -113,13 +113,14 @@ class ArchiveReader extends events.EventEmitter
   processFile: (dataStream) ->
     sink = new toolkit.NullSinkStream()
     dataStream.pipe(sink)
-    toolkit.qend(sink)
+    toolkit.qfinish(sink)
 
   _scanHashed: (bottle) ->
-    bottle.validate().then ({ bottle: innerBottle, valid: validPromise }) =>
+    bottle.validate().then ({ bottle: innerBottle, valid: validPromise, hex: hexPromise }) =>
       @scan(innerBottle).then =>
         validPromise.then (isValid) =>
-          @emit "hash-valid", isValid
+          hexPromise.then (hex) =>
+            @emit "hash", isValid, hex
 
   _scanCompressed: (bottle) ->
     bottle.decompress().then (nextBottle) =>

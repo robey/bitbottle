@@ -43,6 +43,7 @@ class CompressedBottleWriter extends bottle_stream.LoneBottleWriter
   _flush: (callback) ->
     @zStream.end()
     @zStream.on "end", =>
+      @_close()
       callback()
 
   

@@ -56,7 +56,8 @@ class HashBottleWriter extends bottle_stream.BottleWriter
   _flush: (callback) ->
     @hashStream.end()
     @hashStream.on "end", =>
-      @_process(new toolkit.SourceStream(@hashStream.digest)).then ->
+      @_process(new toolkit.SourceStream(@hashStream.digest)).then =>
+        @_close()
         callback()
       .fail (error) ->
         callback(error)
@@ -89,11 +90,13 @@ class HashBottleReader extends bottle_stream.BottleReader
     toolkit.qread(@).then (innerStream) =>
       innerStream.pipe(hashStream)
       bottle_stream.readBottleFromStream(hashStream).then (innerBottle) =>
-        promise = toolkit.qend(innerBottle).then =>
+        hashPromise = toolkit.qend(innerBottle).then =>
           toolkit.qread(@).then (digestStream) =>
             toolkit.pipeToBuffer(digestStream).then (digestBuffer) ->
-              digestBuffer.toString("hex") == hashStream.digest.toString("hex")
-        { bottle: innerBottle, valid: promise }
+              digestBuffer.toString("hex")
+        validPromise = hashPromise.then (hex) ->
+          hex == hashStream.digest.toString("hex")
+        { bottle: innerBottle, valid: validPromise, hex: hashPromise }
 
 
 exports.decodeHashHeader = decodeHashHeader

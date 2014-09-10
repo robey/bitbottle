@@ -54,8 +54,11 @@ class BottleWriter extends stream.Transform
     toolkit.qend(framedStream)
 
   _flush: (callback) ->
-    @push new Buffer([ BOTTLE_END ])
+    @_close()
     callback()
+
+  _close: ->
+    @push new Buffer([ BOTTLE_END ])
 
 
 # Converts a Readable stream into a framed data stream with a 4Q bottle
@@ -77,7 +80,7 @@ class LoneBottleWriter extends BottleWriter
   _flush: (callback) ->
     @framedStream.end()
     @framedStream.on "end", =>
-      @push new Buffer([ BOTTLE_END ])
+      @_close()
       callback()
 
 
