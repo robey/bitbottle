@@ -21,7 +21,7 @@ archiveReader = ->
   r.collectedEvents = []
   r.on "start-bottle", (bottle) -> r.collectedEvents.push { event: "start-bottle", bottle }
   r.on "end-bottle", (bottle) -> r.collectedEvents.push { event: "end-bottle", bottle }
-  r.on "hash", (isValid, hex) -> r.collectedEvents.push { event: "hash-valid", isValid, hex }
+  r.on "hash", (bottle, isValid, hex) -> r.collectedEvents.push { event: "hash-valid", bottle, isValid, hex }
   r.processFile = (dataStream) ->
     toolkit.pipeToBuffer(dataStream).then (data) ->
       r.collectedEvents.push { event: "data", data }

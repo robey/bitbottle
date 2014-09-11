@@ -120,7 +120,7 @@ class ArchiveReader extends events.EventEmitter
       @scan(innerBottle).then =>
         validPromise.then (isValid) =>
           hexPromise.then (hex) =>
-            @emit "hash", isValid, hex
+            @emit "hash", bottle, isValid, hex
 
   _scanCompressed: (bottle) ->
     bottle.decompress().then (nextBottle) =>
