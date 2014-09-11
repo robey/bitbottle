@@ -16,8 +16,9 @@ NOW = Date.now()
 VERSION = "1.0.0"
 
 COLORS =
-  status_count: "cyan"
-  status_size: "cyan"
+  status_count: "0c8"
+  status_total_progress: "0c8"
+  status_file_progress: "0af"
   verbose_size: "green"
 
 USAGE = """
@@ -66,7 +67,7 @@ main = ->
   updater = new StatusUpdater(verbose: argv.v, quiet: argv.q)
   countingOutStream = new toolkit.CountingStream()
   countingOutStream.on "count", (n) ->
-    updater.totalBytes = n
+    updater.totalBytesOut = n
     updater.update()
 
   hashBottle = new lib4q.HashBottleWriter(lib4q.HASH_SHA512)
@@ -81,12 +82,12 @@ main = ->
 
   writer = new lib4q.ArchiveWriter()
   writer.on "filename", (filename, header) ->
-    updater.setName(filename)
+    updater.setFile(filename, header.folder, header.size)
     if not header.folder
       updater.fileCount += 1
       updater.totalBytesIn += header.size
   writer.on "status", (filename, byteCount) ->
-    updater.currentBytes = byteCount
+    updater.currentFileBytes = byteCount
     updater.update()
   writer.on "error", (error) ->
     console.log "\nERROR: #{error.message}"
@@ -105,7 +106,7 @@ main = ->
   .then ->
     updater.done()
     updater.clear()
-    if not argv.q then process.stdout.write "#{argv.o} (#{updater.fileCount} files, #{display.humanize(updater.totalBytesIn)} -> #{display.humanize(updater.totalBytes)} bytes)\n"
+    if not argv.q then process.stdout.write "#{argv.o} (#{updater.fileCount} files, #{display.humanize(updater.totalBytesIn)} -> #{display.humanize(updater.totalBytesOut)} bytes)\n"
   .fail (err) ->
     console.log "\nERROR: #{err.message}"
     console.log err.stack
@@ -123,16 +124,18 @@ copy = (obj, fields) ->
 
 class StatusUpdater
   constructor: (@options) ->
-    @totalBytes = 0
-    @currentBytes = 0
     @totalBytesIn = 0
+    @totalBytesOut = 0
+    @currentFileBytes = 0
+    @currentFileTotalBytes = 0
     @fileCount = 0
     @lastUpdate = 0
     @frequency = 500
 
-  setName: (filename, isFolder) ->
+  setFile: (filename, isFolder, size) ->
     if @filename? then @_finishedFile()
-    @currentBytes = 0
+    @currentFileBytes = 0
+    @currentFileTotalBytes = size
     @filename = filename
     @isFolder = isFolder
     @forceUpdate()
@@ -144,7 +147,7 @@ class StatusUpdater
     if not @options.verbose then return
     @forceUpdate()
     @clear()
-    bytes = if @isFolder then "     " else display.color(COLORS.verbose_size, sprintf("%5s", display.humanize(@currentBytes)))
+    bytes = if @isFolder then "     " else display.color(COLORS.verbose_size, sprintf("%5s", display.humanize(@currentFileTotalBytes)))
     process.stdout.write display.paint("  ", bytes, "  ", @filename).toString() + "\n"
 
   clear: ->
@@ -161,12 +164,12 @@ class StatusUpdater
     if now > @lastUpdate + @frequency and @filename?
       @lastUpdate = now
       count = display.color(COLORS.status_count, sprintf("%6s", @fileCount))
-      sizes = if @currentBytes == 0
-        sprintf("%6s%5s", " ", display.humanize(@totalBytes))
+      totalProgress = display.color(COLORS.status_total_progress, sprintf("%5s -> %5s", display.humanize(@totalBytesIn), display.humanize(@totalBytesOut)))
+      fileProgress = if @currentFileBytes > 0 and @currentFileTotalBytes?
+        display.color(COLORS.status_file_progress, "(#{Math.floor(100 * @currentFileBytes / @currentFileTotalBytes)}%)")
       else
-        sprintf("%5s/%5s", display.humanize(@currentBytes), display.humanize(@totalBytes))
-      progress = display.color(COLORS.status_size, sizes)
-      display.displayStatus display.paint(count, ": (", progress, ")  ", @filename, " ")
+        ""
+      display.displayStatus display.paint(count, ": (", totalProgress, ")  ", @filename, " ", fileProgress)
 
 
 exports.main = main
