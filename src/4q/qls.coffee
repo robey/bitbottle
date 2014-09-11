@@ -110,10 +110,16 @@ dumpArchiveFile = (filename, isVerbose) ->
     # FIXME display something if this is per-file
     if not isValid then throw new Error("Invalid hash; archive is probably corrupt.")
     if state.prefix.length == 0 then state.validHash = bottle.header.hashName
+  reader.on "compress", (bottle) ->
+    # FIXME display something if this is per-file
+    if state.prefix.length == 0 then state.compression = bottle.header.compressionName
 
   reader.scanStream(countingInStream).then ->
     byteTraffic = "#{display.humanize(state.totalBytesIn)} -> #{display.humanize(state.totalBytes)} bytes"
-    hashStatus = if state.validHash? then "[#{state.validHash}] " else ""
+    annotations = []
+    if state.compression? then annotations.push state.compression
+    if state.validHash? then annotations.push state.validHash
+    hashStatus = if annotations.length > 0 then "[#{annotations.join(", ")}] " else ""
     process.stdout.write "#{filename} #{hashStatus}(#{state.totalFiles} files, #{byteTraffic})\n"
 
 readStream = (filename) ->

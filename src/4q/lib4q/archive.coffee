@@ -123,6 +123,7 @@ class ArchiveReader extends events.EventEmitter
             @emit "hash", bottle, isValid, hex
 
   _scanCompressed: (bottle) ->
+    @emit "compress", bottle
     bottle.decompress().then (nextBottle) =>
       @scan(nextBottle)
 
