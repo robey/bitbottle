@@ -1,5 +1,5 @@
-file_bottle = require "./file_bottle"
 bottle_header = require "./bottle_header"
+framed_stream = require "./framed_stream"
 Q = require "q"
 stream = require "stream"
 toolkit = require "stream-toolkit"
@@ -10,10 +10,19 @@ MAGIC = new Buffer([ 0xf0, 0x9f, 0x8d, 0xbc ])
 VERSION = 0x00
 
 TYPE_FILE = 0
+TYPE_HASHED = 1
+TYPE_COMPRESSED = 4
 
-class WritableBottle extends toolkit.QStream
-  constructor: (type, header) ->
-    super()
+BOTTLE_END = 0xff
+
+
+# Converts (Readable) stream objects into a stream of framed data blocks with
+# a 4Q bottle header/footer. Write Readable streams, read buffers.
+class BottleWriter extends stream.Transform
+  constructor: (type, header, options = {}) ->
+    super(options)
+    @_writableState.objectMode = if options.objectModeWrite? then options.objectModeWrite else true
+    @_readableState.objectMode = if options.objectModeRead? then options.objectModeRead else false
     @_writeHeader(type, header)
 
   _writeHeader: (type, header) ->
@@ -21,45 +30,78 @@ class WritableBottle extends toolkit.QStream
     buffers = header.pack()
     length = if buffers.length == 0 then 0 else buffers.map((b) -> b.length).reduce((a, b) -> a + b)
     if length > 4095 then throw new Error("Header too long: #{length} > 4095")
-    buffers.unshift new Buffer([
+    @push MAGIC
+    @push new Buffer([
       VERSION
       0
       (type << 4) | ((length >> 8) & 0xf)
       (length & 0xff)
     ])
-    buffers.unshift MAGIC
-    @write(Buffer.concat(buffers))
+    buffers.map (b) => @push b
 
-  # write a stream into the bottle.
-  # if a length is given, we treat it as data. otherwies, it's a nested bottle.
-  writeData: (inStream, length) ->
-    if not length?
-      @write(new Buffer([ 0x80 ])).then =>
-        @spliceFrom(inStream)
-    else
-      header = 0
-      lengthBytes = zint.encodePackedInt(length)
-      if lengthBytes.length > 7 then throw new Error("wtf")
-      header |= lengthBytes.length
-      @write(new Buffer([ header ])).then =>
-        if lengthBytes? then @write(lengthBytes) else Q()
-      .then =>
-        @spliceFrom(new toolkit.LimitStream(inStream, length))
+  _transform: (inStream, _, callback) ->
+    @_process(inStream).then ->
+      callback()
+    .fail (error) ->
+      callback(error)
 
-  close: ->
-    promise = @write(new Buffer([ 0 ]))
-    WritableBottle.__super__.close.apply(@)
-    promise
+  # write a data stream into this bottle.
+  # ("subclasses" may use this to handle their own magic)
+  _process: (inStream) ->
+    framedStream = new framed_stream.WritableFramedStream()
+    framedStream.on "data", (data) => @push data
+    inStream.pipe(framedStream)
+    toolkit.qend(framedStream)
+
+  _flush: (callback) ->
+    @_close()
+    callback()
+
+  _close: ->
+    @push new Buffer([ BOTTLE_END ])
 
 
-# read a bottle from a stream, returning a "ReadableBottle" object, which is
+# Converts a Readable stream into a framed data stream with a 4Q bottle
+# header/footer. Write buffers, read buffers. This is a convenience version
+# of BottleWriter for the case (like a compression stream) where there will
+# be exactly one nested bottle.
+class LoneBottleWriter extends BottleWriter
+  constructor: (type, header, options = {}) ->
+    if not options.objectModeRead? then options.objectModeRead = false
+    if not options.objectModeWrite? then options.objectModeWrite = false
+    super(type, header, options)
+    # make a single framed stream that we channel
+    @framedStream = new framed_stream.WritableFramedStream()
+    @framedStream.on "data", (data) => @push data
+
+  _transform: (data, _, callback) ->
+    @framedStream.write(data, _, callback)
+
+  _flush: (callback) ->
+    @framedStream.end()
+    @framedStream.on "end", =>
+      @_close()
+      callback()
+
+
+# read a bottle from a stream, returning a BottleReader object, which is
 # a stream that provides sub-streams.
 readBottleFromStream = (stream) ->
-  readBottleHeader(stream).then ({ type, header }) ->
-    header = switch type
-      when TYPE_FILE then file_bottle.decodeFileHeader(header)
-      else header
-    new ReadableBottle(type, header, stream)
+  # avoid import loops.
+  file_bottle = require "./file_bottle"
+  hash_bottle = require "./hash_bottle"
+  compressed_bottle = require "./compressed_bottle"
+
+  readBottleHeader(stream).then ({ type, header, buffer }) ->
+    switch type
+      when TYPE_FILE
+        new BottleReader(type, file_bottle.decodeFileHeader(header), stream)
+      when TYPE_HASHED
+        new hash_bottle.HashBottleReader(hash_bottle.decodeHashHeader(header), stream)
+      when TYPE_COMPRESSED
+        new compressed_bottle.CompressedBottleReader(compressed_bottle.decodeCompressedHeader(header), stream)
+      else
+        new BottleReader(type, header, stream)
 
 readBottleHeader = (stream) ->
   toolkit.qread(stream, 8).then (buffer) ->
@@ -70,65 +112,51 @@ readBottleHeader = (stream) ->
     if buffer[5] != 0 then throw new Error("Incompatible flags: #{buffer[5].toString(16)}")
     type = (buffer[6] >> 4) & 0xf
     headerLength = ((buffer[6] & 0xf) * 256) + (buffer[7] & 0xff)
-    toolkit.qread(stream, headerLength).then (b) =>
-      { type, header: bottle_header.unpack(b) }
+    toolkit.qread(stream, headerLength).then (headerBuffer) =>
+      { type, header: bottle_header.unpack(headerBuffer) }
 
 
 # stream that reads an underlying (buffer) stream, pulls out the header and
-# type, and generates data objects.
-class ReadableBottle extends stream.Readable
+# type, and generates data streams.
+class BottleReader extends stream.Readable
   constructor: (@type, @header, @stream) ->
     super(objectMode: true)
     @lastPromise = Q()
 
-  # default implementation of _read, to be overridden by actual bottle types
-  _read: (size) -> @_nextStream()
+  # usually subclasses will override this.
+  typeName: ->
+    switch @type
+      when TYPE_FILE
+        if @header.folder then "folder" else "file"
+      else "unknown(#{@type})"
+
+  _read: (size) ->
+    @_nextStream()
 
   _nextStream: ->
     # must finish reading the last thing we generated, if any:
     @lastPromise.then =>
-      @_readDataChunk()
+      @_readDataStream()
     .then (stream) =>
       if not stream? then return @push null
-      if not (stream instanceof ReadableBottle)
-        stream = @_streamData(stream)
-        # for convenience, add the type & header, since we know them by now
-        stream.type = @type
-        stream.header = @header
       @lastPromise = toolkit.qend(stream)
       @push stream
-    .fail (err) =>
-      @emit "error", err
+    .fail (error) =>
+      @emit "error", error
 
-  # keep reading data chunks until the "keepReading" bit is clear.
-  _streamData: (firstStream) ->
-    streamQ = [ firstStream ]
-    currentStream = firstStream
-    generator = =>
-      if streamQ.length > 0 then return streamQ.shift()
-      if not currentStream._keepReading then return null
-      @_readDataChunk().then (stream) =>
-        currentStream = stream
-        stream
-    new toolkit.CompoundStream(generator)
-
-  _readDataChunk: ->
+  _readDataStream: ->
     toolkit.qread(@stream, 1).then (buffer) =>
-      # end of data stream?
-      if buffer[0] == 0 then return null
-      isBottle = (buffer[0] & 0x80) != 0
-      if isBottle then return readBottleFromStream(@stream)
-      keepReading = (buffer[0] & 0x40) != 0
-      lengthBytes = (buffer[0] & 7)
-      toolkit.qread(@stream, lengthBytes).then (buffer) =>
-        length = zint.decodePackedInt(buffer)
-        s = new toolkit.LimitStream(@stream, length)
-        s._keepReading = keepReading
-        s
+      if (not buffer?) or (buffer[0] == BOTTLE_END) then return null
+      # put it back. it's part of a data stream!
+      @stream.unshift buffer
+      new framed_stream.ReadableFramedStream(@stream)
 
 
+exports.BottleReader = BottleReader
+exports.BottleWriter = BottleWriter
+exports.LoneBottleWriter = LoneBottleWriter
 exports.MAGIC = MAGIC
-exports.ReadableBottle = ReadableBottle
 exports.readBottleFromStream = readBottleFromStream
 exports.TYPE_FILE = TYPE_FILE
-exports.WritableBottle = WritableBottle
+exports.TYPE_HASHED = TYPE_HASHED
+exports.TYPE_COMPRESSED = TYPE_COMPRESSED
