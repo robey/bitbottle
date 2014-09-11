@@ -49,8 +49,8 @@ main = ->
     process.exit(1)
   if not argv.color then display.noColor()
 
-  (if argv.structure then dumpArchiveStructures(argv._) else dumpArchiveFiles(argv._, argv)).fail (err) ->
-    console.log "\nERROR: #{err.message} #{err.stack}"
+  (if argv.structure then dumpArchiveStructures(argv._) else dumpArchiveFiles(argv._, argv.l)).fail (err) ->
+    console.log "\nERROR: #{err.message}"
     process.exit(1)
   .done()
 
@@ -73,11 +73,48 @@ dumpArchiveStructure = (filename) ->
     indent += 2
   reader.on "end-bottle", (bottle) ->
     indent -= 2
-  reader.on "hash", (isValid, hex) ->
+  reader.on "hash", (bottle, isValid, hex) ->
     validString = if isValid then display.color("green", "valid") else display.color("red", "INVALID")
     process.stdout.write display.paint(pad(), "[", validString, " hash: ", hex, "]").toString() + "\n"
 
   reader.scanStream(readStream(filename))
+
+dumpArchiveFiles = (filenames, isVerbose) ->
+  foreachSerial filenames, (filename) ->
+    dumpArchiveFile(filename, isVerbose)
+
+dumpArchiveFile = (filename, isVerbose) ->
+  # count total bytes packed away
+  state = { totalBytesIn: 0, totalBytes: 0, totalFiles: 0, isVerbose: isVerbose, prefix: [] }
+
+  countingInStream = new toolkit.CountingStream()
+  countingInStream.on "count", (n) ->
+    state.totalBytesIn = n
+  readStream(filename).pipe(countingInStream)
+
+  reader = new lib4q.ArchiveReader()
+  reader.on "start-bottle", (bottle) ->
+    switch bottle.typeName()
+      when "file", "folder"
+        nicePrefix = state.prefix.join("/") + (if state.prefix.length > 0 then "/" else "")
+        process.stdout.write summaryLineForFile(bottle.header, nicePrefix, state.isVerbose) + "\n"
+        state.prefix.push bottle.header.filename
+        if not bottle.header.folder
+          state.totalFiles += 1
+          state.totalBytes += bottle.header.size
+  reader.on "end-bottle", (bottle) ->
+    switch bottle.typeName()
+      when "file", "folder"
+        state.prefix.pop()
+  reader.on "hash", (bottle, isValid, hex) ->
+    # FIXME display something if this is per-file
+    if not isValid then throw new Error("Invalid hash; archive is probably corrupt.")
+    if state.prefix.length == 0 then state.validHash = bottle.header.hashName
+
+  reader.scanStream(countingInStream).then ->
+    byteTraffic = "#{display.humanize(state.totalBytesIn)} -> #{display.humanize(state.totalBytes)} bytes"
+    hashStatus = if state.validHash? then "[#{state.validHash}] " else ""
+    process.stdout.write "#{filename} #{hashStatus}(#{state.totalFiles} files, #{byteTraffic})\n"
 
 readStream = (filename) ->
   try
@@ -91,81 +128,6 @@ readStream = (filename) ->
     console.log "ERROR reading #{filename}: #{err.message}"
     stream.close()
   stream
-
-
-
-
-dumpArchiveFiles = (filenames, argv) ->
-  if filenames.length == 0 then return Q()
-  dumpArchiveFile(filenames.shift(), argv).then ->
-    dumpArchiveFiles(filenames, argv)
-
-dumpArchiveFile = (filename, argv) ->
-  try
-    fd = fs.openSync(filename, "r")
-  catch err
-    console.log "ERROR reading #{filename}: #{err.message}"
-    process.exit(1)
-  
-  stream = fs.createReadStream(filename, fd: fd)
-  stream.on "error", (err) ->
-    console.log "ERROR reading #{filename}: #{err.message}"
-    stream.close()
-
-  # count total bytes packed away
-  state = { totalBytesIn: 0, totalBytes: 0, totalFiles: 0, verbose: argv.l }
-
-  countingInStream = new toolkit.CountingStream()
-  countingInStream.on "count", (n) ->
-    state.totalBytesIn = n
-  stream.pipe(countingInStream)
-
-  lib4q.readBottleFromStream(countingInStream).then (bottle) ->
-    scanBottle(bottle, "", state).then ->
-      byteTraffic = "#{display.humanize(state.totalBytesIn)} -> #{display.humanize(state.totalBytes)} bytes"
-      hashStatus = if state.validHash? then "[#{state.validHash}] " else ""
-      process.stdout.write "#{filename} #{hashStatus}(#{state.totalFiles} files, #{byteTraffic})\n"
-  .fail (err) ->
-    console.log "ERROR reading #{filename}: #{err.message}"
-    console.log err.stack
-    stream.close()
-
-scanBottle = (bottle, prefix, state) ->
-  switch bottle.type
-    when lib4q.TYPE_FILE then dumpFileBottle(bottle, prefix, state)
-    when lib4q.TYPE_HASHED then dumpHashBottle(bottle, prefix, state)
-    else
-      throw new Error "unknown bottle type #{bottle.type}"
-
-skipBottle = (bottle) ->
-  toolkit.qread(bottle).then (s) ->
-    if not s? then return
-    sink = new toolkit.NullSinkStream(objectMode: true)
-    toolkit.qpipe(s, sink).then ->
-      skipBottle(bottle)
-
-dumpHashBottle = (bottle, prefix, state) ->
-  lib4q.validateHashBottle(bottle).then ({ bottle: nextBottle, valid: promise }) ->
-    scanBottle(nextBottle, prefix, state).then ->
-      promise.then (valid) ->
-        if not valid then throw new Error("Invalid hash; archive is probably corrupt.")
-        # FIXME display something if this is per-file
-        if prefix == "" then state.validHash = bottle.header.hashName
-
-dumpFileBottle = (bottle, prefix, state) ->
-  process.stdout.write summaryLineForFile(bottle.header, prefix, state.verbose) + "\n"
-  if bottle.header.folder
-    dumpFolderBottle(bottle, prefix + bottle.header.filename + "/", state)
-  else
-    state.totalFiles += 1
-    state.totalBytes += bottle.header.size
-    skipBottle(bottle)
-
-dumpFolderBottle = (bottle, prefix, state) ->
-  toolkit.qread(bottle).then (dataStream) ->
-    if not dataStream? then return Q()
-    lib4q.readBottleFromStream(dataStream).then (nestedBottle) ->
-      scanBottle(nestedBottle, prefix, state).then -> dumpFolderBottle(bottle, prefix, state)
 
 # either "13:45" or "10 Aug" or "2014"
 # (25 Aug 2014: this is stupid.)
@@ -193,7 +155,7 @@ modeToWire = (mode, isFolder) ->
   d = if isFolder then "d" else "-"
   d + octize((mode >> 6) & 7) + octize((mode >> 3) & 7) + octize(mode & 7)
 
-summaryLineForFile = (stats, prefix, verbose) ->
+summaryLineForFile = (stats, prefix, isVerbose) ->
   mode = modeToWire(stats.mode or 0, stats.folder)
   username = (stats.username or "nobody")[...8]
   groupname = (stats.groupname or "nobody")[...8]
@@ -209,12 +171,10 @@ summaryLineForFile = (stats, prefix, verbose) ->
   userdata = display.color(COLORS.user_group, sprintf("%-8s %-8s", username, groupname))
   time = display.color(COLORS.timestamp, sprintf("%6s", time))
   size = display.color(COLORS.file_size, sprintf("%5s", size))
-  if verbose
+  if isVerbose
     display.paint(mode, "  ", userdata, " ", time, "  ", size, "  ", filename).toString()
   else
     display.paint("  ", size, "  ", filename).toString()
-
-
 
 # given a list, and a map function that returns promises, do them one at a time.
 foreachSerial = (list, f) ->
