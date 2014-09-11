@@ -30,6 +30,8 @@ options:
     --help
     -l
         long form: display date/time, user/group, and posix permissions
+    -q
+        quiet: display only the summary line at the end
     --structure
         show the bottle structure of the archive, instead of the listing
     --no-color
@@ -37,7 +39,7 @@ options:
 """
 
 main = ->
-  argv = minimist(process.argv[2...], boolean: [ "help", "version", "l", "color", "structure" ], default: { color: true })
+  argv = minimist(process.argv[2...], boolean: [ "help", "version", "l", "q", "color", "structure" ], default: { color: true })
   if argv.help or argv._.length == 0
     console.log USAGE
     process.exit(0)
@@ -49,7 +51,7 @@ main = ->
     process.exit(1)
   if not argv.color then display.noColor()
 
-  (if argv.structure then dumpArchiveStructures(argv._) else dumpArchiveFiles(argv._, argv.l)).fail (err) ->
+  (if argv.structure then dumpArchiveStructures(argv._) else dumpArchiveFiles(argv._, argv.l, argv.q)).fail (err) ->
     console.log "\nERROR: #{err.message}"
     process.exit(1)
   .done()
@@ -79,13 +81,13 @@ dumpArchiveStructure = (filename) ->
 
   reader.scanStream(readStream(filename))
 
-dumpArchiveFiles = (filenames, isVerbose) ->
+dumpArchiveFiles = (filenames, isVerbose, isQuiet) ->
   foreachSerial filenames, (filename) ->
-    dumpArchiveFile(filename, isVerbose)
+    dumpArchiveFile(filename, isVerbose, isQuiet)
 
-dumpArchiveFile = (filename, isVerbose) ->
+dumpArchiveFile = (filename, isVerbose, isQuiet) ->
   # count total bytes packed away
-  state = { totalBytesIn: 0, totalBytes: 0, totalFiles: 0, isVerbose: isVerbose, prefix: [] }
+  state = { totalBytesIn: 0, totalBytes: 0, totalFiles: 0, prefix: [] }
 
   countingInStream = new toolkit.CountingStream()
   countingInStream.on "count", (n) ->
@@ -97,7 +99,8 @@ dumpArchiveFile = (filename, isVerbose) ->
     switch bottle.typeName()
       when "file", "folder"
         nicePrefix = state.prefix.join("/") + (if state.prefix.length > 0 then "/" else "")
-        process.stdout.write summaryLineForFile(bottle.header, nicePrefix, state.isVerbose) + "\n"
+        unless isQuiet
+          process.stdout.write summaryLineForFile(bottle.header, nicePrefix, isVerbose) + "\n"
         state.prefix.push bottle.header.filename
         if not bottle.header.folder
           state.totalFiles += 1

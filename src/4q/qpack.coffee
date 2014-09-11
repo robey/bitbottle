@@ -33,10 +33,12 @@ options:
         verbose: display files as they're written
     -q
         quiet: display nothing unless there's an error
+    --no-color
+        turn off cool console colors
 """
 
 main = ->
-  argv = minimist(process.argv[2...], boolean: [ "help", "version" ])
+  argv = minimist(process.argv[2...], boolean: [ "help", "version", "v", "color" ], default: { color: true })
   if argv.help or argv._.length == 0
     console.log USAGE
     process.exit(0)
@@ -46,6 +48,7 @@ main = ->
   if argv._.length == 0
     console.log "Required: filename(s) to archive"
     process.exit(1)
+  if not argv.color then display.noColor()
   if not argv.o?
     argv.o = if argv._.length > 1 then "archive.4q" else argv._[0] + ".4q"
 
