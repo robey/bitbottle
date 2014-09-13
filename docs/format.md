@@ -68,7 +68,7 @@ Each field in the header starts with a 16-bit big-endian descriptor, followed by
     +----------------+----------------+
     | T T D D D D L L L L L L L L L L |
     +----------------+----------------+
-    
+
     T: 2-bit type identifier (0 - 3)
     D: 4-bit field id (0 - 15)
     L: 10-bit length of the field's value
@@ -87,98 +87,169 @@ A boolean field is false by default, so if it's present, it always has a zero-le
 A field is uniquely identified, per bottle type, by the field type and ID. So integer #0 is a different field from string #0, and string #0 in bottle type 3 is a different field from string #0 in bottle type 4. Each bottle defines the exhaustive list of fields for that bottle.
 
 
+## Encoding of data streams
 
+Data streams are framed, so that streaming readers can clearly identify where each data stream ends. A frame header looks is a single byte indicating the header length, followed by the length of the frame in LSB order.
+
+    +---+--- ... -+
+    | H | L       |
+    +---+--- ... -+
+
+For example, a frame of length 100 would be encoded as `0x01`, `0x64`, and then 100 bytes of data. A frame of one million bytes would be encoded as `0x03`, `0x40`, `0x42`, `0x0f`, and then a million bytes.
+
+The frame size is usually dictated by the willingness of the encoder to buffer (or have pre-knowledge about the size of the file).
+
+There are two special header bytes:
+
+- `0x00` - end of this stream
+- `0xff` - end of all data streams in this bottle
+
+For example, the data stream "hello" can be encoded as one frame of five bytes, like this:
+
+    0x01 0x05 0x68 0x65 0x6c 0x6c 0x6f 0x00
+
+or even two frames, of two bytes and then three:
+
+    0x01 0x02 0x68 0x65 0x01 0x03 0x6c 0x6c 0x6f 0x00
+
+Because of the inevitable overhead of the frame headers, you generally want to use large frames whenever possible. Even a frame of 1 terabyte is possible.
 
 
 ## Bottle types
 
-- File (0)
+### File / Folder (0)
 
-    Header:
-    1. filename [string 0]
-    2. mime type [string 1]
-    3. size (bytes) [zint 0]
-    4. posix mode (777) [zint 1]
-    5. created (nanoseconds) [zint 2]
-    6. modified (nanoseconds) [zint 3]
-    7. accessed (nanoseconds) [zint 4]
-    8. owner username [string 2]
-    9. groups (list of strings) [string 3]
-    10. is folder? (data: sequence of files) [bool 0]
+Header fields:
 
-- Hashed data (1)
+- is a folder? [bool 0]
+- filename [string 0] -- required
+- mime type [string 1]
+- size (bytes) [int 0] -- required for files
+- posix mode (lowest 9 bits) [int 1]
+- create timestamp (nanoseconds) [int 2]
+- modification timestamp (nanoseconds) [int 3]
+- accessed timestamp (nanoseconds) [int 4]
+- owner username [string 2]
+- group name [string 3]
 
-    Header:
-    1. hash type [zint 0]
-      - sha-512 [0]
+For a folder, the bottle's contents are nested bottles, representing the contents of the folder.
 
-    Data:
-    1. actual data
-    2. hash value
+For a file, the bottle contains exactly one data stream: the file's raw contents.
 
-3. Signed data
+### Hashed data (1)
 
-    Two data blocks: the signature, then the data.
+Header fields:
 
-4. Encrypted data
+- hash type [int 0]
+  - SHA-512 [0]
 
-    Header:
-    - cipher name (as in SSH) or "gnupg" for a gnupg armored blob
+There are two data streams in a hashed bottle:
 
-- Compressed data (4)
+- the hashed contents (a nested bottle)
+- the hash value, as bytes
 
-    Header:
-    1. compression type [zint 0]
-      - lzma2 [0]
-      - snappy [1]
+There is only one hash defined currently: SHA-512, with a 64-byte hash as the second data stream.
 
-6. Alternate versions
+### Signed data (2)
 
-    Each data block is the same content, but with different encoding (maybe each encrypted with a different key, for example).
+(Not implemented yet.)
 
-7. Partial bottle
+### Encrypted data (3)
 
-    Header:
-    - which part # is this?
-    - how many parts total?
-    - raid format (string)
+(Not implemented yet.)
 
-    Two data blocks: the header for the total reconstituted bottle, and the partial block. That is, each part has the header attached redundantly as a prefix data block.
+### Compressed data (4)
 
+Header fields:
 
+- compression type [int 0]
+  - LZMA2 [0]
+  - Snappy [1]
 
-## Data
+There is only one data stream: a nested bottle as compressed data.
 
-A data block is made up of frames. Each frame consists of:
-1. 1 byte length prefix: how many length bytes are there?
-2. length bytes for this frame
-3. data bytes
+### Alternate versions (5)
 
-A prefix byte of 0x00 is the final (empty) frame marking the end of the data block.
+(Not implemented yet. This is reserved for use in cases where the same content may be encoded in multiple ways, and you only need to decode one. For example, a message encrypted with several different keys.)
 
-A prefix byte of 0xff marks the end of the bottle.
+### Partial (6)
+
+(Not implemented yet. This is reserved for file-based RAID, where a single archive may be spread out across redundant files.)
+
+Possible header fields:
+
+- UUID for the total bottle [string 0]
+- RAID type [int 0]
+- total # of partials [int 1]
+- index # of this part, from 0 [int 2]
 
 
 ## Example archive
 
-Two files, named "hello" and "smile".
+Here is an archive of a folder named "archive", containing two files: "hello.txt" and "smile.txt".
 
-- Bottle type 1 (file: directory): f0 9f 8d bc 00 00 10 22 - header length = 34
-  - Header:
-    - filename "." (00 01, '.')
-    - created 1406011886_693_000_000, or: 88 08, 00 23 50 90 5c 28 83 13
-    - similarly modified & accessed, 10 bytes each
-    - is folder: c0 00
-  - Data #1: 01 3c (60 bytes)
-    - Bottle type 1 (file): f0 9f 8d bc 00 00 10 2c - header length = 44
-      - Metadata:
-        - filename "hello" (00 05, 'hello')
-        - size 5 (80 01, 05)
-        - mode 0666 = 0x1b6 (84 02, b6 01)
-        - same 30 bytes of create/modify/access times
-      - Data: (01 05 + 5 bytes)
-      - 00 (end)
-  - Data #2: 01 3c -- same as above except "smile"
-  - 00 (end)
+    f0 9f 8d bc 00 00 10 03 -- bottle type 1 (hashed), 3 byte header
+    80 01 00 -- int 0 = 0 (hash type SHA-512)
 
-total: 8 + 34 + 2 + 60 + 2 + 60 + 1 = 167
+    hashed data stream:
+      01 ea -- 234 byte frame:
+        f0 9f 8d bc 00 00 00 3b -- bottle type 0 (file), 59 byte header
+        00 07 61 72 63 68 69 76 65 -- string 0: "archive"
+        84 02 ed 01 -- int 1: 0x1ed (octal 755)
+        88 08 00 b8 3a 18 f1 93 93 13 -- int 2 (a big timestamp)
+        8c 08 00 b8 3a 18 f1 93 93 13 -- int 3 (same)
+        90 08 00 ce d4 71 55 94 93 13 -- int 4 (same)
+        c0 00 -- bool 0 (this is a folder)
+        08 05 72 6f 62 65 79 -- string 2: "robey"
+        0c 05 73 74 61 66 66 -- string 3: "staff"
+
+        data stream 1:
+          01 50 -- 80 byte frame:
+            f0 9f 8d bc 00 00 00 3e -- bottle type 0 (file), 62 byte header
+            00 09 68 65 6c 6c 6f 2e 74 78 74 -- string 0: "hello.txt"
+            84 02 a4 01 -- int 1: 0x1a4 (octal 644)
+            88 08 00 b8 3a 18 f1 93 93 13 -- int 2 (a big timestamp)
+            8c 08 00 b8 3a 18 f1 93 93 13 -- int 3 (same)
+            90 08 00 ce d4 71 55 94 93 13 -- int 4 (same)
+            80 01 06 -- int 0: 6
+            08 05 72 6f 62 65 79 -- string 2: "robey"
+            0c 05 73 74 61 66 66 -- string 3: "staff"
+
+            data stream:
+              01 06 -- 6 byte frame:
+              68 65 6c 6c 6f 0a -- "hello\n"
+              00 -- end of stream
+            ff -- no more streams
+          00 -- end of stream
+
+        data stream 2:
+          01 50 -- 80 byte frame:
+            f0 9f 8d bc 00 00 00 3e -- bottle type 0 (file), 62 byte header
+            00 09 73 6d 69 6c 65 2e 74 78 74 -- string 0: "smile.txt"
+            84 02 a4 01 -- int 1: 0x1a4 (octal 644)
+            88 08 00 90 cf 29 f0 93 93 13 -- int 2 (a big timestamp)
+            8c 08 00 90 cf 29 f0 93 93 13 -- int 3 (same)
+            90 08 00 ce d4 71 55 94 93 13 -- int 4 (same)
+            80 01 06 -- int 0: 6
+            08 05 72 6f 62 65 79 -- string 2: "robey"
+            0c 05 73 74 61 66 66 -- string 3: "staff"
+
+            data stream:
+              01 06 -- 6 byte frame:
+              73 6d 69 6c 65 0a -- "smile\n"
+              00 -- end of stream
+            ff -- no more streams
+          00 -- end of stream
+
+        ff -- no more streams
+      00 -- end of stream
+
+    hash result data stream:
+      01 40 -- 64 byte frame:
+        3c 4c ab 36 dc 96 fe 41 a9 56 ac bb 3f 80 96 47
+        8d 7a 4b be 45 86 a4 ba a6 c1 44 4e 16 72 84 cb
+        5e f4 e9 3d 7c 09 eb d9 d6 cb f8 96 bd 83 8c d4
+        0e 56 e5 06 42 cc d0 ee 50 47 f1 dc b6 0d b2 f7
+      00 -- end of stream
+
+    ff -- no more streams
