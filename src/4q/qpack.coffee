@@ -33,12 +33,22 @@ options:
         verbose: display files as they're written
     -q
         quiet: display nothing unless there's an error
+    -Z, --no-compress
+        do not compress the contents
+    -H, --no-hash
+        do not compute a check hash (let go and use the force)
     --no-color
         turn off cool console colors
 """
 
 main = ->
-  argv = minimist(process.argv[2...], boolean: [ "help", "version", "v", "color" ], default: { color: true })
+  argv = minimist process.argv[2...],
+    alias: { "Z": "no-compress", "H": "no-hash" }
+    boolean: [ "help", "version", "v", "color", "compress" ]
+    default: { color: true, compress: true, hash: true }
+  # minimist isn't great at decoding -Z:
+  if argv["no-compress"]? then argv.compress = false
+  if argv["no-hash"]? then argv.hash = false
   if argv.help or argv._.length == 0
     console.log USAGE
     process.exit(0)
@@ -72,13 +82,15 @@ main = ->
   countingOutStream.on "count", (n) ->
     updater.totalBytesOut = n
     updater.update()
+  countingOutStream.pipe(outStream)
+  targetStream = countingOutStream
 
-  hashBottle = new lib4q.HashBottleWriter(lib4q.HASH_SHA512)
+  if argv.hash
+    hashBottle = new lib4q.HashBottleWriter(lib4q.HASH_SHA512)
+    hashBottle.pipe(countingOutStream)
+    targetStream = hashBottle
 
-  hashBottle.pipe(countingOutStream).pipe(outStream)
-  targetStream = hashBottle
-
-  if true
+  if argv.compress
     compressedBottle = new lib4q.CompressedBottleWriter(lib4q.COMPRESSION_LZMA2)
     compressedBottle.pipe(targetStream)
     targetStream = compressedBottle
