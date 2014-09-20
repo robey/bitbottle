@@ -20,6 +20,7 @@
     "minimist": "*",
     "posix": "^1.0.3",
     "q": "^1.0.1",
+    "snappy": "*",
     "sprintf": "*",
     "stream-toolkit": "^1.0.0",
     "strftime": "*",

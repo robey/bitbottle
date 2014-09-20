@@ -26,3 +26,4 @@ exports.TYPE_COMPRESSED = bottle_stream.TYPE_COMPRESSED
 exports.HASH_SHA512 = hash_bottle.HASH_SHA512
 
 exports.COMPRESSION_LZMA2 = compressed_bottle.COMPRESSION_LZMA2
+exports.COMPRESSION_SNAPPY = compressed_bottle.COMPRESSION_SNAPPY

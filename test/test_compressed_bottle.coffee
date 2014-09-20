@@ -21,7 +21,7 @@ validateTinyFile = (fileBottle, filename) ->
 
 
 describe "CompressedBottleWriter", ->
-  it "compresses a file stream", future ->
+  it "compresses a file stream with lzma2", future ->
     file = writeTinyFile("file.txt", new Buffer("the new pornographers"))
     toolkit.pipeToBuffer(file).then (fileBuffer) ->
       # quick verification that we're hashing what we think we are.
@@ -34,6 +34,21 @@ describe "CompressedBottleWriter", ->
     .then (zbottle) ->
       zbottle.type.should.eql bottle_stream.TYPE_COMPRESSED
       zbottle.header.compressionType.should.eql compressed_bottle.COMPRESSION_LZMA2
+      zbottle.decompress().then (bottle) ->
+        validateTinyFile(bottle, "file.txt").then ({ header, data }) ->
+          data.toString().should.eql "the new pornographers"
+
+  # FIXME refactor
+  it "compresses a file stream with snappy", future ->
+    fileBottle = writeTinyFile("file.txt", new Buffer("the new pornographers"))
+    x = new compressed_bottle.CompressedBottleWriter(compressed_bottle.COMPRESSION_SNAPPY)
+    fileBottle.pipe(x)
+    toolkit.pipeToBuffer(x).then (buffer) ->
+      # now decode it.
+      bottle_stream.readBottleFromStream(new toolkit.SourceStream(buffer))
+    .then (zbottle) ->
+      zbottle.type.should.eql bottle_stream.TYPE_COMPRESSED
+      zbottle.header.compressionType.should.eql compressed_bottle.COMPRESSION_SNAPPY
       zbottle.decompress().then (bottle) ->
         validateTinyFile(bottle, "file.txt").then ({ header, data }) ->
           data.toString().should.eql "the new pornographers"

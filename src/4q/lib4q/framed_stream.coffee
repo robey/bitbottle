@@ -19,16 +19,26 @@ class WritableFramedStream extends stream.Transform
   _transform: (data, _, callback) ->
     @buffer.push data
     @bufferSize += data.length
-    if @bufferSize >= @blockSize then @_drain()
-    callback()
+    if @bufferSize >= @blockSize then @_drain(callback) else callback()
 
   _flush: (callback) ->
-    @_drain()
-    @push new Buffer([ 0 ])
-    callback()
+    @_drain =>
+      @push new Buffer([ 0 ])
+      callback()
 
-  _drain: () ->
-    return if @bufferSize == 0
+  _drain: (callback) ->
+    return callback() if @bufferSize == 0
+    # hook: let the caller do a final transform on the buffers before we calculate the length.
+    if @innerTransform?
+      @innerTransform @buffer, (buffers) =>
+        @buffer = buffers
+        @bufferSize = 0
+        for b in buffers then @bufferSize += b.length
+        @__drain(callback)
+    else
+      @__drain(callback)
+
+  __drain: (callback) ->
     lengthBytes = zint.encodePackedInt(@bufferSize)
     if lengthBytes.length > 7 then throw new Error("wtf")
     @push new Buffer([ lengthBytes.length ])
@@ -36,6 +46,7 @@ class WritableFramedStream extends stream.Transform
     @buffer.map (d) => @push d
     @buffer = []
     @bufferSize = 0
+    callback()
 
 
 # wrap a framed stream into a Readable that provides the framed data.
