@@ -39,7 +39,9 @@ options:
 """
 
 main = ->
-  argv = minimist(process.argv[2...], boolean: [ "help", "version", "l", "q", "color", "structure" ], default: { color: true })
+  argv = minimist process.argv[2...],
+    boolean: [ "help", "version", "l", "q", "color", "structure", "debug" ],
+    default: { color: true }
   if argv.help or argv._.length == 0
     console.log USAGE
     process.exit(0)
@@ -51,8 +53,9 @@ main = ->
     process.exit(1)
   if not argv.color then display.noColor()
 
-  (if argv.structure then dumpArchiveStructures(argv._) else dumpArchiveFiles(argv._, argv.l, argv.q)).fail (err) ->
-    console.log "\nERROR: #{err.message}"
+  (if argv.structure then dumpArchiveStructures(argv._) else dumpArchiveFiles(argv._, argv.l, argv.q)).fail (error) ->
+    console.log "\nERROR: #{error.message}"
+    if argv.debug then console.log error
     process.exit(1)
   .done()
 

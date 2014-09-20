@@ -35,6 +35,8 @@ options:
         quiet: display nothing unless there's an error
     -Z, --no-compress
         do not compress the contents
+    -S, --snappy
+        use snappy compression instead of LZMA2
     -H, --no-hash
         do not compute a check hash (let go and use the force)
     --no-color
@@ -43,8 +45,8 @@ options:
 
 main = ->
   argv = minimist process.argv[2...],
-    alias: { "Z": "no-compress", "H": "no-hash" }
-    boolean: [ "help", "version", "v", "color", "compress" ]
+    alias: { "Z": "no-compress", "H": "no-hash", "S": "snappy" }
+    boolean: [ "help", "version", "v", "color", "compress", "snappy", "debug" ]
     default: { color: true, compress: true, hash: true }
   # minimist isn't great at decoding -Z:
   if argv["no-compress"]? then argv.compress = false
@@ -91,7 +93,8 @@ main = ->
     targetStream = hashBottle
 
   if argv.compress
-    compressedBottle = new lib4q.CompressedBottleWriter(lib4q.COMPRESSION_LZMA2)
+    compressionType = if argv.snappy then lib4q.COMPRESSION_SNAPPY else lib4q.COMPRESSION_LZMA2
+    compressedBottle = new lib4q.CompressedBottleWriter(compressionType)
     compressedBottle.pipe(targetStream)
     targetStream = compressedBottle
 
@@ -124,7 +127,7 @@ main = ->
     if not argv.q then process.stdout.write "#{argv.o} (#{updater.fileCount} files, #{display.humanize(updater.totalBytesIn)} -> #{display.humanize(updater.totalBytesOut)} bytes)\n"
   .fail (err) ->
     console.log "\nERROR: #{err.message}"
-    console.log err.stack
+    if arvg.debug then console.log err.stack
     process.exit(1)
   .done()
 
