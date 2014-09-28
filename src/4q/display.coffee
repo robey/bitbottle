@@ -63,9 +63,42 @@ color = (colorName, spans...) ->
   new Span(colorName, spans)
 
 
+class StatusUpdater
+  constructor: (@options = {}) ->
+    @frequency = @options.frequency or 250
+    @lastUpdate = 0
+    @displayedMessage = null
+    @currentMessage = null
+    @timer = null
+
+  update: (message) ->
+    if not message? then message = @currentMessage
+    if not message? then return
+    @currentMessage = message
+    now = Date.now()
+    nextTime = @lastUpdate + @frequency
+    if now >= nextTime
+      displayStatus @currentMessage
+      @displayedMessage = @currentMessage
+      @lastUpdate = now
+      if @timer? then clearTimeout(@timer)
+      @timer = null
+    else
+      if not @timer? then @timer = setTimeout((=> @update()), nextTime - now)
+
+  clear: ->
+    if not @displayedMessage? then return
+    displayStatus ""
+    @displayedMessage = null
+    @currentMessage = null
+    if @timer? then clearTimeout(@timer)
+    @timer = null
+
+
 exports.color = color
 exports.displayStatus = displayStatus
 exports.humanize = humanize
 exports.noColor = noColor
 exports.paint = paint
 exports.roundToPrecision = roundToPrecision
+exports.StatusUpdater = StatusUpdater

@@ -9,17 +9,12 @@ toolkit = require "stream-toolkit"
 util = require "util"
 
 display = require "./display"
+helpers = require "./helpers"
 lib4q = require "./lib4q"
 
 NOW = Date.now()
 
 VERSION = "1.0.0"
-
-COLORS =
-  status_count: "0c8"
-  status_total_progress: "0c8"
-  status_file_progress: "0af"
-  verbose_size: "green"
 
 USAGE = """
 usage: qpack [options] <filename(s)...>
@@ -42,6 +37,8 @@ options:
     --no-color
         turn off cool console colors
 """
+
+COLORS = helpers.COLORS
 
 main = ->
   argv = minimist process.argv[2...],
@@ -79,11 +76,18 @@ main = ->
     process.exit(1)
   outStream = fs.createWriteStream(filename, fd: fd)
 
-  updater = new StatusUpdater(verbose: argv.v, quiet: argv.q)
+  state =
+    fileCount: 0
+    totalBytesOut: 0
+    totalBytesIn: 0
+    currentFileBytes: 0
+    currentFileTotalBytes: 0
+    currentFilename: "..."
+  updater = new display.StatusUpdater()
   countingOutStream = new toolkit.CountingStream()
   countingOutStream.on "count", (n) ->
-    updater.totalBytesOut = n
-    updater.update()
+    state.totalBytesOut = n
+    unless argv.q then updater.update statusMessage(state)
   countingOutStream.pipe(outStream)
   targetStream = countingOutStream
 
@@ -100,13 +104,18 @@ main = ->
 
   writer = new lib4q.ArchiveWriter()
   writer.on "filename", (filename, header) ->
-    updater.setFile(filename, header.folder, header.size)
+    if argv.v then printFinishedFile(state)
+    state.currentFileBytes = 0
+    state.currentFileTotalBytes = header.size
+    state.currentFilename = filename
+    state.isFolder = header.folder
     if not header.folder
-      updater.fileCount += 1
-      updater.totalBytesIn += header.size
+      state.fileCount += 1
+      state.totalBytesIn += header.size
+    unless argv.q then updater.update statusMessage(state)
   writer.on "status", (filename, byteCount) ->
-    updater.currentFileBytes = byteCount
-    updater.update()
+    state.currentFileBytes = byteCount
+    unless argv.q then updater.update statusMessage(state)
   writer.on "error", (error) ->
     console.log "\nERROR: #{error.message}"
     console.log err.stack
@@ -114,7 +123,7 @@ main = ->
 
   promise = if argv._.length > 1
     # multiple files: just make a fake folder
-    folderName = path.join(path.dirname(argv.o), path.basename(argv.o, ".4q"))
+    folderName = path.basename(argv.o, ".4q")
     writer.archiveFiles(folderName, argv._)
   else
     writer.archiveFile(argv._[0])
@@ -122,9 +131,10 @@ main = ->
     bottle.pipe(targetStream)
     toolkit.qfinish(outStream)
   .then ->
-    updater.done()
-    updater.clear()
-    if not argv.q then process.stdout.write "#{argv.o} (#{updater.fileCount} files, #{display.humanize(updater.totalBytesIn)} -> #{display.humanize(updater.totalBytesOut)} bytes)\n"
+    if argv.v then printFinishedFile(state)
+    unless argv.q
+      updater.clear()
+      process.stdout.write "#{argv.o} (#{state.fileCount} files, #{display.humanize(state.totalBytesIn)} -> #{display.humanize(state.totalBytesOut)} bytes)\n"
   .fail (err) ->
     console.log "\nERROR: #{err.message}"
     if arvg.debug then console.log err.stack
@@ -132,62 +142,18 @@ main = ->
   .done()
 
 
-# this really should be part of js. :/
-copy = (obj, fields) ->
-  rv = {}
-  for k, v of obj then rv[k] = v
-  for k, v of fields then rv[k] = v
-  rv
+statusMessage = (state) ->
+  count = display.color(COLORS.status_count, sprintf("%6s", state.fileCount))
+  totalProgress = display.color(COLORS.status_total_progress, sprintf("%5s -> %5s", display.humanize(state.totalBytesIn), display.humanize(state.totalBytesOut)))
+  fileProgress = if state.currentFileBytes > 0 and state.currentFileTotalBytes?
+    display.color(COLORS.status_file_progress, "(#{Math.floor(100 * state.currentFileBytes / state.currentFileTotalBytes)}%)")
+  else
+    ""
+  display.paint(count, ": (", totalProgress, ")  ", state.currentFilename, " ", fileProgress)
 
-
-class StatusUpdater
-  constructor: (@options) ->
-    @totalBytesIn = 0
-    @totalBytesOut = 0
-    @currentFileBytes = 0
-    @currentFileTotalBytes = 0
-    @fileCount = 0
-    @lastUpdate = 0
-    @frequency = 500
-
-  setFile: (filename, isFolder, size) ->
-    if @filename? then @_finishedFile()
-    @currentFileBytes = 0
-    @currentFileTotalBytes = size
-    @filename = filename
-    @isFolder = isFolder
-    @forceUpdate()
-
-  done: ->
-    if @filename? then @_finishedFile()
-
-  _finishedFile: ->
-    if not @options.verbose then return
-    @forceUpdate()
-    @clear()
-    bytes = if @isFolder then "     " else display.color(COLORS.verbose_size, sprintf("%5s", display.humanize(@currentFileTotalBytes)))
-    process.stdout.write display.paint("  ", bytes, "  ", @filename).toString() + "\n"
-
-  clear: ->
-    @lastUpdate = 0
-    if not @options.quiet then display.displayStatus ""
-
-  forceUpdate: ->
-    @lastUpdate = 0
-    @update()
-
-  update: ->
-    if @options.quiet then return
-    now = Date.now()
-    if now > @lastUpdate + @frequency and @filename?
-      @lastUpdate = now
-      count = display.color(COLORS.status_count, sprintf("%6s", @fileCount))
-      totalProgress = display.color(COLORS.status_total_progress, sprintf("%5s -> %5s", display.humanize(@totalBytesIn), display.humanize(@totalBytesOut)))
-      fileProgress = if @currentFileBytes > 0 and @currentFileTotalBytes?
-        display.color(COLORS.status_file_progress, "(#{Math.floor(100 * @currentFileBytes / @currentFileTotalBytes)}%)")
-      else
-        ""
-      display.displayStatus display.paint(count, ": (", totalProgress, ")  ", @filename, " ", fileProgress)
+printFinishedFile = (state) ->
+  bytes = if state.isFolder then "     " else display.color(COLORS.file_size, sprintf("%5s", display.humanize(state.currentFileTotalBytes)))
+  process.stdout.write display.paint("  ", bytes, "  ", state.currentFilename).toString() + "\n"
 
 
 exports.main = main
