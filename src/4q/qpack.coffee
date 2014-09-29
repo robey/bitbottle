@@ -71,8 +71,9 @@ main = ->
 
   try
     fd = fs.openSync(argv.o, "w")
-  catch err
-    console.log "ERROR writing #{argv.o}: #{err.message}"
+  catch error
+    display.displayError "Can't write #{argv.o}: #{error.message}"
+    if argv.debug then console.log error.stack
     process.exit(1)
   outStream = fs.createWriteStream(filename, fd: fd)
 
@@ -117,8 +118,8 @@ main = ->
     state.currentFileBytes = byteCount
     unless argv.q then updater.update statusMessage(state)
   writer.on "error", (error) ->
-    console.log "\nERROR: #{error.message}"
-    console.log err.stack
+    display.displayError error.message
+    if argv.debug then console.log error.stack
     process.exit(1)
 
   promise = if argv._.length > 1
@@ -135,8 +136,8 @@ main = ->
     unless argv.q
       updater.clear()
       process.stdout.write "#{argv.o} (#{state.fileCount} files, #{display.humanize(state.totalBytesIn)} -> #{display.humanize(state.totalBytesOut)} bytes)\n"
-  .fail (err) ->
-    console.log "\nERROR: #{err.message}"
+  .fail (error) ->
+    display.displayError error.message
     if arvg.debug then console.log err.stack
     process.exit(1)
   .done()

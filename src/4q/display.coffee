@@ -5,6 +5,9 @@ util = require "util"
 HUMAN_LABELS = " KMGTPE"
 SPACE = "         "
 
+COLORS =
+  error: "#c00"
+
 useColor = process.stdout.isTTY
 
 noColor = -> useColor = false
@@ -40,6 +43,11 @@ displayStatus = (message = "") ->
   message = message.toString()[...width]
   process.stdout.write(sprintf("\r%-#{width}s\r%s", " ", message))
 
+displayError = (message) ->
+  displayStatus ""
+  process.stdout.write paint(color(COLORS.error, "ERROR"), ": ", message).toString() + "\n"
+
+
 class Span
   constructor: (@color, @spans) ->
 
@@ -65,7 +73,7 @@ color = (colorName, spans...) ->
 
 class StatusUpdater
   constructor: (@options = {}) ->
-    @frequency = @options.frequency or 250
+    @frequency = @options.frequency or 100
     @lastUpdate = 0
     @displayedMessage = null
     @currentMessage = null
@@ -96,6 +104,7 @@ class StatusUpdater
 
 
 exports.color = color
+exports.displayError = displayError
 exports.displayStatus = displayStatus
 exports.humanize = humanize
 exports.noColor = noColor
