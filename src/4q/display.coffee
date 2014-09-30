@@ -95,12 +95,12 @@ class StatusUpdater
       if not @timer? then @timer = setTimeout((=> @update()), nextTime - now)
 
   clear: ->
+    if @timer? then clearTimeout(@timer)
+    @timer = null
+    @currentMessage = null
     if not @displayedMessage? then return
     displayStatus ""
     @displayedMessage = null
-    @currentMessage = null
-    if @timer? then clearTimeout(@timer)
-    @timer = null
 
 
 exports.color = color

@@ -83,7 +83,7 @@ main = ->
     totalBytesIn: 0
     currentFileBytes: 0
     currentFileTotalBytes: 0
-    currentFilename: "..."
+    currentFilename: null
   updater = new display.StatusUpdater()
   countingOutStream = new toolkit.CountingStream()
   countingOutStream.on "count", (n) ->
@@ -105,6 +105,7 @@ main = ->
 
   writer = new lib4q.ArchiveWriter()
   writer.on "filename", (filename, header) ->
+    unless argv.q then updater.clear()
     if argv.v then printFinishedFile(state)
     state.currentFileBytes = 0
     state.currentFileTotalBytes = header.size
@@ -138,12 +139,13 @@ main = ->
       process.stdout.write "#{argv.o} (#{state.fileCount} files, #{display.humanize(state.totalBytesIn)} -> #{display.humanize(state.totalBytesOut)} bytes)\n"
   .fail (error) ->
     display.displayError error.message
-    if arvg.debug then console.log err.stack
+    if argv.debug then console.log err.stack
     process.exit(1)
   .done()
 
 
 statusMessage = (state) ->
+  return unless state.currentFilename?
   count = display.color(COLORS.status_count, sprintf("%6s", state.fileCount))
   totalProgress = display.color(COLORS.status_total_progress, sprintf("%5s -> %5s", display.humanize(state.totalBytesIn), display.humanize(state.totalBytesOut)))
   fileProgress = if state.currentFileBytes > 0 and state.currentFileTotalBytes?
@@ -153,6 +155,7 @@ statusMessage = (state) ->
   display.paint(count, ": (", totalProgress, ")  ", state.currentFilename, " ", fileProgress)
 
 printFinishedFile = (state) ->
+  return unless state.currentFilename?
   bytes = if state.isFolder then "     " else display.color(COLORS.file_size, sprintf("%5s", display.humanize(state.currentFileTotalBytes)))
   process.stdout.write display.paint("  ", bytes, "  ", state.currentFilename).toString() + "\n"
 
