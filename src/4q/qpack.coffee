@@ -105,8 +105,9 @@ main = ->
 
   writer = new lib4q.ArchiveWriter()
   writer.on "filename", (filename, header) ->
-    unless argv.q then updater.clear()
-    if argv.v then printFinishedFile(state)
+    if argv.v
+      unless argv.q then updater.clear()
+      printFinishedFile(state)
     state.currentFileBytes = 0
     state.currentFileTotalBytes = header.size
     state.currentFilename = filename
