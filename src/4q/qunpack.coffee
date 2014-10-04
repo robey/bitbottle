@@ -1,5 +1,6 @@
 fs = require "fs"
 minimist = require "minimist"
+path = require "path"
 Q = require "q"
 sprintf = require "sprintf"
 strftime = require "strftime"
@@ -24,6 +25,8 @@ usage: qunpack [options] <filename(s)...>
 
 options:
     --help
+    -f, --force
+        overwrite any existing files when unpacking
     -v
         verbose: display files as they're written
     -q
@@ -34,8 +37,9 @@ options:
 
 main = ->
   argv = minimist process.argv[2...],
-    boolean: [ "help", "version", "q", "v", "color", "debug" ],
-    default: { color: true }
+    boolean: [ "help", "version", "q", "v", "color", "debug", "force" ],
+    alias: { "f": "force" }
+    default: { color: true, force: false }
   if argv.help or argv._.length == 0
     console.log USAGE
     process.exit(0)
@@ -53,24 +57,29 @@ main = ->
     try
       fs.mkdirSync(outputFolder)
     catch error
-      display.displayError "Can't create output folder: #{outputFolder} (#{error.message})"
+      display.displayError "Can't create folder #{outputFolder}: #{helpers.messageForError(error)}"
       if argv.debug then console.log error.stack
       process.exit(1)
   if not fs.statSync(outputFolder).isDirectory
     display.displayError "Not a folder: #{outputFolder}"
     process.exit(1)
-    
-  unpackArchiveFiles(argv._, outputFolder, argv.q, argv.v).fail (error) ->
-    display.displayError error.message
+  
+  options =
+    isQuiet: argv.q
+    isVerbose: argv.v
+    debug: argv.debug
+    force: argv.force
+  unpackArchiveFiles(argv._, outputFolder, options).fail (error) ->
+    display.displayError "Unable to unpack archive: #{helpers.messageForError(error)}"
     if argv.debug then console.log error.stack
     process.exit(1)
   .done()
 
-unpackArchiveFiles = (filenames, outputFolder, isQuiet, isVerbose) ->
+unpackArchiveFiles = (filenames, outputFolder, options) ->
   helpers.foreachSerial filenames, (filename) ->
-    unpackArchiveFile(filename, outputFolder, isQuiet, isVerbose)
+    unpackArchiveFile(filename, outputFolder, options)
 
-unpackArchiveFile = (filename, outputFolder, isQuiet, isVerbose) ->
+unpackArchiveFile = (filename, outputFolder, options) ->
   state =
     totalFiles: 0
     totalBytesOut: 0
@@ -78,6 +87,7 @@ unpackArchiveFile = (filename, outputFolder, isQuiet, isVerbose) ->
     currentFileBytes: 0
     currentFileTotalBytes: 0
     currentFilename: null
+    currentDestFilename: null
     prefix: [ ]
     validHash: null
     compression: null
@@ -86,29 +96,34 @@ unpackArchiveFile = (filename, outputFolder, isQuiet, isVerbose) ->
   countingInStream = new toolkit.CountingStream()
   countingInStream.on "count", (n) ->
     state.totalBytesIn = n
-    unless isQuiet then updater.update statusMessage(state)
+    unless options.isQuiet then updater.update statusMessage(state)
   helpers.readStream(filename).pipe(countingInStream)
+  ultimateOutputFolder = null
 
   reader = new lib4q.ArchiveReader()
   reader.on "start-bottle", (bottle) ->
     switch bottle.typeName()
       when "file", "folder"
-        state.prefix.push bottle.header.filename
         nicePrefix = state.prefix.join("/") + (if state.prefix.length > 0 then "/" else "")
-        niceFilename = nicePrefix + filename
+        niceFilename = nicePrefix + bottle.header.filename
         state.currentFileBytes = 0
         state.currentFileTotalBytes = bottle.header.size
         state.currentFilename = niceFilename
+        state.currentDestFilename = path.join(outputFolder, niceFilename)
         state.isFolder = bottle.header.folder
+        state.mode = bottle.header.mode
+        if state.isFolder and (not ultimateOutputFolder?) then ultimateOutputFolder = state.currentDestFilename
         if not state.isFolder then state.totalFiles += 1
-        unless isQuiet then updater.update statusMessage(state)
+        unless options.isQuiet then updater.update statusMessage(state)
+        if state.isFolder then ensureFolder(state.currentDestFilename)
+        state.prefix.push bottle.header.filename
   reader.on "end-bottle", (bottle) ->
     switch bottle.typeName()
       when "file", "folder"
-        if isVerbose
-          unless isQuiet then updater.clear()
-          printFinishedFile(state)
-        if not state.isFolder then state.totalBytesOut += state.currentFileTotalBytes
+        if options.isVerbose
+          unless options.isQuiet then updater.clear()
+          unless bottle.typeName() == "folder" then printFinishedFile(state)
+        unless bottle.typeName() == "folder" then state.totalBytesOut += state.currentFileTotalBytes
         state.currentFileBytes = 0
         state.currentFileTotalBytes = 0
         state.prefix.pop()
@@ -119,16 +134,32 @@ unpackArchiveFile = (filename, outputFolder, isQuiet, isVerbose) ->
   reader.on "compress", (bottle) ->
     # FIXME display something if this is per-file
     if state.prefix.length == 0 then state.compression = bottle.header.compressionName
+  reader.on "error", (error) ->
+    display.displayError "Can't write #{state.currentDestFilename or '?'}: #{helpers.messageForError(error)}"
+    if error.code == "EEXIST" then display.displayError "Use -f or --force to overwrite existing files."
+    if options.debug then console.log error.stack
+    process.exit(1)
 
   reader.processFile = (dataStream) ->
     countingOutStream = new toolkit.CountingStream()
     countingOutStream.on "count", (n) ->
       state.currentFileBytes = n
-      unless isQuiet then updater.update statusMessage(state)
-    # FIXME actually write the file. :)
-    sink = new toolkit.NullSinkStream()
-    dataStream.pipe(countingOutStream).pipe(sink)
-    toolkit.qfinish(sink)
+      unless options.isQuiet then updater.update statusMessage(state)
+
+    realFilename = path.join(outputFolder, state.currentFilename)
+
+    access = if options.force then "w" else "wx"
+    Q.nfbind(fs.open)(realFilename, access, state.mode or parseInt("666", 8)).then (fd) ->
+      outStream = fs.createWriteStream(realFilename, fd: fd)
+      outStream.on "error", (error) -> reader.emit "error", error
+      dataStream.pipe(countingOutStream).pipe(outStream)
+      toolkit.qfinish(outStream)
+    .fail (error) ->
+      reader.emit "error", error
+
+  ensureFolder = (realFilename) ->
+    if not (fs.existsSync(realFilename) and fs.statSync(realFilename).isDirectory())
+      fs.mkdirSync(realFilename)
 
   reader.scanStream(countingInStream).then ->
     updater.clear()
@@ -136,8 +167,10 @@ unpackArchiveFile = (filename, outputFolder, isQuiet, isVerbose) ->
     annotations = []
     if state.compression? then annotations.push state.compression
     if state.validHash? then annotations.push state.validHash
-    hashStatus = if annotations.length > 0 then "[#{annotations.join(", ")}] " else ""
-    process.stdout.write "#{filename} #{hashStatus}(#{state.totalFiles} files, #{byteTraffic})\n"
+    extras = if annotations.length > 0 and options.isVerbose then display.color(COLORS.annotations, "[#{annotations.join(", ")}] ") else ""
+    inStatus = display.paint(filename, " ", display.color(COLORS.file_size, "(#{display.humanize(state.totalBytesIn)})"))
+    outStatus = display.paint(ultimateOutputFolder, " ", display.color(COLORS.file_size, "(#{state.totalFiles} files, #{display.humanize(state.totalBytesOut)}B)"))
+    process.stdout.write "#{filename} -> #{outStatus} #{extras}\n"
 
 
 statusMessage = (state) ->

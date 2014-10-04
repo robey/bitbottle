@@ -42,7 +42,7 @@ main = ->
   if not argv.color then display.noColor()
 
   (if argv.structure then dumpArchiveStructures(argv._) else dumpArchiveFiles(argv._, argv.l, argv.q)).fail (error) ->
-    display.displayError error.message
+    display.displayError "Unable to read archive: #{helpers.messageForError(error)}"
     if argv.debug then console.log error.stack
     process.exit(1)
   .done()

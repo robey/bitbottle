@@ -1,3 +1,4 @@
+errno = require "errno"
 fs = require "fs"
 Q = require "q"
 sprintf = require "sprintf"
@@ -8,6 +9,7 @@ display = require "./display"
 # some helpers for the command-line tools.
 
 COLORS =
+  annotations: "99c"
   executable: "red"
   mode: "088"
   user_group: "088"
@@ -29,13 +31,13 @@ readStream = (filename, showStack = false) ->
   try
     fd = fs.openSync(filename, "r")
   catch error
-    console.log "ERROR reading #{filename}: #{error.message}"
+    console.log "ERROR reading #{filename}: #{messageForError(error)}"
     if showStack then console.log error.stack
     process.exit(1)
   
   stream = fs.createReadStream(filename, fd: fd)
   stream.on "error", (error) ->
-    console.log "ERROR reading #{filename}: #{error.message}"
+    display.displayError "Can't read #{filename}: #{messageForError(error)}"
     if showStack then console.log error.stack
     process.exit(1)
   stream
@@ -46,6 +48,10 @@ foreachSerial = (list, f) ->
   item = list.shift()
   f(item).then ->
     foreachSerial(list, f)
+
+messageForError = (error) ->
+  if error.code? then return errno.code[error.code]?.description or error.message
+  error.message
 
 # NOW = Date.now()
 # HOURS_20 = 20 * 60 * 60 * 1000
@@ -102,5 +108,6 @@ summaryLineForFile = (stats, prefix, isVerbose) ->
 exports.COLORS = COLORS
 exports.copy = copy
 exports.foreachSerial = foreachSerial
+exports.messageForError = messageForError
 exports.readStream = readStream
 exports.summaryLineForFile = summaryLineForFile

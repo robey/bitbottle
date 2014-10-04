@@ -43,7 +43,7 @@ COLORS = helpers.COLORS
 main = ->
   argv = minimist process.argv[2...],
     alias: { "Z": "no-compress", "H": "no-hash", "S": "snappy" }
-    boolean: [ "help", "version", "v", "color", "compress", "snappy", "debug" ]
+    boolean: [ "help", "version", "v", "q", "color", "compress", "snappy", "debug" ]
     default: { color: true, compress: true, hash: true }
   # minimist isn't great at decoding -Z:
   if argv["no-compress"]? then argv.compress = false
@@ -72,7 +72,7 @@ main = ->
   try
     fd = fs.openSync(argv.o, "w")
   catch error
-    display.displayError "Can't write #{argv.o}: #{error.message}"
+    display.displayError "Can't write #{argv.o}: #{helpers.messageForError(error)}"
     if argv.debug then console.log error.stack
     process.exit(1)
   outStream = fs.createWriteStream(filename, fd: fd)
@@ -120,7 +120,7 @@ main = ->
     state.currentFileBytes = byteCount
     unless argv.q then updater.update statusMessage(state)
   writer.on "error", (error) ->
-    display.displayError error.message
+    display.displayError "Unable to write archive: #{helpers.messageForError(error)}"
     if argv.debug then console.log error.stack
     process.exit(1)
 
@@ -139,7 +139,7 @@ main = ->
       updater.clear()
       process.stdout.write "#{argv.o} (#{state.fileCount} files, #{display.humanize(state.totalBytesIn)} -> #{display.humanize(state.totalBytesOut)} bytes)\n"
   .fail (error) ->
-    display.displayError error.message
+    display.displayError "Unable to write archive: #{helpers.messageForError(error)}"
     if argv.debug then console.log err.stack
     process.exit(1)
   .done()

@@ -17,6 +17,7 @@
   "license": "Apache2",
   "dependencies": {
     "antsy": "*",
+    "errno": "*",
     "minimist": "*",
     "posix": "^1.0.3",
     "q": "^1.0.1",
