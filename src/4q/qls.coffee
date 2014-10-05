@@ -10,6 +10,8 @@ lib4q = require "./lib4q"
 
 VERSION = "1.0.0"
 
+COLORS = helpers.COLORS
+
 USAGE = """
 usage: qls [options] <filename(s)...>
     displays contents of 4Q archives
@@ -109,12 +111,13 @@ dumpArchiveFile = (filename, isVerbose, isQuiet) ->
     if state.prefix.length == 0 then state.compression = bottle.header.compressionName
 
   reader.scanStream(countingInStream).then ->
-    byteTraffic = "#{display.humanize(state.totalBytesIn)} -> #{display.humanize(state.totalBytes)} bytes"
     annotations = []
     if state.compression? then annotations.push state.compression
     if state.validHash? then annotations.push state.validHash
-    hashStatus = if annotations.length > 0 then "[#{annotations.join(", ")}] " else ""
-    process.stdout.write "#{filename} #{hashStatus}(#{state.totalFiles} files, #{byteTraffic})\n"
+    compressionStatus = if state.compression? then display.paint(" -> ", display.color(COLORS.file_size, display.humanize(state.totalBytesOut) + "B")) else ""
+    sizes = display.color(COLORS.file_size, "(#{state.totalFiles} files, #{display.humanize(state.totalBytesIn)}B)")
+    extras = if annotations.length > 0 then display.color(COLORS.annotations, " [#{annotations.join(", ")}] ") else ""
+    process.stdout.write "#{filename} #{sizes}#{extras}\n"
 
 
 

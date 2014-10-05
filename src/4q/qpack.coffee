@@ -137,7 +137,9 @@ main = ->
     if argv.v then printFinishedFile(state)
     unless argv.q
       updater.clear()
-      process.stdout.write "#{argv.o} (#{state.fileCount} files, #{display.humanize(state.totalBytesIn)} -> #{display.humanize(state.totalBytesOut)} bytes)\n"
+      compressionStatus = if argv.compress then display.paint(" -> ", display.color(COLORS.file_size, display.humanize(state.totalBytesOut) + "B")) else ""
+      inStatus = display.color(COLORS.file_size, "(#{state.fileCount} files, #{display.humanize(state.totalBytesIn)}B)")
+      process.stdout.write "#{argv.o} #{inStatus}#{compressionStatus}\n"
   .fail (error) ->
     display.displayError "Unable to write archive: #{helpers.messageForError(error)}"
     if argv.debug then console.log err.stack
