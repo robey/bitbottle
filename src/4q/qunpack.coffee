@@ -98,7 +98,7 @@ unpackArchiveFile = (filename, outputFolder, options) ->
     state.totalBytesIn = n
     unless options.isQuiet then updater.update statusMessage(state)
   helpers.readStream(filename).pipe(countingInStream)
-  ultimateOutputFolder = null
+  ultimateOutputFolder = outputFolder
 
   reader = new lib4q.ArchiveReader()
   reader.on "start-bottle", (bottle) ->
