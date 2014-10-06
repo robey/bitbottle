@@ -60,3 +60,24 @@ describe "bin/qpack", ->
       fs.existsSync("#{folder}/out/test/file3").should.eql(true)
       fs.readFileSync("#{folder}/out/test/file3").toString().should.eql("nothing\n")
 
+  it "packs, lists, and unpacks a folder of files", future withTempFolder (folder) ->
+    fs.mkdirSync("#{folder}/in")
+    fs.writeFileSync "#{folder}/in/file1", "part 1\n"
+    fs.writeFileSync "#{folder}/in/file2", "part two\n"
+    fs.writeFileSync "#{folder}/in/file3", "part 333333\n"
+    exec("#{qpack} -o #{folder}/test.4q #{folder}/in").then ->
+      fs.existsSync("#{folder}/test.4q").should.eql(true)
+      exec("#{qls} -l #{folder}/test.4q")
+    .then (p) ->
+      # three files, each length 8
+      p.stdout.should.match /\s7\s*in\/file1\s/
+      p.stdout.should.match /\s9\s*in\/file2\s/
+      p.stdout.should.match /\s12\s*in\/file3\s/
+      exec("#{qunpack} -o #{folder}/out #{folder}/test.4q")
+    .then (p) ->
+      fs.existsSync("#{folder}/out/in/file1").should.eql(true)
+      fs.readFileSync("#{folder}/out/in/file1").toString().should.eql("part 1\n")
+      fs.existsSync("#{folder}/out/in/file2").should.eql(true)
+      fs.readFileSync("#{folder}/out/in/file2").toString().should.eql("part two\n")
+      fs.existsSync("#{folder}/out/in/file3").should.eql(true)
+      fs.readFileSync("#{folder}/out/in/file3").toString().should.eql("part 333333\n")
