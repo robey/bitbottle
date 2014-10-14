@@ -18,10 +18,12 @@ COMPRESSION_NAMES = {}
 COMPRESSION_NAMES[COMPRESSION_LZMA2] = "LZMA2"
 COMPRESSION_NAMES[COMPRESSION_SNAPPY] = "Snappy"
 
+LZMA_PRESET = 9
+
 
 compressionStreamForType = (compressionType) ->
   switch compressionType
-    when COMPRESSION_LZMA2 then new xz.Compressor()
+    when COMPRESSION_LZMA2 then new xz.Compressor(LZMA_PRESET)
     else throw new Error("Unknown compression stream: #{compressionType}")
 
 compressionTransformForType = (compressionType) ->
