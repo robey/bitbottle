@@ -1,20 +1,29 @@
 {
   "name": "4q",
-  "module_name": "node_xz",
   "version": "0.5.0",
   "description": "the 4q archive format",
-  "main": "4q.js",
-  "directories": {
-    "doc": "docs"
-  },
-  "scripts": {
-    "test": "npm -v test"
-  },
+  "main": "./lib/4q/lib4q.js",
   "keywords": [
     "archive"
   ],
   "author": "Robey Pointer <robeypointer@gmail.com>",
-  "license": "Apache2",
+  "homepage": "https://github.com/robey/4q",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/robey/4q.git"
+  },
+  "licenses": [
+    {
+      "type": "Apache License 2.0",
+      "url": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+    }
+  ],
+  "scripts": {
+    "test": "./node_modules/plz/bin/plz -v clean build test"
+  },
+  "directories": {
+    "doc": "docs"
+  },
   "dependencies": {
     "antsy": "*",
     "errno": "*",
