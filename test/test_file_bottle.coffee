@@ -61,19 +61,19 @@ describe "FileBottleWriter", ->
     bottle2.write(bottle3)
     bottle2.end()
     toolkit.pipeToBuffer(bottle1).then (data) ->
-      data.toString("hex").should.eql "f09f8dbc0000000900056f75746572c0000131f09f8dbc000000090005696e6e6572c000011cf09f8dbc0000000d0008746573742e747874800103010361626300ff00ff00ff"
+      data.toString("hex").should.eql "f09f8dbc0000000900056f75746572c0002ff09f8dbc000000090005696e6e6572c0001bf09f8dbc0000000d0008746573742e7478748001030361626300ff00ff00ff"
       # f09f8dbc 00000009
       #   0005 6f75746572  // "outer"
       #   c000             // folder
-      #   01 31
+      #   2f
       #     f09f8dbc 00000009
       #     0005 696e6e6572  // "inner"
       #     c000             // folder
-      #     01 1c
+      #     1b
       #       f09f8dbc 0000000d
       #       0008 746573742e747874  // "test.txt"
       #       800103                 // size=3
-      #       01 03
+      #       03
       #         616263
       #       00 ff
       #     00 ff

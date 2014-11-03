@@ -25,7 +25,7 @@ describe "CompressedBottleWriter", ->
     file = writeTinyFile("file.txt", new Buffer("the new pornographers"))
     toolkit.pipeToBuffer(file).then (fileBuffer) ->
       # quick verification that we're hashing what we think we are.
-      fileBuffer.toString("hex").should.eql "f09f8dbc0000000d000866696c652e7478748001150115746865206e657720706f726e6f677261706865727300ff"
+      fileBuffer.toString("hex").should.eql "f09f8dbc0000000d000866696c652e74787480011515746865206e657720706f726e6f677261706865727300ff"
       x = new compressed_bottle.CompressedBottleWriter(compressed_bottle.COMPRESSION_LZMA2)
       new toolkit.SourceStream(fileBuffer).pipe(x)
       toolkit.pipeToBuffer(x).then (buffer) ->
