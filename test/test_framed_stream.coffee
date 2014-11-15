@@ -68,7 +68,7 @@ describe "WritableFramedStream", ->
         data[1].should.eql (blockSize >> 6)
     )
 
-  it "writes a large (>= 8K) frame", future ->
+  it "writes a large (< 2M) frame", future ->
     Q.all([ 8193, 12345, 456123 ].map (blockSize) ->
       s = new framed_stream.WritableFramedStream()
       promise = toolkit.pipeToBuffer(s)
@@ -83,21 +83,83 @@ describe "WritableFramedStream", ->
         data[2].should.eql (blockSize >> 13)
     )
 
+  it "writes a huge (>= 2M) frame", future ->
+    Q.all([ Math.pow(2, 21) + 1, 3998778 ].map (blockSize) ->
+      s = new framed_stream.WritableFramedStream()
+      promise = toolkit.pipeToBuffer(s)
+      b = new Buffer(blockSize)
+      b.fill(0)
+      s.write(b)
+      s.end()
+      promise.then (data) ->
+        data.length.should.eql blockSize + 5
+        data[0].should.eql (blockSize & 0xf) + 0xe0
+        data[1].should.eql (blockSize >> 4) & 0xff
+        data[2].should.eql (blockSize >> 12) & 0xff
+        data[3].should.eql (blockSize >> 20) & 0xff
+    )
 
 describe "ReadableFramedStream", ->
-  it "reads a simple frame", ->
+  it "reads a simple frame", future ->
     s = new framed_stream.ReadableFramedStream(new toolkit.SourceStream(new Buffer("0301020300", "hex")))
     toolkit.pipeToBuffer(s).then (data) ->
       data.toString("hex").should.eql "010203"
 
-  it "reads a block of many frames", ->
+  it "reads a block of many frames", future ->
     s = new framed_stream.ReadableFramedStream(new toolkit.SourceStream(new Buffer("0468656c6c056f20736169036c6f7200", "hex")))
     toolkit.pipeToBuffer(s).then (data) ->
       data.toString().should.eql "hello sailor"
 
-  it "can pipe two framed streams from the same source", ->
+  it "can pipe two framed streams from the same source", future ->
     source = new toolkit.SourceStream(new Buffer("0568656c6c6f00067361696c6f7200", "hex"))
     toolkit.pipeToBuffer(new framed_stream.ReadableFramedStream(source)).then (data) ->
       data.toString().should.eql "hello"
       toolkit.pipeToBuffer(new framed_stream.ReadableFramedStream(source)).then (data) ->
         data.toString().should.eql "sailor"
+
+  it "reads a power-of-two frame", future ->
+    Q.all([ 128, 1024, Math.pow(2, 18), Math.pow(2, 22) ].map (blockSize) ->
+      b = new Buffer(blockSize + 2)
+      b.fill(0)
+      b[0] = 0xf0 + (Math.log(blockSize) / Math.log(2)) - 7
+      s = new framed_stream.ReadableFramedStream(new toolkit.SourceStream(b))
+      toolkit.pipeToBuffer(s).then (data) ->
+        data.length.should.eql blockSize
+    )
+
+  it "reads a medium (< 8K) frame", future ->
+    Q.all([ 129, 1234, 8191 ].map (blockSize) ->
+      b = new Buffer(blockSize + 3)
+      b.fill(0)
+      b[0] = 0x80 + (blockSize & 0x3f)
+      b[1] = blockSize >> 6
+      s = new framed_stream.ReadableFramedStream(new toolkit.SourceStream(b))
+      toolkit.pipeToBuffer(s).then (data) ->
+        data.length.should.eql blockSize
+    )
+
+  it "reads a large (< 2M) frame", future ->
+    Q.all([ 8193, 12345, 456123 ].map (blockSize) ->
+      b = new Buffer(blockSize + 4)
+      b.fill(0)
+      b[0] = 0xc0 + (blockSize & 0x1f)
+      b[1] = (blockSize >> 5) & 0xff
+      b[2] = blockSize >> 13
+      s = new framed_stream.ReadableFramedStream(new toolkit.SourceStream(b))
+      toolkit.pipeToBuffer(s).then (data) ->
+        data.length.should.eql blockSize
+    )
+
+  it "reads a huge (>= 2M) frame", future ->
+    Q.all([ Math.pow(2, 21) + 1, 3998778 ].map (blockSize) ->
+      b = new Buffer(blockSize + 5)
+      b.fill(0)
+      b[0] = 0xe0 + (blockSize & 0xf)
+      b[1] = (blockSize >> 4) & 0xff
+      b[2] = (blockSize >> 12) & 0xff
+      b[3] = (blockSize >> 20) & 0xff
+      s = new framed_stream.ReadableFramedStream(new toolkit.SourceStream(b))
+      toolkit.pipeToBuffer(s).then (data) ->
+        data.length.should.eql blockSize
+    )
+
