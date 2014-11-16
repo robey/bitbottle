@@ -1,10 +1,8 @@
+crypto = require "crypto"
 fs = require "fs"
 mocha_sprinkles = require "mocha-sprinkles"
 path = require "path"
 Q = require "q"
-# shell = require 'shelljs'
-# should = require 'should'
-# touch = require 'touch'
 util = require "util"
 
 exec = mocha_sprinkles.exec
@@ -14,6 +12,37 @@ withTempFolder = mocha_sprinkles.withTempFolder
 qpack = "#{process.cwd()}/bin/qpack"
 qls = "#{process.cwd()}/bin/qls"
 qunpack = "#{process.cwd()}/bin/qunpack"
+
+sourceFolder = "#{process.cwd()}/src"
+xzFolder = "#{process.cwd()}/node_modules/xz"
+
+hashFile = (filename) ->
+  h = crypto.createHash("sha512")
+  h.update(fs.readFileSync(filename))
+  x = h.digest()
+  x
+
+# uh?
+arraysAreEqual = (x, y) ->
+  if x.length != y.length then return false
+  for i in [0 ... x.length] then if x[i] != y[i] then return false
+  true
+
+compareFolders = (folder1, folder2) ->
+  files1 = fs.readdirSync(folder1).sort()
+  files2 = fs.readdirSync(folder2).sort()
+  if not arraysAreEqual(files1, files2) then throw new Error("Different file sets in #{folder1} vs #{folder2}")
+  for filename in files1
+    fullFilename1 = path.join(folder1, filename)
+    fullFilename2 = path.join(folder2, filename)
+    if fs.statSync(fullFilename1).isDirectory()
+      if not fs.statSync(fullFilename2).isDirectory() then throw new Error("Expected folder: #{fullFilename1} is, #{fullFilename2} is not.")
+      compareFolders(fullFilename1, fullFilename2)
+    else
+      if fs.statSync(fullFilename2).isDirectory() then throw new Error("Expected folder: #{fullFilename1} is not, #{fullFilename2} is.")
+      if hashFile(fullFilename1).toString("hex") != hashFile(fullFilename2).toString("hex")
+        throw new Error("File #{fullFilename1} != #{fullFilename2}")
+
 
 #
 # effectively, these are integration tests.
@@ -81,3 +110,43 @@ describe "bin/qpack", ->
       fs.readFileSync("#{folder}/out/in/file2").toString().should.eql("part two\n")
       fs.existsSync("#{folder}/out/in/file3").should.eql(true)
       fs.readFileSync("#{folder}/out/in/file3").toString().should.eql("part 333333\n")
+
+  describe "preserves file contents", ->
+    it "source, with --snappy", future withTempFolder (folder) ->
+      exec("#{qpack} -q -o #{folder}/src.4q #{sourceFolder} -S").then ->
+        fs.existsSync("#{folder}/src.4q").should.eql(true)
+        exec("#{qunpack} -q -o #{folder}/src2 #{folder}/src.4q")
+      .then ->
+        exec("#{qls} -q #{folder}/src.4q").then (p) ->
+          console.log p.stdout
+          compareFolders("#{sourceFolder}", "#{folder}/src2/src")
+
+    it "node_modules, with --snappy", future withTempFolder (folder) ->
+      exec("#{qpack} -q -o #{folder}/xz.4q #{xzFolder} -S").then ->
+        fs.existsSync("#{folder}/xz.4q").should.eql(true)
+        exec("#{qunpack} -q -o #{folder}/xz #{folder}/xz.4q")
+      .then ->
+        exec("#{qls} -q #{folder}/xz.4q").then (p) ->
+          console.log p.stdout
+          compareFolders("#{xzFolder}", "#{folder}/xz/xz")
+
+    it "source, with xz", future withTempFolder (folder) ->
+      exec("#{qpack} -q -o #{folder}/src.4q #{sourceFolder}").then ->
+        fs.existsSync("#{folder}/src.4q").should.eql(true)
+        exec("#{qunpack} -q -o #{folder}/src2 #{folder}/src.4q")
+      .then ->
+        exec("#{qls} -q #{folder}/src.4q").then (p) ->
+          console.log p.stdout
+          compareFolders("#{sourceFolder}", "#{folder}/src2/src")
+
+    it "node_modules, with xz", future withTempFolder (folder) ->
+      exec("#{qpack} -q -o #{folder}/xz.4q #{xzFolder}").then ->
+        fs.existsSync("#{folder}/xz.4q").should.eql(true)
+        exec("#{qunpack} -q -o #{folder}/xz #{folder}/xz.4q")
+      .then ->
+        exec("#{qls} -q #{folder}/xz.4q").then (p) ->
+          console.log p.stdout
+          compareFolders("#{xzFolder}", "#{folder}/xz/xz")
+
+
+

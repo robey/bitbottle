@@ -1,5 +1,8 @@
 load "coffee"
 load "mocha"
 
+# some of the integration tests are slow
+settings.mocha.options.push "--timeout 60000 --slow 1000"
+
 settings.clean = [ "lib" ]
 settings.distclean = [ "node_modules" ]
