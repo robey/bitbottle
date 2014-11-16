@@ -89,13 +89,28 @@ A field is uniquely identified, per bottle type, by the field type and ID. So in
 
 ## Encoding of data streams
 
-Data streams are framed, so that streaming readers can clearly identify where each data stream ends. A frame header looks is a single byte indicating the header length, followed by the length of the frame in LSB order.
+Data streams are framed, so that streaming readers can clearly identify where each data stream ends. A frame header is 1 to 4 bytes, encoding the length of the frame. The high bits of the first byte indicate the length and encoding of the frame header.
 
-    +---+--- ... -+
-    | H | L       |
-    +---+--- ... -+
+    0xxxxxxx : 0 - 128
+    10xxxxxx : (+ 1 byte) 0 - 8K, LSB
+    110xxxxx : (+ 2 byte) 0 - 2M, LSB
+    1110xxxx : (+ 3 byte) 0 - 128M, LSB
+    1111xxxx : 2**(7+x) -- any power-of-2 block size from 2**7 (128) to 2**21 (2M)
 
-For example, a frame of length 100 would be encoded as `0x01`, `0x64`, and then 100 bytes of data. A frame of one million bytes would be encoded as `0x03`, `0x40`, `0x42`, `0x0f`, and then a million bytes.
+For example, a frame of length 100 would be encoded as `0x64`, followed by 100 bytes of data. A frame of one million and one (1000001) bytes would be encoded as `0xc1 0x11 0x7a`: the first byte's highest 3 bits are `110`, indicating a 3-byte length in LSB order that decodes to `0xf4241`.
+
+    -------========~~~~~
+    11110100001001000001
+
+    .-- 3-byte encoding
+    |  .-- lowest 5 bits (0x01)
+    |  |     .-- next 8 bits (0x11)
+    |  |     |          .-- highest 7 bits (0x7a)
+    v  v     v         v
+    ***~~~~~ ========  -------
+    11000001 00010010 01111010
+
+The final encoding form (`0xf0` - `0xff`) is used as a shorthand for any power-of-2 block size, which is common for buffering large files. A 1GB file may be encoded using a 1MB buffer size, leading to 1MB frames. A 1MB (1048576 byte) frame would be encoded as `0xfd`: 2 to the power of (13 + 7), or `2**20`.
 
 The frame size is usually dictated by the willingness of the encoder to buffer (or have pre-knowledge about the size of the file).
 
@@ -106,13 +121,13 @@ There are two special header bytes:
 
 For example, the data stream "hello" can be encoded as one frame of five bytes, like this:
 
-    0x01 0x05 0x68 0x65 0x6c 0x6c 0x6f 0x00
+    0x05 0x68 0x65 0x6c 0x6c 0x6f 0x00
 
 or even two frames, of two bytes and then three:
 
-    0x01 0x02 0x68 0x65 0x01 0x03 0x6c 0x6c 0x6f 0x00
+    0x02 0x68 0x65 0x03 0x6c 0x6c 0x6f 0x00
 
-Because of the inevitable overhead of the frame headers, you generally want to use large frames whenever possible. Even a frame of 1 terabyte is possible.
+Because of the inevitable overhead of the frame headers, you generally want to use large frames whenever possible. The 1MB frame size is recommended.
 
 
 ## Bottle types

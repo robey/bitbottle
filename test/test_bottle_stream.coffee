@@ -31,7 +31,7 @@ describe "BottleWriter", ->
     b.write(data)
     b.end()
     toolkit.pipeToBuffer(b).then (data) ->
-      data.toString("hex").should.eql "#{MAGIC_STRING}a0000104ff00ff0000ff"
+      data.toString("hex").should.eql "#{MAGIC_STRING}a00004ff00ff0000ff"
 
   it "writes nested bottle data", future ->
     b = new bottle_stream.BottleWriter(10, new bottle_header.Header())
@@ -40,7 +40,7 @@ describe "BottleWriter", ->
     b.end()
     b2.end()
     toolkit.pipeToBuffer(b).then (data) ->
-      data.toString("hex").should.eql "#{MAGIC_STRING}a0000109#{MAGIC_STRING}e000ff00ff"
+      data.toString("hex").should.eql "#{MAGIC_STRING}a00009#{MAGIC_STRING}e000ff00ff"
 
   it "streams data", future ->
     # just to verify that the data is written as it comes in, and the event isn't triggered until completion.
@@ -56,7 +56,7 @@ describe "BottleWriter", ->
     b.write(slowStream)
     b.end()
     toolkit.pipeToBuffer(b).then (data) ->
-      data.toString("hex").should.eql "#{MAGIC_STRING}e0000104c44cc44c00ff"
+      data.toString("hex").should.eql "#{MAGIC_STRING}e00004c44cc44c00ff"
 
   it "writes several datas", future ->
     data1 = new toolkit.SourceStream(new Buffer("f0f0f0", "hex"))
@@ -68,7 +68,7 @@ describe "BottleWriter", ->
     b.write(data3)
     b.end()
     toolkit.pipeToBuffer(b).then (data) ->
-      data.toString("hex").should.eql "#{MAGIC_STRING}e0000103f0f0f0000103e0e0e0000103cccccc00ff"
+      data.toString("hex").should.eql "#{MAGIC_STRING}e00003f0f0f00003e0e0e00003cccccc00ff"
 
 
 describe "BottleReader", ->
@@ -92,7 +92,7 @@ describe "BottleReader", ->
         b.type.should.eql 14
 
   it "reads a data block", future ->
-    bottle_stream.readBottleFromStream(new toolkit.SourceStream(new Buffer("#{BASIC_MAGIC}010568656c6c6f00ff", "hex"))).then (b) ->
+    bottle_stream.readBottleFromStream(new toolkit.SourceStream(new Buffer("#{BASIC_MAGIC}0568656c6c6f00ff", "hex"))).then (b) ->
       toolkit.qread(b).then (dataStream) ->
         toolkit.pipeToBuffer(dataStream).then (data) ->
           data.toString().should.eql "hello"
@@ -100,7 +100,7 @@ describe "BottleReader", ->
             (dataStream?).should.eql false
 
   it "reads a continuing data block", future ->
-    bottle_stream.readBottleFromStream(new toolkit.SourceStream(new Buffer("#{BASIC_MAGIC}0102686501016c01026c6f00ff", "hex"))).then (b) ->
+    bottle_stream.readBottleFromStream(new toolkit.SourceStream(new Buffer("#{BASIC_MAGIC}026865016c026c6f00ff", "hex"))).then (b) ->
       toolkit.qread(b).then (dataStream) ->
         toolkit.pipeToBuffer(dataStream).then (data) ->
           data.toString().should.eql "hello"
@@ -108,7 +108,7 @@ describe "BottleReader", ->
             (data?).should.eql false
 
   it "reads several datas", future ->
-    bottle_stream.readBottleFromStream(new toolkit.SourceStream(new Buffer("#{BASIC_MAGIC}0103f0f0f0000103e0e0e0000103cccccc00ff", "hex"))).then (b) ->
+    bottle_stream.readBottleFromStream(new toolkit.SourceStream(new Buffer("#{BASIC_MAGIC}03f0f0f00003e0e0e00003cccccc00ff", "hex"))).then (b) ->
       toolkit.qread(b).then (dataStream) ->
         toolkit.pipeToBuffer(dataStream).then (data) ->
           data.toString("hex").should.eql "f0f0f0"
@@ -125,7 +125,7 @@ describe "BottleReader", ->
         (dataStream?).should.eql false
 
   it "reads several bottles from the same stream", future ->
-    source = new toolkit.SourceStream(new Buffer("#{BASIC_MAGIC}010363617400ff#{BASIC_MAGIC}010368617400ff", "hex"))
+    source = new toolkit.SourceStream(new Buffer("#{BASIC_MAGIC}0363617400ff#{BASIC_MAGIC}0368617400ff", "hex"))
     bottle_stream.readBottleFromStream(source).then (b) ->
       toolkit.qread(b).then (dataStream) ->
         toolkit.pipeToBuffer(dataStream).then (data) ->

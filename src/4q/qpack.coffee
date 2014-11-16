@@ -59,7 +59,12 @@ main = ->
     process.exit(1)
   if not argv.color then display.noColor()
   if not argv.o?
-    argv.o = if argv._.length > 1 then "archive.4q" else argv._[0] + ".4q"
+    argv.o = if argv._.length > 1
+      "archive.4q"
+    else
+      archiveFolder = argv._[0]
+      if archiveFolder[archiveFolder.length - 1] == "/" then archiveFolder = archiveFolder[0 ... archiveFolder.length - 1]
+      archiveFolder + ".4q"
 
   # quick sanity check: do all these files exist?
   okay = true

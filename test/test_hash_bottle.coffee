@@ -27,7 +27,7 @@ describe "HashBottleWriter", ->
     file = writeTinyFile("file.txt", new Buffer("the new pornographers"))
     toolkit.pipeToBuffer(file).then (fileBuffer) ->
       # quick verification that we're hashing what we think we are.
-      fileBuffer.toString("hex").should.eql "f09f8dbc0000000d000866696c652e7478748001150115746865206e657720706f726e6f677261706865727300ff"
+      fileBuffer.toString("hex").should.eql "f09f8dbc0000000d000866696c652e74787480011515746865206e657720706f726e6f677261706865727300ff"
       hashStream = new hash_bottle.HashBottleWriter(hash_bottle.HASH_SHA512)
       new toolkit.SourceStream(fileBuffer).pipe(hashStream)
       toolkit.pipeToBuffer(hashStream).then (buffer) ->
@@ -42,7 +42,7 @@ describe "HashBottleWriter", ->
       .then ->
         toolkit.qread(bottle).then (hashStream) ->
           toolkit.pipeToBuffer(hashStream).then (buffer) ->
-            buffer.toString("hex").should.eql "b62fa61779952e57ae6d1353a027a9001ca3345150632f64bff005f9174b088acef5fd9c066ec9dde0bf16d5e19cab5e832c1b19dc56a29fd6bf5de17885890e"
+            buffer.toString("hex").should.eql "872613ed7e437f332b77ae992925ea33a4565e3f26c9d623da6c78aea9522d90261c4f52824b64f5ad4fdd020a4678c47bf862f53f02a62183749a1e0616b940"
 
 describe "HashBottleReader", ->
   it "reads a hashed stream", future ->

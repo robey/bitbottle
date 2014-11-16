@@ -39,10 +39,7 @@ class WritableFramedStream extends stream.Transform
       @__drain(callback)
 
   __drain: (callback) ->
-    lengthBytes = zint.encodePackedInt(@bufferSize)
-    if lengthBytes.length > 7 then throw new Error("wtf")
-    @push new Buffer([ lengthBytes.length ])
-    @push lengthBytes
+    @push encodeLength(@bufferSize)
     @buffer.map (d) => @push d
     @buffer = []
     @bufferSize = 0
@@ -55,15 +52,52 @@ class ReadableFramedStream extends stream.Readable
     super()
 
   _read: (bytes) ->
-    toolkit.qread(@stream, 1).then (prefix) =>
-      if (not prefix?) or prefix[0] == 0 then return @push null
-      toolkit.qread(@stream, prefix[0]).then (lengthBuffer) =>
-        if not lengthBuffer? then return @push null
-        length = zint.decodePackedInt(lengthBuffer)
-        # empty frame? move on.
-        if length == 0 then return @_read(bytes)
-        toolkit.qread(@stream, length).then (data) =>
-          @push data
+    readLength(@stream).then (length) =>
+      if (not length?) or (length == 0) then return @push null
+      toolkit.qread(@stream, length).then (data) =>
+        @push data
+
+# 0xxxxxxx - 0 thru 2^7 = 128 (0 = end of stream)
+# 10xxxxxx - (+ 1 byte) = 2^14 = 8K
+# 110xxxxx - (+ 2 byte) = 2^21 = 2M
+# 1110xxxx - (+ 3 byte) = 2^28 = 128M
+# 1111xxxx - 2^(7+x) = any power-of-2 block size from 128 to 2^22 = 4M
+encodeLength = (n) ->
+  if n < 128 then return new Buffer([ n ])
+  if n <= Math.pow(2, 22) and (n & (n - 1)) == 0 then return new Buffer([ 0xf0 + logBase2(n) - 7 ])
+  if n < 8192 then return new Buffer([ 0x80 + (n & 0x3f), (n >> 6) & 0xff ])
+  if n < Math.pow(2, 21) then return new Buffer([ 0xc0 + (n & 0x1f), (n >> 5) & 0xff, (n >> 13) & 0xff ])
+  if n < Math.pow(2, 28) then return new Buffer([ 0xe0 + (n & 0xf), (n >> 4) & 0xff, (n >> 12) & 0xff, (n >> 20) & 0xff ])
+  throw new Error(">:-P -> #{n}")
+
+readLength = (stream) ->
+  toolkit.qread(stream, 1).then (prefix) ->
+    if (not prefix?) or prefix[0] == 0 then return null
+    if (prefix[0] & 0x80) == 0 then return prefix[0]
+    if (prefix[0] & 0xf0) == 0xf0 then return Math.pow(2, 7 + (prefix[0] & 0xf))
+    if (prefix[0] & 0xc0) == 0x80
+      return toolkit.qread(stream, 1).then (data) ->
+        if not data? then return null
+        (prefix[0] & 0x3f) + (data[0] << 6)
+    if (prefix[0] & 0xe0) == 0xc0
+      return toolkit.qread(stream, 2).then (data) ->
+        if not data? then return null
+        (prefix[0] & 0x3f) + (data[0] << 5) + (data[1] << 13)
+    if (prefix[0] & 0xf0) == 0xe0
+      return toolkit.qread(stream, 3).then (data) ->
+        if not data? then return null
+        (prefix[0] & 0xf) + (data[0] << 4) + (data[1] << 12) + (data[2] << 20)
+    null
+
+# hacker's delight! (only works on exact powers of 2)
+logBase2 = (x) ->
+  x -= 1
+  x -= ((x >> 1) & 0x55555555)
+  x = (x & 0x33333333) + ((x >> 2) & 0x33333333)
+  x = (x + (x >> 4)) & 0x0F0F0F0F
+  x += (x << 8)
+  x += (x << 16)
+  x >> 24
 
 
 exports.ReadableFramedStream = ReadableFramedStream
