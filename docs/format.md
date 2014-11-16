@@ -110,7 +110,7 @@ For example, a frame of length 100 would be encoded as `0x64`, followed by 100 b
     ***~~~~~ ========  -------
     11000001 00010010 01111010
 
-The final encoding form (`0xf0` - `0xff`) is used as a shorthand for any power-of-2 block size, which is common for buffering large files. A 1GB file may be encoded using a 1MB buffer size, leading to 1MB frames. A 1MB (1048576 byte) frame would be encoded as `0xfd`: 2 to the power of (13 + 7), or `2**20`.
+The final encoding form (`0xf0` - `0xfe`) is used as a shorthand for any power-of-2 block size, which is common for buffering large files. A 1GB file may be encoded using a 1MB buffer size, leading to 1MB frames. A 1MB (1048576 byte) frame would be encoded as `0xfd`: 2 to the power of (13 + 7), or `2**20`.
 
 The frame size is usually dictated by the willingness of the encoder to buffer (or have pre-knowledge about the size of the file).
 
