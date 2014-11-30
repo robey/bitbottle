@@ -59,7 +59,9 @@ unpack = (buffer) ->
     field = { type, id }
     switch type
       when TYPE_ZINT then field.number = zint.decodePackedInt(content)
-      when TYPE_STRING then field.list = content.toString("UTF-8").split("\x00")
+      when TYPE_STRING
+        field.string = content.toString("UTF-8")
+        field.list = field.string.split("\x00")
     header.fields.push field
     i += length
   header

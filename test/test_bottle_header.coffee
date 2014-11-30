@@ -25,10 +25,10 @@ describe "bottle_header", ->
     bottle_header.unpack(new Buffer("c400a802e8030c0469726f6e", "hex")).fields.should.eql [
       { type: bottle_header.TYPE_BOOL, id: 1 }
       { type: bottle_header.TYPE_ZINT, id: 10, number: 1000 }
-      { type: bottle_header.TYPE_STRING, id: 3, list: [ "iron" ] }
+      { type: bottle_header.TYPE_STRING, id: 3, list: [ "iron" ], string: "iron" }
     ]
     bottle_header.unpack(new Buffer("3c0d6f6e650074776f007468726565", "hex")).fields.should.eql [
-      { type: bottle_header.TYPE_STRING, id: 15, list: [ "one", "two", "three" ] }
+      { type: bottle_header.TYPE_STRING, id: 15, list: [ "one", "two", "three" ], string: "one\x00two\x00three" }
     ]
 
   it "unpack truncated", ->
