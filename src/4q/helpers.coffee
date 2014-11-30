@@ -1,6 +1,6 @@
 errno = require "errno"
 fs = require "fs"
-Q = require "q"
+Promise = require "bluebird"
 sprintf = require "sprintf"
 strftime = require "strftime"
 
@@ -41,13 +41,6 @@ readStream = (filename, showStack = false) ->
     if showStack then console.log error.stack
     process.exit(1)
   stream
-
-# given a list, and a map function that returns promises, do them one at a time.
-foreachSerial = (list, f) ->
-  if list.length == 0 then return Q()
-  item = list.shift()
-  f(item).then ->
-    foreachSerial(list, f)
 
 messageForError = (error) ->
   if error.code? then return errno.code[error.code]?.description or error.message

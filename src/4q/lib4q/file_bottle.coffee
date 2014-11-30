@@ -2,7 +2,6 @@ bottle_header = require "./bottle_header"
 bottle_stream = require "./bottle_stream"
 fs = require "fs"
 posix = require "posix"
-Q = require "q"
 util = require "util"
 
 FIELDS =

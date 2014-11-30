@@ -1,5 +1,4 @@
 mocha_sprinkles = require "mocha-sprinkles"
-Q = require "q"
 toolkit = require "stream-toolkit"
 util = require "util"
 
@@ -10,12 +9,12 @@ compressed_bottle = require "../lib/4q/lib4q/compressed_bottle"
 future = mocha_sprinkles.future
 
 writeTinyFile = (filename, data) ->
-  new toolkit.SourceStream(data).pipe(new file_bottle.FileBottleWriter(filename: filename, size: data.length))
+  toolkit.sourceStream(data).pipe(new file_bottle.FileBottleWriter(filename: filename, size: data.length))
 
 validateTinyFile = (fileBottle, filename) ->
   fileBottle.type.should.eql bottle_stream.TYPE_FILE
   fileBottle.header.filename.should.eql filename
-  toolkit.qread(fileBottle).then (dataStream) ->
+  fileBottle.readPromise().then (dataStream) ->
     toolkit.pipeToBuffer(dataStream).then (buffer) ->
       { header: fileBottle.header, data: buffer }
 
@@ -27,10 +26,10 @@ describe "CompressedBottleWriter", ->
       # quick verification that we're hashing what we think we are.
       fileBuffer.toString("hex").should.eql "f09f8dbc0000000d000866696c652e74787480011515746865206e657720706f726e6f677261706865727300ff"
       x = new compressed_bottle.CompressedBottleWriter(compressed_bottle.COMPRESSION_LZMA2)
-      new toolkit.SourceStream(fileBuffer).pipe(x)
+      toolkit.sourceStream(fileBuffer).pipe(x)
       toolkit.pipeToBuffer(x).then (buffer) ->
         # now decode it.
-        bottle_stream.readBottleFromStream(new toolkit.SourceStream(buffer))
+        bottle_stream.readBottleFromStream(toolkit.sourceStream(buffer))
     .then (zbottle) ->
       zbottle.type.should.eql bottle_stream.TYPE_COMPRESSED
       zbottle.header.compressionType.should.eql compressed_bottle.COMPRESSION_LZMA2
@@ -45,7 +44,7 @@ describe "CompressedBottleWriter", ->
     fileBottle.pipe(x)
     toolkit.pipeToBuffer(x).then (buffer) ->
       # now decode it.
-      bottle_stream.readBottleFromStream(new toolkit.SourceStream(buffer))
+      bottle_stream.readBottleFromStream(toolkit.sourceStream(buffer))
     .then (zbottle) ->
       zbottle.type.should.eql bottle_stream.TYPE_COMPRESSED
       zbottle.header.compressionType.should.eql compressed_bottle.COMPRESSION_SNAPPY

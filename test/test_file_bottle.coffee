@@ -1,6 +1,5 @@
 fs = require "fs"
 mocha_sprinkles = require "mocha-sprinkles"
-Q = require "q"
 toolkit = require "stream-toolkit"
 util = require "util"
 
@@ -19,17 +18,17 @@ describe "FileBottleWriter", ->
       createdNanos: 1234567890
       username: "tyrion"
     bottle = new file_bottle.FileBottleWriter(header)
-    new toolkit.SourceStream("television").pipe(bottle)
+    toolkit.sourceStream("television").pipe(bottle)
     toolkit.pipeToBuffer(bottle).then (data) ->
       # now decode it.
-      bottle_stream.readBottleFromStream(new toolkit.SourceStream(data)).then (bottle) ->
+      bottle_stream.readBottleFromStream(toolkit.sourceStream(data)).then (bottle) ->
         bottle.type.should.eql bottle_stream.TYPE_FILE
         bottle.header.filename.should.eql "bogus.txt"
         bottle.header.mode.should.eql 7
         bottle.header.createdNanos.should.eql 1234567890
         bottle.header.size.should.eql 10
         bottle.header.username.should.eql "tyrion"
-        toolkit.qread(bottle).then (fileStream) ->
+        bottle.readPromise().then (fileStream) ->
           toolkit.pipeToBuffer(fileStream).then (data) ->
             data.toString().should.eql "television"
 
@@ -41,12 +40,12 @@ describe "FileBottleWriter", ->
     fs.createReadStream(filename).pipe(bottle)
     toolkit.pipeToBuffer(bottle).then (data) ->
       # now decode it.
-      bottle_stream.readBottleFromStream(new toolkit.SourceStream(data)).then (bottle) ->
+      bottle_stream.readBottleFromStream(toolkit.sourceStream(data)).then (bottle) ->
         bottle.type.should.eql bottle_stream.TYPE_FILE
         bottle.header.filename.should.eql "#{folder}/test.txt"
         bottle.header.folder.should.eql false
         bottle.header.size.should.eql 7
-        toolkit.qread(bottle).then (fileStream) ->
+        bottle.readPromise().then (fileStream) ->
           toolkit.pipeToBuffer(fileStream).then (data) ->
             data.toString().should.eql "hello!\n"
 
@@ -54,7 +53,7 @@ describe "FileBottleWriter", ->
     bottle1 = new file_bottle.FolderBottleWriter(filename: "outer", folder: true)
     bottle2 = new file_bottle.FolderBottleWriter(filename: "inner", folder: true)
     bottle3 = new file_bottle.FileBottleWriter(filename: "test.txt", size: 3)
-    new toolkit.SourceStream("abc").pipe(bottle3)
+    toolkit.sourceStream("abc").pipe(bottle3)
     # wire it up!
     bottle1.write(bottle2)
     bottle1.end()

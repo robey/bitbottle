@@ -1,6 +1,5 @@
 bottle_header = require "./bottle_header"
 bottle_stream = require "./bottle_stream"
-Q = require "q"
 snappy = require "snappy"
 stream = require "stream"
 toolkit = require "stream-toolkit"
@@ -54,12 +53,14 @@ class CompressedBottleWriter extends bottle_stream.LoneBottleWriter
       else false
     if @usesFraming 
       transform = compressionTransformForType(@compressionType)
+      toolkit.promisify(transform)
       @framedStream.innerTransform = (buffers, callback) =>
         transform Buffer.concat(buffers), (error, compressedData) =>
           if error? then return @emit "error", error
           callback([ compressedData ])
     else
       @zStream = compressionStreamForType(@compressionType)
+      toolkit.promisify(@zStream)
       @_process(@zStream)
 
   _transform: (data, _, callback) ->
@@ -93,7 +94,8 @@ class CompressedBottleReader extends bottle_stream.BottleReader
 
   decompress: ->
     zStream = decompressionStreamForType(@header.compressionType)
-    toolkit.qread(@).then (compressedStream) ->
+    toolkit.promisify(zStream)
+    @readPromise().then (compressedStream) ->
       compressedStream.pipe(zStream)
       bottle_stream.readBottleFromStream(zStream)
 
@@ -103,6 +105,7 @@ class CompressedBottleReader extends bottle_stream.BottleReader
 class SnappyDecompressor extends stream.Transform
   constructor: (options) ->
     super(options)
+    toolkit.promisify(@)
 
   _transform: (data, _, callback) ->
     snappy.uncompress data, { asBuffer: true }, (error, uncompressed) =>

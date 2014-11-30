@@ -1,7 +1,6 @@
 bottle_header = require "./bottle_header"
 bottle_stream = require "./bottle_stream"
 crypto = require "crypto"
-Q = require "q"
 stream = require "stream"
 toolkit = require "stream-toolkit"
 util = require "util"
@@ -21,6 +20,7 @@ HASH_NAMES[HASH_SHA512] = "SHA-512"
 class HashingStream extends stream.Transform
   constructor: (hashName, options) ->
     super(options)
+    toolkit.promisify(@)
     @hasher = crypto.createHash(hashName)
 
   _transform: (buffer, _, callback) ->
@@ -56,10 +56,10 @@ class HashBottleWriter extends bottle_stream.BottleWriter
   _flush: (callback) ->
     @hashStream.end()
     @hashStream.on "end", =>
-      @_process(new toolkit.SourceStream(@hashStream.digest)).then =>
+      @_process(toolkit.sourceStream(@hashStream.digest)).then =>
         @_close()
         callback()
-      .fail (error) ->
+      .catch (error) ->
         callback(error)
 
 
@@ -87,11 +87,11 @@ class HashBottleReader extends bottle_stream.BottleReader
   #     true if the hash validated correctly, false if not
   validate: ->
     hashStream = hashStreamForType(@header.hashType)
-    toolkit.qread(@).then (innerStream) =>
+    @readPromise().then (innerStream) =>
       innerStream.pipe(hashStream)
       bottle_stream.readBottleFromStream(hashStream).then (innerBottle) =>
-        hashPromise = toolkit.qend(innerBottle).then =>
-          toolkit.qread(@).then (digestStream) =>
+        hashPromise = innerBottle.endPromise().then =>
+          @readPromise().then (digestStream) =>
             toolkit.pipeToBuffer(digestStream).then (digestBuffer) ->
               digestBuffer.toString("hex")
         validPromise = hashPromise.then (hex) ->

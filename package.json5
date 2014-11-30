@@ -4,25 +4,25 @@
   "description": "the 4q archive format",
   "main": "./lib/4q/lib4q.js",
   "keywords": [
-    "archive"
+    "archive",
   ],
   "author": "Robey Pointer <robeypointer@gmail.com>",
   "homepage": "https://github.com/robey/4q",
   "repository": {
     "type": "git",
-    "url": "git://github.com/robey/4q.git"
+    "url": "git://github.com/robey/4q.git",
   },
   "licenses": [
     {
       "type": "Apache License 2.0",
-      "url": "http://www.apache.org/licenses/LICENSE-2.0.txt"
+      "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
     }
   ],
   "scripts": {
-    "test": "./node_modules/plz/bin/plz -v clean build test"
+    "test": "./node_modules/plz/bin/plz -v clean build test",
   },
   "directories": {
-    "doc": "docs"
+    "doc": "docs",
   },
   "dependencies": {
     "antsy": "*",
@@ -34,7 +34,7 @@
     "sprintf": "*",
     "stream-toolkit": "^2.0.0",
     "strftime": "*",
-    "xz": "^1.0.1"
+    "xz": "^1.0.1",
   },
   "devDependencies": {
     "coffee-script": "^1.7",
@@ -42,6 +42,7 @@
     "mocha-sprinkles": "*",
     "plz": "^2.0.3",
     "should": "*",
-    "json5": "*"
+    // for building this file :)
+    json5: "*",
   }
 }

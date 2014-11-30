@@ -1,6 +1,6 @@
 fs = require "fs"
 minimist = require "minimist"
-Q = require "q"
+Promise = require "bluebird"
 toolkit = require "stream-toolkit"
 util = require "util"
 
@@ -43,15 +43,14 @@ main = ->
     process.exit(1)
   if not argv.color then display.noColor()
 
-  (if argv.structure then dumpArchiveStructures(argv._) else dumpArchiveFiles(argv._, argv.l, argv.q)).fail (error) ->
+  (if argv.structure then dumpArchiveStructures(argv._) else dumpArchiveFiles(argv._, argv.l, argv.q)).catch (error) ->
     display.displayError "Unable to read archive: #{helpers.messageForError(error)}"
     if argv.debug then console.log error.stack
     process.exit(1)
   .done()
 
 dumpArchiveStructures = (filenames) ->
-  helpers.foreachSerial filenames, (filename) ->
-    dumpArchiveStructure(filename)
+  Promise.map(filenames, ((filename) -> dumpArchiveStructure(filename)), concurrency: 1)
 
 dumpArchiveStructure = (filename) ->
   indent = 0
@@ -75,14 +74,13 @@ dumpArchiveStructure = (filename) ->
   reader.scanStream(helpers.readStream(filename))
 
 dumpArchiveFiles = (filenames, isVerbose, isQuiet) ->
-  helpers.foreachSerial filenames, (filename) ->
-    dumpArchiveFile(filename, isVerbose, isQuiet)
+  Promise.map(filenames, ((filename) -> dumpArchiveFile(filename, isVerbose, isQuiet)), concurrency: 1)
 
 dumpArchiveFile = (filename, isVerbose, isQuiet) ->
   # count total bytes packed away
   state = { totalBytesIn: 0, totalBytes: 0, totalFiles: 0, prefix: [] }
 
-  countingInStream = new toolkit.CountingStream()
+  countingInStream = toolkit.countingStream()
   countingInStream.on "count", (n) ->
     state.totalBytesIn = n
   helpers.readStream(filename).pipe(countingInStream)

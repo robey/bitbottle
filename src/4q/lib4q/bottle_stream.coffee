@@ -1,6 +1,6 @@
 bottle_header = require "./bottle_header"
 framed_stream = require "./framed_stream"
-Q = require "q"
+Promise = require "bluebird"
 stream = require "stream"
 toolkit = require "stream-toolkit"
 util = require "util"
@@ -11,6 +11,7 @@ VERSION = 0x00
 
 TYPE_FILE = 0
 TYPE_HASHED = 1
+TYPE_ENCRYPTED = 3
 TYPE_COMPRESSED = 4
 
 BOTTLE_END = 0xff
@@ -21,6 +22,7 @@ BOTTLE_END = 0xff
 class BottleWriter extends stream.Transform
   constructor: (type, header, options = {}) ->
     super(options)
+    toolkit.promisify(@)
     @_writableState.objectMode = if options.objectModeWrite? then options.objectModeWrite else true
     @_readableState.objectMode = if options.objectModeRead? then options.objectModeRead else false
     @_writeHeader(type, header)
@@ -42,16 +44,16 @@ class BottleWriter extends stream.Transform
   _transform: (inStream, _, callback) ->
     @_process(inStream).then ->
       callback()
-    .fail (error) ->
+    .catch (error) ->
       callback(error)
 
   # write a data stream into this bottle.
   # ("subclasses" may use this to handle their own magic)
   _process: (inStream) ->
-    framedStream = new framed_stream.WritableFramedStream()
+    framedStream = framed_stream.writableFramedStream()
     framedStream.on "data", (data) => @push data
     inStream.pipe(framedStream)
-    toolkit.qend(framedStream)
+    framedStream.endPromise()
 
   _flush: (callback) ->
     @_close()
@@ -71,7 +73,7 @@ class LoneBottleWriter extends BottleWriter
     if not options.objectModeWrite? then options.objectModeWrite = false
     super(type, header, options)
     # make a single framed stream that we channel
-    @framedStream = new framed_stream.WritableFramedStream()
+    @framedStream = framed_stream.writableFramedStream()
     @framedStream.on "data", (data) => @push data
 
   _transform: (data, _, callback) ->
@@ -104,7 +106,7 @@ readBottleFromStream = (stream) ->
         new BottleReader(type, header, stream)
 
 readBottleHeader = (stream) ->
-  toolkit.qread(stream, 8).then (buffer) ->
+  stream.readPromise(8).then (buffer) ->
     if not buffer? then throw new Error("End of stream")
     [0 ... 4].map (i) =>
       if buffer[i] != MAGIC[i] then throw new Error("Incorrect magic (not a 4Q archive)")
@@ -112,7 +114,7 @@ readBottleHeader = (stream) ->
     if buffer[5] != 0 then throw new Error("Incompatible flags: #{buffer[5].toString(16)}")
     type = (buffer[6] >> 4) & 0xf
     headerLength = ((buffer[6] & 0xf) * 256) + (buffer[7] & 0xff)
-    toolkit.qread(stream, headerLength).then (headerBuffer) =>
+    stream.readPromise(headerLength).then (headerBuffer) =>
       { type, header: bottle_header.unpack(headerBuffer) }
 
 
@@ -121,7 +123,8 @@ readBottleHeader = (stream) ->
 class BottleReader extends stream.Readable
   constructor: (@type, @header, @stream) ->
     super(objectMode: true)
-    @lastPromise = Q()
+    @lastPromise = Promise.resolve()
+    toolkit.promisify(@)
 
   # usually subclasses will override this.
   typeName: ->
@@ -139,17 +142,17 @@ class BottleReader extends stream.Readable
       @_readDataStream()
     .then (stream) =>
       if not stream? then return @push null
-      @lastPromise = toolkit.qend(stream)
+      @lastPromise = stream.endPromise()
       @push stream
-    .fail (error) =>
+    .catch (error) =>
       @emit "error", error
 
   _readDataStream: ->
-    toolkit.qread(@stream, 1).then (buffer) =>
+    @stream.readPromise(1).then (buffer) =>
       if (not buffer?) or (buffer[0] == BOTTLE_END) then return null
       # put it back. it's part of a data stream!
       @stream.unshift buffer
-      new framed_stream.ReadableFramedStream(@stream)
+      framed_stream.readableFramedStream(@stream)
 
 
 exports.BottleReader = BottleReader
@@ -159,4 +162,5 @@ exports.MAGIC = MAGIC
 exports.readBottleFromStream = readBottleFromStream
 exports.TYPE_FILE = TYPE_FILE
 exports.TYPE_HASHED = TYPE_HASHED
+exports.TYPE_ENCRYPTED = TYPE_ENCRYPTED
 exports.TYPE_COMPRESSED = TYPE_COMPRESSED

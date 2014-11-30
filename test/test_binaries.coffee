@@ -2,7 +2,6 @@ crypto = require "crypto"
 fs = require "fs"
 mocha_sprinkles = require "mocha-sprinkles"
 path = require "path"
-Q = require "q"
 util = require "util"
 
 exec = mocha_sprinkles.exec

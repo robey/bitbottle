@@ -1,6 +1,5 @@
 fs = require "fs"
 mocha_sprinkles = require "mocha-sprinkles"
-Q = require "q"
 toolkit = require "stream-toolkit"
 util = require "util"
 
@@ -51,7 +50,7 @@ describe "ArchiveReader", ->
   it "reads a file", future ->
     data = "f09f8dbc0000003d0008746573742e7478748402a401880800ae4ae2d77e92138c0800ae4ae2d77e9213900800ae4ae2d77e92138001050805726f6265790c05776865656c0568656c6c6f00ff"
     r = archiveReader()
-    r.scanStream(new toolkit.SourceStream(new Buffer(data, "hex"))).then ->
+    r.scanStream(toolkit.sourceStream(new Buffer(data, "hex"))).then ->
       r.collectedEvents.map((e) -> e.event).should.eql [ "start-bottle", "data", "end-bottle" ]
       r.collectedEvents[0].bottle.header.filename.should.eql "test.txt"
       r.collectedEvents[1].data.toString().should.eql "hello"
@@ -59,7 +58,7 @@ describe "ArchiveReader", ->
   it "reads a folder", future ->
     data = "f09f8dbc00000039000573747566668402ed0188080040b675ecffa2138c080040b675ecffa21390080040b675ecffa213c0000805726f6265790c05776865656c4bf09f8dbc0000003c00076f6e652e7478748402a40188080040b675ecffa2138c080040b675ecffa21390080040b675ecffa2138001040805726f6265790c05776865656c046f6e652100ff004bf09f8dbc0000003c000774776f2e7478748402a40188080040b675ecffa2138c080040b675ecffa21390080040b675ecffa2138001040805726f6265790c05776865656c0474776f2100ff00ff"
     r = archiveReader()
-    r.scanStream(new toolkit.SourceStream(new Buffer(data, "hex"))).then ->
+    r.scanStream(toolkit.sourceStream(new Buffer(data, "hex"))).then ->
       r.collectedEvents.map((e) -> e.event).should.eql [ "start-bottle", "start-bottle", "data", "end-bottle", "start-bottle", "data", "end-bottle", "end-bottle" ]
       r.collectedEvents[0].bottle.header.filename.should.eql "stuff"
       r.collectedEvents[1].bottle.header.filename.should.eql "one.txt"

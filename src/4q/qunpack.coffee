@@ -1,7 +1,7 @@
 fs = require "fs"
 minimist = require "minimist"
 path = require "path"
-Q = require "q"
+Promise = require "bluebird"
 sprintf = require "sprintf"
 strftime = require "strftime"
 toolkit = require "stream-toolkit"
@@ -69,15 +69,14 @@ main = ->
     isVerbose: argv.v
     debug: argv.debug
     force: argv.force
-  unpackArchiveFiles(argv._, outputFolder, options).fail (error) ->
+  unpackArchiveFiles(argv._, outputFolder, options).catch (error) ->
     display.displayError "Unable to unpack archive: #{helpers.messageForError(error)}"
     if argv.debug then console.log error.stack
     process.exit(1)
   .done()
 
 unpackArchiveFiles = (filenames, outputFolder, options) ->
-  helpers.foreachSerial filenames, (filename) ->
-    unpackArchiveFile(filename, outputFolder, options)
+  Promise.map(filenames, ((filename) -> unpackArchiveFile(filename, outputFolder, options)), concurrency: 1)
 
 unpackArchiveFile = (filename, outputFolder, options) ->
   state =
@@ -93,7 +92,7 @@ unpackArchiveFile = (filename, outputFolder, options) ->
     compression: null
 
   updater = new display.StatusUpdater()
-  countingInStream = new toolkit.CountingStream()
+  countingInStream = toolkit.countingStream()
   countingInStream.on "count", (n) ->
     state.totalBytesIn = n
     unless options.isQuiet then updater.update statusMessage(state)
@@ -141,7 +140,7 @@ unpackArchiveFile = (filename, outputFolder, options) ->
     process.exit(1)
 
   reader.processFile = (dataStream) ->
-    countingOutStream = new toolkit.CountingStream()
+    countingOutStream = new toolkit.countingStream()
     countingOutStream.on "count", (n) ->
       state.currentFileBytes = n
       unless options.isQuiet then updater.update statusMessage(state)
@@ -149,12 +148,13 @@ unpackArchiveFile = (filename, outputFolder, options) ->
     realFilename = path.join(outputFolder, state.currentFilename)
 
     access = if options.force then "w" else "wx"
-    Q.nfbind(fs.open)(realFilename, access, state.mode or parseInt("666", 8)).then (fd) ->
+    Promise.promisify(fs.open)(realFilename, access, state.mode or parseInt("666", 8)).then (fd) ->
       outStream = fs.createWriteStream(realFilename, fd: fd)
+      toolkit.promisify(outStream)
       outStream.on "error", (error) -> reader.emit "error", error
       dataStream.pipe(countingOutStream).pipe(outStream)
-      toolkit.qfinish(outStream)
-    .fail (error) ->
+      outStream.finishPromise()
+    .catch (error) ->
       reader.emit "error", error
 
   ensureFolder = (realFilename) ->

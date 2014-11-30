@@ -3,7 +3,7 @@ events = require "events"
 file_bottle = require "./file_bottle"
 fs = require "fs"
 path = require "path"
-Q = require "q"
+Promise = require "bluebird"
 stream = require "stream"
 toolkit = require "stream-toolkit"
 util = require "util"
@@ -37,13 +37,13 @@ class ArchiveWriter extends events.EventEmitter
 
   _processFile: (filename, prefix) ->
     basename = path.basename(filename)
-    qify(fs.stat)(filename).then (stats) =>
+    Promise.promisify(fs.stat)(filename).then (stats) =>
       header = file_bottle.fileHeaderFromStats(basename, stats)
       displayName = (if prefix? then path.join(prefix, basename) else basename) + (if header.folder then "/" else "")
       @emit "filename", displayName, header
       if header.folder then return @_processFolder(filename, displayName, header)
-      qify(fs.open)(filename, "r").then (fd) =>
-        countingFileStream = new toolkit.CountingStream()
+      Promise.promisify(fs.open)(filename, "r").then (fd) =>
+        countingFileStream = toolkit.countingStream()
         countingFileStream.on "count", (n) =>
           @emit "status", displayName, n
         fileBottle = new file_bottle.FileBottleWriter(header)
@@ -51,16 +51,16 @@ class ArchiveWriter extends events.EventEmitter
         fileBottle
 
   _processFolder: (folderName, prefix, header, files = null) ->
-    (if files? then Q(files) else qify(fs.readdir)(folderName)).then (files) =>
+    (if files? then Promise.resolve(files) else Promise.promisify(fs.readdir)(folderName)).then (files) =>
       folderBottle = new file_bottle.FolderBottleWriter(header)
       # fill the bottle in the background, closing it when done.
-      foreachSerial files, (filename) =>
+      Promise.map(files, ((filename) =>
         fullPath = if folderName? then path.join(folderName, filename) else filename
         @_processFile(fullPath, prefix).then (fileStream) =>
-          toolkit.qwrite(folderBottle, fileStream)
-      .then =>
+          folderBottle.writePromise(fileStream)
+      ), concurrency: 1).then =>
         folderBottle.end()
-      .fail (error) =>
+      .catch (error) =>
         @emit "error", error
       folderBottle
 
@@ -98,22 +98,22 @@ class ArchiveReader extends events.EventEmitter
 
   # scan each internal stream recursively
   _scanFolder: (bottle) ->
-    toolkit.qread(bottle).then (nextStream) =>
+    bottle.readPromise().then (nextStream) =>
       if not nextStream? then return
       @scanStream(nextStream).then =>
         @_scanFolder(bottle)
 
   _scanFile: (bottle) ->
-    toolkit.qread(bottle).then (nextStream) =>
+    bottle.readPromise().then (nextStream) =>
       if not nextStream? then return
       @processFile(nextStream).then =>
         @_scanFile(bottle)
 
   # override this method to do something besides just skip the stream and move on.
   processFile: (dataStream) ->
-    sink = new toolkit.NullSinkStream()
+    sink = toolkit.nullSinkStream()
     dataStream.pipe(sink)
-    toolkit.qfinish(sink)
+    sink.finishPromise()
 
   _scanHashed: (bottle) ->
     bottle.validate().then ({ bottle: innerBottle, valid: validPromise, hex: hexPromise }) =>
@@ -128,28 +128,12 @@ class ArchiveReader extends events.EventEmitter
       @scan(nextBottle)
 
   _skipBottle: (bottle) ->
-    toolkit.qread(bottle).then (s) ->
+    bottle.readPromise().then (s) ->
       if not s? then return
       sink = new toolkit.NullSinkStream()
-      toolkit.qpipe(s, sink).then ->
+      s.pipe(sink)
+      sink.endPromise().then ->
         skipBottle(bottle)
-
-
-# take a node function that takes a callback, and return a form that returns a promise.
-qify = (f) ->
-  (arg...) ->
-    deferred = Q.defer()
-    f arg..., (err, rv) ->
-      if err? then return deferred.reject(err)
-      deferred.resolve(rv)
-    deferred.promise
-
-# given a list, and a map function that returns promises, do them one at a time.
-foreachSerial = (list, f) ->
-  if list.length == 0 then return Q()
-  item = list.shift()
-  f(item).then ->
-    foreachSerial(list, f)
 
 
 exports.ArchiveReader = ArchiveReader

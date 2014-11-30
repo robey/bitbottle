@@ -1,7 +1,6 @@
 fs = require "fs"
 minimist = require "minimist"
 path = require "path"
-Q = require "q"
 sprintf = require "sprintf"
 stream = require "stream"
 strftime = require "strftime"
@@ -10,6 +9,7 @@ util = require "util"
 
 display = require "./display"
 helpers = require "./helpers"
+keybaser = require "./keybaser"
 lib4q = require "./lib4q"
 
 NOW = Date.now()
@@ -81,6 +81,7 @@ main = ->
     if argv.debug then console.log error.stack
     process.exit(1)
   outStream = fs.createWriteStream(filename, fd: fd)
+  toolkit.promisify(outStream)
 
   state =
     fileCount: 0
@@ -90,7 +91,7 @@ main = ->
     currentFileTotalBytes: 0
     currentFilename: null
   updater = new display.StatusUpdater()
-  countingOutStream = new toolkit.CountingStream()
+  countingOutStream = toolkit.countingStream()
   countingOutStream.on "count", (n) ->
     state.totalBytesOut = n
     unless argv.q then updater.update statusMessage(state)
@@ -137,7 +138,7 @@ main = ->
     writer.archiveFile(argv._[0])
   promise.then (bottle) ->
     bottle.pipe(targetStream)
-    toolkit.qfinish(outStream)
+    outStream.finishPromise()
   .then ->
     if argv.v then printFinishedFile(state)
     unless argv.q
@@ -145,7 +146,7 @@ main = ->
       compressionStatus = if argv.compress then display.paint(" -> ", display.color(COLORS.file_size, display.humanize(state.totalBytesOut) + "B")) else ""
       inStatus = display.color(COLORS.file_size, "(#{state.fileCount} files, #{display.humanize(state.totalBytesIn)}B)")
       process.stdout.write "#{argv.o} #{inStatus}#{compressionStatus}\n"
-  .fail (error) ->
+  .catch (error) ->
     display.displayError "Unable to write archive: #{helpers.messageForError(error)}"
     if argv.debug then console.log err.stack
     process.exit(1)

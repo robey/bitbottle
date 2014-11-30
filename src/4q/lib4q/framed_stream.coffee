@@ -1,4 +1,3 @@
-Q = require "q"
 stream = require "stream"
 toolkit = require "stream-toolkit"
 util = require "util"
@@ -50,12 +49,14 @@ class WritableFramedStream extends stream.Transform
 class ReadableFramedStream extends stream.Readable
   constructor: (@stream) ->
     super()
+    toolkit.promisify(@stream)
 
   _read: (bytes) ->
     readLength(@stream).then (length) =>
       if (not length?) or (length == 0) then return @push null
-      toolkit.qread(@stream, length).then (data) =>
+      @stream.readPromise(length).then (data) =>
         @push data
+
 
 # 0xxxxxxx - 0 thru 2^7 = 128 (0 = end of stream)
 # 10xxxxxx - (+ 1 byte) = 2^14 = 8K
@@ -71,20 +72,20 @@ encodeLength = (n) ->
   throw new Error(">:-P -> #{n}")
 
 readLength = (stream) ->
-  toolkit.qread(stream, 1).then (prefix) ->
+  stream.readPromise(1).then (prefix) ->
     if (not prefix?) or prefix[0] == 0 then return null
     if (prefix[0] & 0x80) == 0 then return prefix[0]
     if (prefix[0] & 0xf0) == 0xf0 then return Math.pow(2, 7 + (prefix[0] & 0xf))
     if (prefix[0] & 0xc0) == 0x80
-      return toolkit.qread(stream, 1).then (data) ->
+      return stream.readPromise(1).then (data) ->
         if not data? then return null
         (prefix[0] & 0x3f) + (data[0] << 6)
     if (prefix[0] & 0xe0) == 0xc0
-      return toolkit.qread(stream, 2).then (data) ->
+      return stream.readPromise(2).then (data) ->
         if not data? then return null
         (prefix[0] & 0x3f) + (data[0] << 5) + (data[1] << 13)
     if (prefix[0] & 0xf0) == 0xe0
-      return toolkit.qread(stream, 3).then (data) ->
+      return stream.readPromise(3).then (data) ->
         if not data? then return null
         (prefix[0] & 0xf) + (data[0] << 4) + (data[1] << 12) + (data[2] << 20)
     null
@@ -100,5 +101,12 @@ logBase2 = (x) ->
   x >> 24
 
 
-exports.ReadableFramedStream = ReadableFramedStream
-exports.WritableFramedStream = WritableFramedStream
+readableFramedStream = (stream) ->
+  toolkit.promisify(new ReadableFramedStream(stream))
+
+writableFramedStream = (stream) ->
+  toolkit.promisify(new WritableFramedStream(stream))
+
+
+exports.readableFramedStream = readableFramedStream
+exports.writableFramedStream = writableFramedStream
