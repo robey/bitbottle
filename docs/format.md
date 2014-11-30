@@ -171,7 +171,33 @@ There is only one hash defined currently: SHA-512, with a 64-byte hash as the se
 
 ### Encrypted data (3)
 
-(Not implemented yet.)
+Header fields:
+
+- encryption type [int 0]
+  - AES-256 [0]
+- recipients [string 0]
+
+There are N + 1 data streams, where N is the number of recipients. The recipients' data streams come first, in the order listed, followed by the actual encrypted data.
+
+Recipients are namespaced by protocol:
+
+    <namespace>:<user-identifier>
+
+and separated by a NUL character (`0x00`):
+
+    <namespace>:<user-identifier>\x00<namespace>:<user-identifier>
+
+The only currently defined protocol is "keybase". The user identifier for keybase is the keybase username. So, for example, if the recipients field contains
+
+    keybase:robey\x00keybase:max
+
+then the encrypted bottle has two recipients: "robey" on keybase, and "max" on keybase. The first data stream will be an encrypted message for robey; the second data stream is the same encrypted message for max; and the final stream is the encrypted bottle.
+
+The encrypted message is always the encryption key (for the final data stream) followed by its IV. For AES-256, this will be 48 bytes: 32 bytes of key followed by 16 bytes of IV. In the keybase protocol, the data stream itself will be an armored text message of the type keybase generates by default.
+
+N may be zero. There may be no recipients, in which case you must have received the encryption key and IV out-of-band in order to decrypt the bottle.
+
+The expected data flow for decryption is to identify which recipient is opening the bottle, ask them to decrypt their key message, and use the decrypted key and IV to decrypt the final data stream which contains the bottle.
 
 ### Compressed data (4)
 

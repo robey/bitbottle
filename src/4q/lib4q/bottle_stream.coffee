@@ -92,6 +92,7 @@ readBottleFromStream = (stream) ->
   # avoid import loops.
   file_bottle = require "./file_bottle"
   hash_bottle = require "./hash_bottle"
+  encrypted_bottle = require "./encrypted_bottle"
   compressed_bottle = require "./compressed_bottle"
 
   readBottleHeader(stream).then ({ type, header, buffer }) ->
@@ -100,6 +101,8 @@ readBottleFromStream = (stream) ->
         new BottleReader(type, file_bottle.decodeFileHeader(header), stream)
       when TYPE_HASHED
         new hash_bottle.HashBottleReader(hash_bottle.decodeHashHeader(header), stream)
+      when TYPE_ENCRYPTED
+        new encrypted_bottle.EncryptedBottleReader(encrypted_bottle.decodeEncryptionHeader(header), stream)
       when TYPE_COMPRESSED
         new compressed_bottle.CompressedBottleReader(compressed_bottle.decodeCompressedHeader(header), stream)
       else
