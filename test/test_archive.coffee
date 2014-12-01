@@ -37,7 +37,7 @@ describe "ArchiveWriter", ->
         w.collectedEvents.filter((e) -> e.event == "filename").map((e) -> e.filename).should.eql [ "test.txt" ]
 
   it "processes a folder", future withTempFolder (folder) ->
-    fs.mkdir("#{folder}/stuff")
+    fs.mkdirSync("#{folder}/stuff")
     fs.writeFileSync("#{folder}/stuff/one.txt", "one!")
     fs.writeFileSync("#{folder}/stuff/two.txt", "two!")
     w = archiveWriter()
