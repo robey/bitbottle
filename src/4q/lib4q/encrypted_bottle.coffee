@@ -18,10 +18,10 @@ ENCRYPTION_NAMES = {}
 ENCRYPTION_NAMES[ENCRYPTION_AES_256] = "AES-256"
 
 
-encryptedStreamForType = (encryptionType) ->
+encryptedStreamForType = (encryptionType, keyBuffer) ->
   switch encryptionType
     when ENCRYPTION_AES_256
-      Promise.promisify(crypto.randomBytes)(48).then (buffer) ->
+      (if keyBuffer? then Promise.resolve(keyBuffer) else Promise.promisify(crypto.randomBytes)(48)).then (buffer) ->
         key = buffer.slice(0, 32)
         iv = buffer.slice(32, 48)
         stream = crypto.createCipheriv("aes256", key, iv)
@@ -51,7 +51,8 @@ class EncryptedBottleWriter extends bottle_stream.BottleWriter
       header.addStringList(FIELDS.STRINGS.RECIPIENTS, @recipients)
     super(bottle_stream.TYPE_ENCRYPTED, header, objectModeRead: false, objectModeWrite: false)
     # make a single framed stream that we channel
-    @ready = encryptedStreamForType(@encryptionType).then ({ key, stream }) =>
+    keyBuffer = if @recipients.length == 0 then @encrypter else null
+    @ready = encryptedStreamForType(@encryptionType, keyBuffer).then ({ key, stream }) =>
       @encryptionKey = key
       @encryptedStream = stream
       Promise.all(
@@ -60,6 +61,8 @@ class EncryptedBottleWriter extends bottle_stream.BottleWriter
             @_process(toolkit.sourceStream(buffer))
           ), concurrency: 1)
       )
+    @ready.catch (error) =>
+      @emit "error", error
     @ready.then =>
       @_process(@encryptedStream)
  

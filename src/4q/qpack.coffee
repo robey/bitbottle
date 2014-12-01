@@ -1,6 +1,8 @@
+crypto = require "crypto"
 fs = require "fs"
 minimist = require "minimist"
 path = require "path"
+Promise = require "bluebird"
 sprintf = require "sprintf"
 stream = require "stream"
 strftime = require "strftime"
@@ -34,6 +36,9 @@ options:
         use snappy compression instead of LZMA2
     -H, --no-hash
         do not compute a check hash (let go and use the force)
+    -e <user>, --encrypt <user>
+        encrypt archive for a keybase user (may be used multiple times to
+        send to multiple recipients)
     --no-color
         turn off cool console colors
 """
@@ -41,8 +46,10 @@ options:
 COLORS = helpers.COLORS
 
 main = ->
+  keybaser = new keybaser.Keybaser()
+
   argv = minimist process.argv[2...],
-    alias: { "Z": "no-compress", "H": "no-hash", "S": "snappy" }
+    alias: { "Z": "no-compress", "H": "no-hash", "S": "snappy", "e": "encrypt" }
     boolean: [ "help", "version", "v", "q", "color", "compress", "snappy", "debug" ]
     default: { color: true, compress: true, hash: true }
   # minimist isn't great at decoding -Z:
@@ -74,81 +81,113 @@ main = ->
       okay = false
   if not okay then process.exit(1)
 
-  try
-    fd = fs.openSync(argv.o, "w")
-  catch error
-    display.displayError "Can't write #{argv.o}: #{helpers.messageForError(error)}"
-    if argv.debug then console.log error.stack
-    process.exit(1)
-  outStream = fs.createWriteStream(filename, fd: fd)
-  toolkit.promisify(outStream)
-
-  state =
-    fileCount: 0
-    totalBytesOut: 0
-    totalBytesIn: 0
-    currentFileBytes: 0
-    currentFileTotalBytes: 0
-    currentFilename: null
-  updater = new display.StatusUpdater()
-  countingOutStream = toolkit.countingStream()
-  countingOutStream.on "count", (n) ->
-    state.totalBytesOut = n
-    unless argv.q then updater.update statusMessage(state)
-  countingOutStream.pipe(outStream)
-  targetStream = countingOutStream
-
-  if argv.hash
-    hashBottle = new lib4q.HashBottleWriter(lib4q.HASH_SHA512)
-    hashBottle.pipe(countingOutStream)
-    targetStream = hashBottle
-
-  if argv.compress
-    compressionType = if argv.snappy then lib4q.COMPRESSION_SNAPPY else lib4q.COMPRESSION_LZMA2
-    compressedBottle = new lib4q.CompressedBottleWriter(compressionType)
-    compressedBottle.pipe(targetStream)
-    targetStream = compressedBottle
-
-  writer = new lib4q.ArchiveWriter()
-  writer.on "filename", (filename, header) ->
-    if argv.v
-      unless argv.q then updater.clear()
-      printFinishedFile(state)
-    state.currentFileBytes = 0
-    state.currentFileTotalBytes = header.size
-    state.currentFilename = filename
-    state.isFolder = header.folder
-    if not header.folder
-      state.fileCount += 1
-      state.totalBytesIn += header.size
-    unless argv.q then updater.update statusMessage(state)
-  writer.on "status", (filename, byteCount) ->
-    state.currentFileBytes = byteCount
-    unless argv.q then updater.update statusMessage(state)
-  writer.on "error", (error) ->
-    display.displayError "Unable to write archive: #{helpers.messageForError(error)}"
-    if argv.debug then console.log error.stack
-    process.exit(1)
-
-  promise = if argv._.length > 1
-    # multiple files: just make a fake folder
-    folderName = path.basename(argv.o, ".4q")
-    writer.archiveFiles(folderName, argv._)
+  (if argv.encrypt?
+    if not Array.isArray(argv.encrypt) then argv.encrypt = [ argv.encrypt ]
+    keybaser.check().catch (error) ->
+      display.displayError "Keybase error: #{helpers.messageForError(error)}"
+      if argv.debug then console.log error.stack
+      process.exit(1)
   else
-    writer.archiveFile(argv._[0])
-  promise.then (bottle) ->
-    bottle.pipe(targetStream)
-    outStream.finishPromise()
-  .then ->
-    if argv.v then printFinishedFile(state)
-    unless argv.q
-      updater.clear()
-      compressionStatus = if argv.compress then display.paint(" -> ", display.color(COLORS.file_size, display.humanize(state.totalBytesOut) + "B")) else ""
-      inStatus = display.color(COLORS.file_size, "(#{state.fileCount} files, #{display.humanize(state.totalBytesIn)}B)")
-      process.stdout.write "#{argv.o} #{inStatus}#{compressionStatus}\n"
+    Promise.resolve()
+  ).then ->
+    die = (error) ->
+      display.displayError "Unable to write #{argv.o}: #{helpers.messageForError(error)}"
+      if argv.debug then console.log error.stack
+      process.exit(1)
+
+    try
+      fd = fs.openSync(argv.o, "w")
+    catch error
+      die(error)
+    outStream = fs.createWriteStream(filename, fd: fd)
+    toolkit.promisify(outStream)
+
+    state =
+      fileCount: 0
+      totalBytesOut: 0
+      totalBytesIn: 0
+      currentFileBytes: 0
+      currentFileTotalBytes: 0
+      currentFilename: null
+    updater = new display.StatusUpdater()
+    countingOutStream = toolkit.countingStream()
+    countingOutStream.on "count", (n) ->
+      state.totalBytesOut = n
+      unless argv.q then updater.update statusMessage(state)
+    countingOutStream.pipe(outStream)
+    targetStream = countingOutStream
+
+    (if argv.encrypt?
+      encrypter = (recipient, buffer) ->
+        [ scheme, name ] = recipient.split(":")
+        if scheme != "keybase" then throw new Error("Expected keybase scheme, got #{scheme}")
+        keybaser.encrypt(buffer, name, updater: updater)
+      recipients = argv.encrypt.map (name) -> "keybase:#{name}"
+      encryptedBottle = new lib4q.EncryptedBottleWriter(lib4q.ENCRYPTION_AES_256, recipients, encrypter)
+      encryptedBottle.pipe(targetStream)
+      targetStream = encryptedBottle
+      encryptedBottle.on "error", die
+      encryptedBottle.ready
+    else if argv.password?
+      # this is really bad. don't use it.
+      Promise.promisify(crypto.pbkdf2)(argv.password, helpers.SALT, 10000, 48).then (keyBuffer) ->
+        encryptedBottle = new lib4q.EncryptedBottleWriter(lib4q.ENCRYPTION_AES_256, [], keyBuffer)
+        encryptedBottle.pipe(targetStream)
+        targetStream = encryptedBottle
+        encryptedBottle.on "error", die
+        encryptedBottle.ready
+    else
+      Promise.resolve()
+    ).then ->
+
+      if argv.hash
+        hashBottle = new lib4q.HashBottleWriter(lib4q.HASH_SHA512)
+        hashBottle.pipe(targetStream)
+        targetStream = hashBottle
+
+      if argv.compress
+        compressionType = if argv.snappy then lib4q.COMPRESSION_SNAPPY else lib4q.COMPRESSION_LZMA2
+        compressedBottle = new lib4q.CompressedBottleWriter(compressionType)
+        compressedBottle.pipe(targetStream)
+        targetStream = compressedBottle
+
+      writer = new lib4q.ArchiveWriter()
+      writer.on "filename", (filename, header) ->
+        if argv.v
+          unless argv.q then updater.clear()
+          printFinishedFile(state)
+        state.currentFileBytes = 0
+        state.currentFileTotalBytes = header.size
+        state.currentFilename = filename
+        state.isFolder = header.folder
+        if not header.folder
+          state.fileCount += 1
+          state.totalBytesIn += header.size
+        unless argv.q then updater.update statusMessage(state)
+      writer.on "status", (filename, byteCount) ->
+        state.currentFileBytes = byteCount
+        unless argv.q then updater.update statusMessage(state)
+      writer.on "error", die
+
+      promise = if argv._.length > 1
+        # multiple files: just make a fake folder
+        folderName = path.basename(argv.o, ".4q")
+        writer.archiveFiles(folderName, argv._)
+      else
+        writer.archiveFile(argv._[0])
+      promise.then (bottle) ->
+        bottle.pipe(targetStream)
+        outStream.finishPromise()
+      .then ->
+        if argv.v then printFinishedFile(state)
+        unless argv.q
+          updater.clear()
+          compressionStatus = if argv.compress then display.paint(" -> ", display.color(COLORS.file_size, display.humanize(state.totalBytesOut) + "B")) else ""
+          inStatus = display.color(COLORS.file_size, "(#{state.fileCount} files, #{display.humanize(state.totalBytesIn)}B)")
+          process.stdout.write "#{argv.o} #{inStatus}#{compressionStatus}\n"
   .catch (error) ->
-    display.displayError "Unable to write archive: #{helpers.messageForError(error)}"
-    if argv.debug then console.log err.stack
+    display.displayError "Unable to write #{argv.o}: #{helpers.messageForError(error)}"
+    if argv.debug then console.log error.stack
     process.exit(1)
   .done()
 
@@ -168,5 +207,7 @@ printFinishedFile = (state) ->
   bytes = if state.isFolder then "     " else display.color(COLORS.file_size, sprintf("%5s", display.humanize(state.currentFileTotalBytes)))
   process.stdout.write display.paint("  ", bytes, "  ", state.currentFilename).toString() + "\n"
 
+launchKeybase = () ->
+  
 
 exports.main = main

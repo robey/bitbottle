@@ -79,3 +79,23 @@ describe "EncryptedBottleWriter", ->
           toolkit.pipeToBuffer(stream)
         .then (buffer) ->
           buffer.should.eql DATA1
+
+    it "with a key", future ->
+      keyBuffer = new Buffer(48)
+      keyBuffer.fill(0)
+      es = new encrypted_bottle.EncryptedBottleWriter(encrypted_bottle.ENCRYPTION_AES_256, [ ], keyBuffer)
+      toolkit.sourceStream(DATA1).pipe(es)
+      toolkit.pipeToBuffer(es).then (buffer) ->
+        # now decrypt
+        bottle_stream.readBottleFromStream(toolkit.sourceStream(buffer))
+      .then (encryptedBottle) ->
+        encryptedBottle.type.should.eql bottle_stream.TYPE_ENCRYPTED
+        encryptedBottle.header.encryptionType.should.eql encrypted_bottle.ENCRYPTION_AES_256
+        encryptedBottle.header.recipients.should.eql [ ]
+        encryptedBottle.readKeys().then (keys) =>
+          Object.keys(keys).should.eql [ ]
+          encryptedBottle.decrypt(keyBuffer)
+        .then (stream) ->
+          toolkit.pipeToBuffer(stream)
+        .then (buffer) ->
+          buffer.should.eql DATA1

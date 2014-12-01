@@ -109,6 +109,7 @@ readBottleFromStream = (stream) ->
         new BottleReader(type, header, stream)
 
 readBottleHeader = (stream) ->
+  toolkit.promisify(stream)
   stream.readPromise(8).then (buffer) ->
     if not buffer? then throw new Error("End of stream")
     [0 ... 4].map (i) =>

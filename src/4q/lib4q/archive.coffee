@@ -90,6 +90,7 @@ class ArchiveReader extends events.EventEmitter
       when bottle_stream.TYPE_FILE
         if bottle.header.folder then @_scanFolder(bottle) else @_scanFile(bottle)
       when bottle_stream.TYPE_HASHED then @_scanHashed(bottle)
+      when bottle_stream.TYPE_ENCRYPTED then @_scanEncrypted(bottle)
       when bottle_stream.TYPE_COMPRESSED then @_scanCompressed(bottle)
       else
         @_skipBottle(bottle)
@@ -115,6 +116,12 @@ class ArchiveReader extends events.EventEmitter
     dataStream.pipe(sink)
     sink.finishPromise()
 
+  # given a map of (name -> buffer), where the buffer is an encrypted blob,
+  # try to find a name we recognize and can decrypt, and decrypt the buffer,
+  # returning it as a promise. reject the promise if we can't.
+  decryptKey: (keymap) ->
+    Promise.reject(new Error("Encrypted bottle; no keys"))
+
   _scanHashed: (bottle) ->
     bottle.validate().then ({ bottle: innerBottle, valid: validPromise, hex: hexPromise }) =>
       @scan(innerBottle).then =>
@@ -122,6 +129,14 @@ class ArchiveReader extends events.EventEmitter
           hexPromise.then (hex) =>
             @emit "hash", bottle, isValid, hex
 
+  _scanEncrypted: (bottle) ->
+    @emit "encrypt", bottle
+    bottle.readKeys().then (keymap) =>
+      @decryptKey(keymap).then (keyBuffer) =>
+        bottle.decrypt(keyBuffer).then (stream) =>
+          bottle_stream.readBottleFromStream(stream).then (bottle) =>
+            @scan(bottle)
+      
   _scanCompressed: (bottle) ->
     @emit "compress", bottle
     bottle.decompress().then (nextBottle) =>

@@ -11,13 +11,16 @@ display = require "./display"
 COLORS =
   annotations: "99c"
   executable: "red"
-  mode: "088"
-  user_group: "088"
-  timestamp: "blue"
   file_size: "green"
+  importante: "c66"
+  mode: "088"
   status_count: "0c8"
-  status_total_progress: "0c8"
   status_file_progress: "0af"
+  status_total_progress: "0c8"
+  timestamp: "blue"
+  user_group: "088"
+
+SALT = "4q"
 
 # this really should be part of js. :/
 copy = (obj, fields) ->
@@ -100,7 +103,7 @@ summaryLineForFile = (stats, prefix, isVerbose) ->
 
 exports.COLORS = COLORS
 exports.copy = copy
-exports.foreachSerial = foreachSerial
 exports.messageForError = messageForError
 exports.readStream = readStream
+exports.SALT = SALT
 exports.summaryLineForFile = summaryLineForFile
