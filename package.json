@@ -2,7 +2,7 @@
   "name": "4q",
   "version": "0.5.0",
   "description": "the 4q archive format",
-  "main": "./lib/4q/lib4q.js",
+  "main": "./lib/4q",
   "keywords": [
     "archive"
   ],
@@ -43,5 +43,12 @@
     "plz": "^2.0.3",
     "should": "*",
     "json5": "*"
-  }
+  },
+  "files": [
+    "bin",
+    "build.plz",
+    "docs",
+    "lib",
+    "test"
+  ]
 }

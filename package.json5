@@ -44,5 +44,13 @@
     "should": "*",
     // for building this file :)
     json5: "*",
-  }
+  },
+  "main": "./lib/4q",
+  "files": [
+    "bin",
+    "build.plz",
+    "docs",
+    "lib",
+    "test",
+  ]
 }
