@@ -1,3 +1,4 @@
+crypto = require "crypto"
 fs = require "fs"
 minimist = require "minimist"
 path = require "path"
@@ -9,6 +10,7 @@ util = require "util"
 
 display = require "./display"
 helpers = require "./helpers"
+keybaser = require "./keybaser"
 lib4q = require "./lib4q"
 
 NOW = Date.now()
@@ -36,6 +38,8 @@ options:
 """
 
 main = ->
+  keybaser = new keybaser.Keybaser()
+
   argv = minimist process.argv[2...],
     boolean: [ "help", "version", "q", "v", "color", "debug", "force" ],
     alias: { "f": "force" }
@@ -69,6 +73,8 @@ main = ->
     isVerbose: argv.v
     debug: argv.debug
     force: argv.force
+    password: argv.password
+    keybaser: keybaser
   unpackArchiveFiles(argv._, outputFolder, options).catch (error) ->
     display.displayError "Unable to unpack archive: #{helpers.messageForError(error)}"
     if argv.debug then console.log error.stack
@@ -100,6 +106,16 @@ unpackArchiveFile = (filename, outputFolder, options) ->
   ultimateOutputFolder = outputFolder
 
   reader = new lib4q.ArchiveReader()
+  reader.decryptKey = (keymap) ->
+    if Object.keys(keymap).length == 0
+      if not options.password? then throw new Error("No password provided.")
+      return Promise.promisify(crypto.pbkdf2)(options.password, helpers.SALT, 10000, 48)
+    options.keybaser.check().then ->
+      self = "keybase:#{options.keybaser.identity}"
+      allowed = Object.keys(keymap).join(", ")
+      if not keymap[self]? then throw new Error("No encryption key for #{self} (only: #{allowed})")
+      options.keybaser.decrypt(keymap[self])
+
   reader.on "start-bottle", (bottle) ->
     switch bottle.typeName()
       when "file", "folder"
@@ -133,9 +149,14 @@ unpackArchiveFile = (filename, outputFolder, options) ->
   reader.on "compress", (bottle) ->
     # FIXME display something if this is per-file
     if state.prefix.length == 0 then state.compression = bottle.header.compressionName
+  reader.on "encrypt", (bottle) ->
+    if state.prefix.length == 0
+      state.encryption = bottle.header.encryptionName
+      if bottle.header.recipients.length > 0 then state.encryptedFor = bottle.header.recipients.join(" & ")
   reader.on "error", (error) ->
     display.displayError "Can't write #{state.currentDestFilename or '?'}: #{helpers.messageForError(error)}"
-    if error.code == "EEXIST" then display.displayError "Use -f or --force to overwrite existing files."
+    code = error.code or error.cause?.code
+    if code == "EEXIST" then display.displayError "Use -f or --force to overwrite existing files."
     if options.debug then console.log error.stack
     process.exit(1)
 
@@ -165,12 +186,16 @@ unpackArchiveFile = (filename, outputFolder, options) ->
     updater.clear()
     byteTraffic = "#{display.humanize(state.totalBytesIn)} -> #{display.humanize(state.totalBytesOut)} bytes"
     annotations = []
+    importante = []
+    if state.encryption?
+      importante.push state.encryption + (if state.encryptedFor? then " for #{state.encryptedFor}" else "")
     if state.compression? then annotations.push state.compression
     if state.validHash? then annotations.push state.validHash
-    extras = if annotations.length > 0 and options.isVerbose then display.color(COLORS.annotations, "[#{annotations.join(", ")}] ") else ""
+    extras = if importante.length > 0 and options.isVerbose then display.color(COLORS.importante, " [#{importante.join("; ")}]") else ""
+    extras += if annotations.length > 0 and options.isVerbose then display.color(COLORS.annotations, " [#{annotations.join(", ")}]") else ""
     inStatus = display.paint(filename, " ", display.color(COLORS.file_size, "(#{display.humanize(state.totalBytesIn)})"))
     outStatus = display.paint(ultimateOutputFolder, " ", display.color(COLORS.file_size, "(#{state.totalFiles} files, #{display.humanize(state.totalBytesOut)}B)"))
-    process.stdout.write "#{filename} -> #{outStatus} #{extras}\n"
+    process.stdout.write "#{filename} -> #{outStatus}#{extras}\n"
 
 
 statusMessage = (state) ->
