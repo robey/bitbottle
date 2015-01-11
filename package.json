@@ -1,6 +1,6 @@
 {
   "name": "4q",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "the 4q archive format",
   "main": "./lib/4q",
   "keywords": [
@@ -50,5 +50,11 @@
     "docs",
     "lib",
     "test"
-  ]
+  ],
+  "bin": {
+    "qls": "bin/qls",
+    "qpack": "bin/qpack",
+    "qunpack": "bin/qunpack"
+  },
+
 }
