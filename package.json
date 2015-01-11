@@ -19,7 +19,8 @@
     }
   ],
   "scripts": {
-    "test": "./node_modules/plz/bin/plz -v clean build test"
+    "prepublish": "plz build",
+    "test": "plz -v clean build test"
   },
   "directories": {
     "doc": "docs"
@@ -55,6 +56,5 @@
     "qls": "bin/qls",
     "qpack": "bin/qpack",
     "qunpack": "bin/qunpack"
-  },
-
+  }
 }
