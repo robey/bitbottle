@@ -34,11 +34,13 @@ class Keybaser
       throw error
 
   encrypt: (key, target, options = {}) ->
-    args = [ "encrypt", "--message", key.toString("base64") ]
+    args = [ "encrypt", "-b" ]
     if options.sign then args.push "--sign"
     args.push target
     if options.updater? then options.updater.update "Encrypting key for #{target} ..."
-    p = child_process.spawn(KEYBASE_BINARY, args, stdio: [ process.stdin, "pipe", process.stderr ])
+    # can't just send 'spawn' a stream, because it counts on having an underlying file descriptor
+    p = child_process.spawn(KEYBASE_BINARY, args, stdio: [ "pipe", "pipe", process.stderr ])
+    toolkit.pipeFromBuffer(key, p.stdin)
     waitForProcess(p).then (code) =>
       if options.updater? then options.updater.update ""
       toolkit.pipeToBuffer(p.stdout).then (buffer) =>
@@ -46,14 +48,14 @@ class Keybaser
         buffer
 
   decrypt: (encrypted) ->
-    args = [ "decrypt", "--batch", "--message", encrypted ]
+    args = [ "decrypt" ]
     display.displayStatus "Decrypting key as #{@identity} ..."
-    p = child_process.spawn(KEYBASE_BINARY, args, stdio: [ process.stdin, "pipe", process.stderr ])
+    p = child_process.spawn(KEYBASE_BINARY, args, stdio: [ "pipe", "pipe", process.stderr ])
+    toolkit.pipeFromBuffer(encrypted, p.stdin)
     waitForProcess(p).then (code) =>
       if code != 0 then throw new Error("Keybase exit code #{code}")
       display.displayStatus ""
-      toolkit.pipeToBuffer(p.stdout).then (data) =>
-        new Buffer(data.toString(), "base64")
+      toolkit.pipeToBuffer(p.stdout)
 
 
 waitForProcess = (process) ->

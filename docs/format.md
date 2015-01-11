@@ -193,7 +193,7 @@ The only currently defined protocol is "keybase". The user identifier for keybas
 
 then the encrypted bottle has two recipients: "robey" on keybase, and "max" on keybase. The first data stream will be an encrypted message for robey; the second data stream is the same encrypted message for max; and the final stream is the encrypted bottle.
 
-The encrypted message is always the encryption key (for the final data stream) followed by its IV. For AES-256, this will be 48 bytes: 32 bytes of key followed by 16 bytes of IV. In the keybase protocol, the data stream itself will be an armored text message of the type keybase generates by default.
+The encrypted message is always the encryption key (for the final data stream) followed by its IV. For AES-256, this will be 48 bytes: 32 bytes of key followed by 16 bytes of IV. In the keybase protocol, the data stream itself will be a binary (not armored) message of the type keybase generates by default.
 
 N may be zero. There may be no recipients, in which case you must have received the encryption key and IV out-of-band in order to decrypt the bottle.
 
