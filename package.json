@@ -19,8 +19,10 @@
     }
   ],
   "scripts": {
-    "prepublish": "plz build",
-    "test": "plz -v clean build test"
+    "clean": "rm -rf lib test/lib",
+    "distclean": "npm run clean && rm -rf node_modules",
+    "prepublish": "babel --source-maps --out-dir lib src && babel --source-maps --out-dir test/lib test/src",
+    "test": "mocha -R spec --colors test/lib --timeout 60000 --slow 1000"
   },
   "directories": {
     "doc": "docs"
@@ -30,19 +32,19 @@
     "bluebird": "*",
     "errno": "*",
     "minimist": "*",
-    "posix": "^1.0.3",
+    "posix": "^2.0.0",
     "snappy": "*",
     "sprintf": "*",
     "stream-toolkit": "^2.0.0",
     "strftime": "*",
-    "xz": "^1.0.1"
+    "xz": "^1.1.1"
   },
   "devDependencies": {
-    "coffee-script": "^1.7",
+    "babel": "*",
     "mocha": "*",
     "mocha-sprinkles": "*",
-    "plz": "^2.0.3",
     "should": "*",
+    "source-map-support": "*",
     "json5": "*"
   },
   "files": [
@@ -51,10 +53,5 @@
     "docs",
     "lib",
     "test"
-  ],
-  "bin": {
-    "qls": "bin/qls",
-    "qpack": "bin/qpack",
-    "qunpack": "bin/qunpack"
-  }
+  ]
 }

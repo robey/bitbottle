@@ -1,6 +1,6 @@
 {
   "name": "4q",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "the 4q archive format",
   "main": "./lib/4q/lib4q.js",
   "keywords": [
@@ -19,7 +19,10 @@
     }
   ],
   "scripts": {
-    "test": "./node_modules/plz/bin/plz -v clean build test",
+    "clean": "rm -rf lib test/lib",
+    "distclean": "npm run clean && rm -rf node_modules",
+    "prepublish": "babel --source-maps --out-dir lib src && babel --source-maps --out-dir test/lib test/src",
+    "test": "mocha -R spec --colors test/lib --timeout 60000 --slow 1000"
   },
   "directories": {
     "doc": "docs",
@@ -29,19 +32,19 @@
     "bluebird": "*",
     "errno": "*",
     "minimist": "*",
-    "posix": "^1.0.3",
+    "posix": "^2.0.0",
     "snappy": "*",
     "sprintf": "*",
     "stream-toolkit": "^2.0.0",
     "strftime": "*",
-    "xz": "^1.0.1",
+    "xz": "^1.1.1",
   },
   "devDependencies": {
-    "coffee-script": "^1.7",
+    "babel": "*",
     "mocha": "*",
     "mocha-sprinkles": "*",
-    "plz": "^2.0.3",
     "should": "*",
+    "source-map-support": "*",
     // for building this file :)
     json5: "*",
   },
