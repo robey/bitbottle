@@ -23,7 +23,7 @@ A bottle is a small header and one or more data streams. Each data stream is eit
     +---------------------+---------------------------------------------- ...
     | Bottle header       | Data stream (nested bottle)
     | (type = compressed) | +-----------------+-------------------------- ...
-    |                     | | Bottle header   | Data stream (nested bottle) 
+    |                     | | Bottle header   | Data stream (nested bottle)
     |                     | | (type = folder) | +---------------+-------- ...
     |                     | |                 | | Bottle header | File
     |                     | |                 | | (type = file) | data...
@@ -99,6 +99,7 @@ Data streams are framed, so that streaming readers can clearly identify where ea
 
 For example, a frame of length 100 would be encoded as `0x64`, followed by 100 bytes of data. A frame of one million and one (1000001) bytes would be encoded as `0xc1 0x11 0x7a`: the first byte's highest 3 bits are `110`, indicating a 3-byte length in LSB order that decodes to `0xf4241`.
 
+```
     -------========~~~~~
     11110100001001000001
 
@@ -109,6 +110,7 @@ For example, a frame of length 100 would be encoded as `0x64`, followed by 100 b
     v  v     v         v
     ***~~~~~ ========  -------
     11000001 00010010 01111010
+```
 
 The final encoding form (`0xf0` - `0xfe`) is used as a shorthand for any power-of-2 block size, which is common for buffering large files. A 1GB file may be encoded using a 1MB buffer size, leading to 1MB frames. A 1MB (1048576 byte) frame would be encoded as `0xfd`: 2 to the power of (13 + 7), or `2**20`.
 
