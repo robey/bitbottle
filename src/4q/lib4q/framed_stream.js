@@ -40,7 +40,7 @@ class WritableFramedStream extends stream.Transform {
       this.innerTransform(this.buffer, (buffers) => {
         this.buffer = buffers;
         this.bufferSize = 0;
-        for (b of buffers) this.bufferSize += b.length;
+        for (let b of buffers) this.bufferSize += b.length;
         this.__drain(callback);
       });
     } else {
