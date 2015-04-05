@@ -1,3 +1,5 @@
+"use strict";
+
 const bottle_header = require("./bottle_header");
 const bottle_stream = require("./bottle_stream");
 const snappy = require("snappy");

@@ -1,3 +1,5 @@
+"use strict";
+
 const stream = require("stream");
 const toolkit = require("stream-toolkit");
 const util = require("util");

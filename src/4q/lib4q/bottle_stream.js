@@ -1,3 +1,5 @@
+"use strict";
+
 const bottle_header = require("./bottle_header");
 const framed_stream = require("./framed_stream");
 const Promise = require("bluebird");
