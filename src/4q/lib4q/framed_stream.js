@@ -68,8 +68,10 @@ class ReadableFramedStream extends stream.Readable {
 
   _read(bytes) {
     return readLength(this.stream).then((length) => {
+      this.stream.__log("frame: len=" + length);
       if (length == null || length == 0) return this.push(null);
-      this.stream.readPromise(length).then((data) => {
+      return this.stream.readPromise(length).then((data) => {
+        if (this.stream.__debug) this.stream.__log("frame: data=" + util.inspect(data));
         this.push(data);
       });
     });
@@ -132,11 +134,11 @@ function logBase2(x) {
 
 
 function readableFramedStream(stream) {
-  return toolkit.promisify(new ReadableFramedStream(stream));
+  return toolkit.promisify(new ReadableFramedStream(stream), { name: "ReadableFramedStream" });
 }
 
 function writableFramedStream(stream) {
-  return toolkit.promisify(new WritableFramedStream(stream));
+  return toolkit.promisify(new WritableFramedStream(stream), { name: "WritableFramedStream" });
 }
 
 

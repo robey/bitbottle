@@ -22,7 +22,7 @@ const BOTTLE_END = 0xff;
 class BottleWriter extends stream.Transform {
   constructor(type, header, options = {}) {
     super(options);
-    toolkit.promisify(this);
+    toolkit.promisify(this, { name: "BottleWriter(" + type + ")" });
     this._writableState.objectMode = options.objectModeWrite ? options.objectModeWrite : true;
     this._readableState.objectMode = options.objectModeRead ? options.objectModeRead : false;
     this._writeHeader(type, header);
@@ -125,7 +125,8 @@ function readBottleFromStream(stream) {
 }
 
 function readBottleHeader(stream) {
-  toolkit.promisify(stream);
+  toolkit.promisify(stream, { name: "BottleHeader" });
+  stream.__log("readBottleHeader");
   return stream.readPromise(8).then((buffer) => {
     if (!buffer) throw new Error("End of stream");
     for (let i = 0; i < 4; i++) {
@@ -136,7 +137,9 @@ function readBottleHeader(stream) {
     const type = (buffer[6] >> 4) & 0xf;
     const headerLength = ((buffer[6] & 0xf) * 256) + (buffer[7] & 0xff);
     return stream.readPromise(headerLength).then((headerBuffer) => {
-      return { type, header: bottle_header.unpack(headerBuffer) };
+      const rv = { type, header: bottle_header.unpack(headerBuffer) };
+      if (stream.__debug) stream.__log("readBottleHeader -> " + util.inspect(rv, { depth: null }));
+      return rv;
     });
   });
 }
@@ -151,7 +154,11 @@ class BottleReader extends stream.Readable {
     this.header = header;
     this.stream = stream;
     this.lastPromise = Promise.resolve();
-    toolkit.promisify(this);
+    toolkit.promisify(this, { name: "BottleReader(" + this.typeName() + ")" });
+  }
+
+  toString() {
+    return this.__name;
   }
 
   // usually subclasses will override this.
@@ -165,15 +172,23 @@ class BottleReader extends stream.Readable {
   }
 
   _read(size) {
+    this.__log("_read(" + size + ")");
     return this._nextStream();
   }
 
   _nextStream() {
     // must finish reading the last thing we generated, if any:
+    this.__log("wait for inner stream to end");
     return this.lastPromise.then(() => {
+      this.__log("inner stream ended! reading next data stream");
       return this._readDataStream();
     }).then((stream) => {
-      if (!stream) return this.push(null);
+      if (!stream) {
+        this.__log("end of stream");
+        this.push(null);
+        return;
+      }
+      this.__log("pushing new stream: " + (stream.__name || "?"));
       this.lastPromise = stream.endPromise();
       this.push(stream);
     }).catch((error) => {
@@ -183,6 +198,7 @@ class BottleReader extends stream.Readable {
 
   _readDataStream() {
     return this.stream.readPromise(1).then((buffer) => {
+      this.__log("stream header: " + buffer[0]);
       if (!buffer || buffer[0] == BOTTLE_END) return null;
       // put it back. it's part of a data stream!
       this.stream.unshift(buffer);

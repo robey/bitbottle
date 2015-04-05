@@ -12,20 +12,24 @@ class Header {
 
   addBool(id) {
     this.fields.push({ type: TYPE_BOOL, id, content: new Buffer(0) });
+    return this;
   }
 
   addNumber(id, number) {
     this.fields.push({ type: TYPE_ZINT, id, content: zint.encodePackedInt(number), number });
+    return this;
   }
 
   addString(id, str) {
     this.addStringList(id, [ str ]);
+    return this;
   }
 
   addStringList(id, list) {
     const buffers = list.slice(0, list.length - 1).map((str) => new Buffer(str + "\x00", "UTF-8"));
     buffers.push(new Buffer(list[list.length - 1], "UTF-8"));
     this.fields.push({ type: TYPE_STRING, id, content: Buffer.concat(buffers), list });
+    return this;
   }
 
   pack() {
