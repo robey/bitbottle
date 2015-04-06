@@ -30,6 +30,7 @@ class WritableFramedStream extends stream.Transform {
 
   _flush(callback) {
     this._drain(() => {
+      this.__log("flush end-of-stream marker");
       this.push(new Buffer([ 0 ]));
       callback();
     });
@@ -51,6 +52,7 @@ class WritableFramedStream extends stream.Transform {
   }
 
   __drain(callback) {
+    if (this.__debug) this.__log("flush frame, bytes=" + this.bufferSize);
     this.push(encodeLength(this.bufferSize));
     this.buffer.map((d) => this.push(d));
     this.buffer = [];

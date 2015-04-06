@@ -32,6 +32,7 @@ class BottleWriter extends stream.Transform {
 
   _writeHeader(type, header) {
     if (type < 0 || type > 15) throw new Error(`Bottle type out of range: ${type}`);
+    if (this.__debug) this.__log("writeHeader: type=" + type + " header=" + header.toString());
     const buffers = header.pack();
     const length = buffers.length == 0 ? 0 : buffers.map((b) => b.length).reduce((a, b) => a + b);
     if (length > 4095) throw new Error(`Header too long: ${length} > 4095`);
@@ -57,6 +58,7 @@ class BottleWriter extends stream.Transform {
   // ("subclasses" may use this to handle their own magic)
   _process(inStream) {
     const framedStream = framed_stream.writableFramedStream();
+    this.__log("writing stream into " + framedStream.__name);
     framedStream.on("data", (data) => this.push(data));
     inStream.pipe(framedStream);
     return framedStream.endPromise();
@@ -68,6 +70,7 @@ class BottleWriter extends stream.Transform {
   }
 
   _close() {
+    this.__log("end of bottle");
     this.push(new Buffer([ BOTTLE_END ]));
   }
 }
@@ -84,6 +87,7 @@ class LoneBottleWriter extends BottleWriter {
     super(type, header, options);
     // make a single framed stream that we channel
     this.framedStream = framed_stream.writableFramedStream();
+    this.__log("writing (lone) stream into " + this.framedStream.__name);
     this.framedStream.on("data", (data) => this.push(data));
   }
 
@@ -92,7 +96,7 @@ class LoneBottleWriter extends BottleWriter {
   }
 
   _flush(callback) {
-    this.framedStream.end()
+    this.framedStream.end();
     this.framedStream.on("end", () => {
       this._close();
       callback();
@@ -186,6 +190,8 @@ class BottleReader extends stream.Readable {
       return this._readDataStream();
     }).then((stream) => {
       if (!stream) {
+        // just in case we're tripping that io.js bug, read 0 bytes, to trigger the 'end' signal.
+        this.stream.read(0);
         this.__log("end of stream");
         this.push(null);
         return;
