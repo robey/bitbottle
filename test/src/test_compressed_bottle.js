@@ -1,7 +1,7 @@
 "use strict";
 
-const bottle_stream = require("../../lib/4q/lib4q/bottle_stream");
-const compressed_bottle = require("../../lib/4q/lib4q/compressed_bottle");
+const bottle_stream = require("../../lib/lib4q/bottle_stream");
+const compressed_bottle = require("../../lib/lib4q/compressed_bottle");
 const files = require("./files");
 const mocha_sprinkles = require("mocha-sprinkles");
 const toolkit = require("stream-toolkit");

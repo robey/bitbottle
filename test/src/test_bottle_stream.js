@@ -1,5 +1,5 @@
-const bottle_header = require("../../lib/4q/lib4q/bottle_header");
-const bottle_stream = require("../../lib/4q/lib4q/bottle_stream");
+const bottle_header = require("../../lib/lib4q/bottle_header");
+const bottle_stream = require("../../lib/lib4q/bottle_stream");
 const mocha_sprinkles = require("mocha-sprinkles");
 const Promise = require("bluebird");
 const stream = require("stream");

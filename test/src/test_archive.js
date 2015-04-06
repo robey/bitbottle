@@ -1,6 +1,6 @@
 "use strict";
 
-const archive = require("../../lib/4q/lib4q/archive");
+const archive = require("../../lib/lib4q/archive");
 const fs = require("fs");
 const mocha_sprinkles = require("mocha-sprinkles");
 const toolkit = require("stream-toolkit");

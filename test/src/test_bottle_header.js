@@ -1,4 +1,4 @@
-const bottle_header = require("../../lib/4q/lib4q/bottle_header");
+const bottle_header = require("../../lib/lib4q/bottle_header");
 const should = require("should");
 const toolkit = require("stream-toolkit");
 const util = require("util");

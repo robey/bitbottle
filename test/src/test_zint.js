@@ -1,7 +1,7 @@
 const should = require("should");
 const toolkit = require("stream-toolkit");
 const util = require("util");
-const zint = require("../../lib/4q/lib4q/zint");
+const zint = require("../../lib/lib4q/zint");
 
 require("source-map-support").install();
 

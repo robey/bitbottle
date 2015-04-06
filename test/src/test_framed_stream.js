@@ -1,4 +1,4 @@
-const framed_stream = require("../../lib/4q/lib4q/framed_stream");
+const framed_stream = require("../../lib/lib4q/framed_stream");
 const mocha_sprinkles = require("mocha-sprinkles");
 const Promise = require("bluebird");
 const stream = require("stream");

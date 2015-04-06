@@ -1,9 +1,9 @@
 "use strict";
 
-const bottle_stream = require("../../lib/4q/lib4q/bottle_stream");
+const bottle_stream = require("../../lib/lib4q/bottle_stream");
 const files = require("./files");
-const file_bottle = require("../../lib/4q/lib4q/file_bottle");
-const hash_bottle = require("../../lib/4q/lib4q/hash_bottle");
+const file_bottle = require("../../lib/lib4q/file_bottle");
+const hash_bottle = require("../../lib/lib4q/hash_bottle");
 const mocha_sprinkles = require("mocha-sprinkles");
 const Promise = require("bluebird");
 const toolkit = require("stream-toolkit");
