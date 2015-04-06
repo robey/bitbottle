@@ -1,16 +1,16 @@
 {
-  "name": "4q",
-  "version": "0.6.0",
-  "description": "the 4q archive format",
-  "main": "./lib/4q",
+  "name": "lib4q",
+  "version": "1.0.0",
+  "description": "read and write the 4q archive format",
+  "main": "./lib/lib4q.js",
   "keywords": [
     "archive"
   ],
   "author": "Robey Pointer <robeypointer@gmail.com>",
-  "homepage": "https://github.com/robey/4q",
+  "homepage": "https://github.com/robey/lib4q",
   "repository": {
     "type": "git",
-    "url": "git://github.com/robey/4q.git"
+    "url": "git://github.com/robey/lib4q.git"
   },
   "licenses": [
     {
@@ -22,21 +22,17 @@
     "clean": "rm -rf lib test/lib",
     "distclean": "npm run clean && rm -rf node_modules",
     "prepublish": "babel --source-maps --out-dir lib src && babel --source-maps --out-dir test/lib test/src",
-    "test": "mocha -R spec --colors test/lib --timeout 60000 --slow 1000"
+    "test": "mocha -R spec --colors test/lib"
   },
   "directories": {
     "doc": "docs"
   },
   "dependencies": {
-    "antsy": "*",
     "bluebird": "*",
-    "errno": "*",
-    "minimist": "*",
     "posix": "^2.0.0",
     "snappy": "*",
     "sprintf": "*",
     "stream-toolkit": "^2.0.0",
-    "strftime": "*",
     "xz": "^1.1.1"
   },
   "devDependencies": {
@@ -48,8 +44,6 @@
     "json5": "*"
   },
   "files": [
-    "bin",
-    "build.plz",
     "docs",
     "lib",
     "test"
