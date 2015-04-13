@@ -15,7 +15,7 @@ exports.readBottleFromStream = bottle_stream.readBottleFromStream;
 
 exports.CompressedBottleWriter = compressed_bottle.CompressedBottleWriter;
 
-exports.EncryptedBottleWriter = encrypted_bottle.EncryptedBottleWriter;
+exports.writeEncryptedBottle = encrypted_bottle.writeEncryptedBottle;
 
 exports.FileBottleWriter = file_bottle.FileBottleWriter;
 exports.fileHeaderFromStats = file_bottle.fileHeaderFromStats;

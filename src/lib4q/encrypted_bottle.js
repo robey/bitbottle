@@ -111,6 +111,11 @@ class EncryptedBottleWriter extends bottle_stream.BottleWriter {
   }
 }
 
+function writeEncryptedBottle(encryptionType, recipients = [], encrypter = null) {
+  const bottle = new EncryptedBottleWriter(encryptionType, recipients, encrypter);
+  return bottle.ready.then(() => bottle);
+}
+
 
 function decodeEncryptionHeader(h) {
   const rv = {};
@@ -177,3 +182,4 @@ exports.decodeEncryptionHeader = decodeEncryptionHeader;
 exports.EncryptedBottleReader = EncryptedBottleReader;
 exports.EncryptedBottleWriter = EncryptedBottleWriter;
 exports.ENCRYPTION_AES_256 = ENCRYPTION_AES_256;
+exports.writeEncryptedBottle = writeEncryptedBottle;
