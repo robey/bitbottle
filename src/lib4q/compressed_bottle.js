@@ -65,7 +65,7 @@ class CompressedBottleWriter extends bottle_stream.LoneBottleWriter {
     // each frame as a whole block of its own.
     //   this.usesFraming: -> framedStream (with inner compressor) ->
     //   otherwise: -> zStream -> framedStream ->
-    this.usesFraming = false
+    this.usesFraming = false;
     switch (this.compressionType) {
       case COMPRESSION_SNAPPY:
         this.usesFraming = true;

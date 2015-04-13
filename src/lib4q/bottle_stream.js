@@ -161,6 +161,7 @@ class BottleReader extends stream.Readable {
     this.stream = stream;
     this.lastPromise = Promise.resolve();
     toolkit.promisify(this, { name: "BottleReader(" + this.typeName() + ")" });
+    this.__log(`${this.__name} reading from ${this.stream.__name || "???"}`);
   }
 
   toString() {
