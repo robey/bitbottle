@@ -217,7 +217,7 @@ class ArchiveReader extends events.EventEmitter {
       if (s == null) return;
       const sink = new toolkit.NullSinkStream();
       s.pipe(sink);
-      return sink.endPromise().then(() => skipBottle(bottle));
+      return sink.endPromise().then(() => this._skipBottle(bottle));
     });
   }
 }
