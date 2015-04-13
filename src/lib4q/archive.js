@@ -147,7 +147,13 @@ class ArchiveReader extends events.EventEmitter {
         promise = this._skipBottle(bottle);
         break;
     }
-    return promise.then(() => this.emit("end-bottle", bottle));
+    return Promise.all([
+      // io.js requires a read() to notice end-of-stream.
+      promise.then(() => bottle.read(0)),
+      bottle.endPromise()
+    ]).then(() => {
+      this.emit("end-bottle", bottle);
+    });
   }
 
   // scan each internal stream recursively
