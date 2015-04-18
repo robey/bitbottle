@@ -15,14 +15,14 @@ const DATA1 = new Buffer("hello sailor!");
 describe("EncryptedBottleWriter", () => {
   describe("encrypts", () => {
     it("with no recipients", future(() => {
-      const es = new encrypted_bottle.EncryptedBottleWriter(encrypted_bottle.ENCRYPTION_AES_256);
+      const es = new encrypted_bottle.EncryptedBottleWriter(encrypted_bottle.ENCRYPTION_AES_256_CTR);
       toolkit.sourceStream(DATA1).pipe(es);
       return toolkit.pipeToBuffer(es).then((buffer) => {
         // now decrypt
         return bottle_stream.readBottleFromStream(toolkit.sourceStream(buffer));
       }).then((encryptedBottle) => {
         encryptedBottle.type.should.eql(bottle_stream.TYPE_ENCRYPTED);
-        encryptedBottle.header.encryptionType.should.eql(encrypted_bottle.ENCRYPTION_AES_256);
+        encryptedBottle.header.encryptionType.should.eql(encrypted_bottle.ENCRYPTION_AES_256_CTR);
         encryptedBottle.header.recipients.should.eql([]);
         return encryptedBottle.readKeys().then((keys) => {
           keys.should.eql({});
@@ -41,14 +41,18 @@ describe("EncryptedBottleWriter", () => {
         savedKey = buffer;
         return Promise.resolve(new Buffer("odie"));
       };
-      const es = new encrypted_bottle.EncryptedBottleWriter(encrypted_bottle.ENCRYPTION_AES_256, [ "garfield" ], encrypter);
+      const es = new encrypted_bottle.EncryptedBottleWriter(
+        encrypted_bottle.ENCRYPTION_AES_256_CTR,
+        [ "garfield" ],
+        encrypter
+      );
       toolkit.sourceStream(DATA1).pipe(es);
       return toolkit.pipeToBuffer(es).then((buffer) => {
         // now decrypt
         return bottle_stream.readBottleFromStream(toolkit.sourceStream(buffer));
       }).then((encryptedBottle) => {
         encryptedBottle.type.should.eql(bottle_stream.TYPE_ENCRYPTED);
-        encryptedBottle.header.encryptionType.should.eql(encrypted_bottle.ENCRYPTION_AES_256);
+        encryptedBottle.header.encryptionType.should.eql(encrypted_bottle.ENCRYPTION_AES_256_CTR);
         encryptedBottle.header.recipients.should.eql([ "garfield" ]);
         return encryptedBottle.readKeys().then((keys) => {
           Object.keys(keys).should.eql([ "garfield" ]);
@@ -70,14 +74,18 @@ describe("EncryptedBottleWriter", () => {
         buffer.copy(keyBuffer, 8);
         return Promise.resolve(keyBuffer);
       };
-      const es = new encrypted_bottle.EncryptedBottleWriter(encrypted_bottle.ENCRYPTION_AES_256, [ "garfield", "odie" ], encrypter);
+      const es = new encrypted_bottle.EncryptedBottleWriter(
+        encrypted_bottle.ENCRYPTION_AES_256_CTR,
+        [ "garfield", "odie" ],
+        encrypter
+      );
       toolkit.sourceStream(DATA1).pipe(es);
       return toolkit.pipeToBuffer(es).then((buffer) => {
         // now decrypt
         return bottle_stream.readBottleFromStream(toolkit.sourceStream(buffer));
       }).then((encryptedBottle) => {
         encryptedBottle.type.should.eql(bottle_stream.TYPE_ENCRYPTED);
-        encryptedBottle.header.encryptionType.should.eql(encrypted_bottle.ENCRYPTION_AES_256);
+        encryptedBottle.header.encryptionType.should.eql(encrypted_bottle.ENCRYPTION_AES_256_CTR);
         encryptedBottle.header.recipients.should.eql([ "garfield", "odie" ]);
         return encryptedBottle.readKeys().then((keys) => {
           Object.keys(keys).should.eql([ "garfield", "odie" ]);
@@ -94,14 +102,18 @@ describe("EncryptedBottleWriter", () => {
     it("with a key", future(() => {
       const keyBuffer = new Buffer(48);
       keyBuffer.fill(0);
-      const es = new encrypted_bottle.EncryptedBottleWriter(encrypted_bottle.ENCRYPTION_AES_256, [ ], keyBuffer);
+      const es = new encrypted_bottle.EncryptedBottleWriter(
+        encrypted_bottle.ENCRYPTION_AES_256_CTR,
+        [ ],
+        keyBuffer
+      );
       toolkit.sourceStream(DATA1).pipe(es);
       return toolkit.pipeToBuffer(es).then((buffer) => {
         // now decrypt
         return bottle_stream.readBottleFromStream(toolkit.sourceStream(buffer));
       }).then((encryptedBottle) => {
         encryptedBottle.type.should.eql(bottle_stream.TYPE_ENCRYPTED);
-        encryptedBottle.header.encryptionType.should.eql(encrypted_bottle.ENCRYPTION_AES_256);
+        encryptedBottle.header.encryptionType.should.eql(encrypted_bottle.ENCRYPTION_AES_256_CTR);
         encryptedBottle.header.recipients.should.eql([]);
         return encryptedBottle.readKeys().then((keys) => {
           Object.keys(keys).should.eql([]);

@@ -17,20 +17,20 @@ const FIELDS = {
   }
 };
 
-const ENCRYPTION_AES_256 = 0;
+const ENCRYPTION_AES_256_CTR = 0;
 
 const ENCRYPTION_NAMES = {
-  [ENCRYPTION_AES_256]: "AES-256"
+  [ENCRYPTION_AES_256_CTR]: "AES-256-CTR"
 };
 
 
 function encryptedStreamForType(encryptionType, keyBuffer) {
   switch (encryptionType) {
-    case ENCRYPTION_AES_256:
+    case ENCRYPTION_AES_256_CTR:
       return (keyBuffer ? Promise.resolve(keyBuffer) : Promise.promisify(crypto.randomBytes)(48)).then((buffer) => {
         const key = buffer.slice(0, 32);
         const iv = buffer.slice(32, 48);
-        const stream = crypto.createCipheriv("aes256", key, iv);
+        const stream = crypto.createCipheriv("aes-256-ctr", key, iv);
         return { key: buffer, stream };
       });
     default:
@@ -40,10 +40,10 @@ function encryptedStreamForType(encryptionType, keyBuffer) {
 
 function decryptedStreamForType(encryptionType, keyBuffer) {
   switch (encryptionType) {
-    case ENCRYPTION_AES_256:
+    case ENCRYPTION_AES_256_CTR:
       const key = keyBuffer.slice(0, 32);
       const iv = keyBuffer.slice(32, 48);
-      return crypto.createDecipheriv("aes256", key, iv);
+      return crypto.createDecipheriv("aes-256-ctr", key, iv);
     default:
       throw new Error(`Unknown encryption type: ${encryptionType}`);
   }
@@ -181,5 +181,5 @@ class EncryptedBottleReader extends bottle_stream.BottleReader {
 exports.decodeEncryptionHeader = decodeEncryptionHeader;
 exports.EncryptedBottleReader = EncryptedBottleReader;
 exports.EncryptedBottleWriter = EncryptedBottleWriter;
-exports.ENCRYPTION_AES_256 = ENCRYPTION_AES_256;
+exports.ENCRYPTION_AES_256_CTR = ENCRYPTION_AES_256_CTR;
 exports.writeEncryptedBottle = writeEncryptedBottle;
