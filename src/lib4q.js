@@ -34,4 +34,4 @@ exports.HASH_SHA512 = hash_bottle.HASH_SHA512;
 exports.COMPRESSION_LZMA2 = compressed_bottle.COMPRESSION_LZMA2;
 exports.COMPRESSION_SNAPPY = compressed_bottle.COMPRESSION_SNAPPY;
 
-exports.ENCRYPTION_AES_256 = encrypted_bottle.ENCRYPTION_AES_256;
+exports.ENCRYPTION_AES_256_CTR = encrypted_bottle.ENCRYPTION_AES_256_CTR;
