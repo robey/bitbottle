@@ -84,7 +84,7 @@ Unsigned integers are stored in the least number of bytes required, LSB order. S
 
 A boolean field is false by default, so if it's present, it always has a zero-length value and represents "true".
 
-A field is uniquely identified, per bottle type, by the field type and ID. So integer #0 is a different field from string #0, and string #0 in bottle type 3 is a different field from string #0 in bottle type 4. Each bottle defines the exhaustive list of fields for that bottle.
+A field is uniquely identified, per bottle type, by the field type and ID. So integer \#0 is a different field from string \#0, and string \#0 in bottle type 3 is a different field from string \#0 in bottle type 4. Each bottle defines the exhaustive list of fields for that bottle.
 
 
 ## Encoding of data streams
@@ -112,9 +112,9 @@ For example, a frame of length 100 would be encoded as `0x64`, followed by 100 b
     11000001 00010010 01111010
 ```
 
-The final encoding form (`0xf0` - `0xfe`) is used as a shorthand for any power-of-2 block size, which is common for buffering large files. A 1GB file may be encoded using a 1MB buffer size, leading to 1MB frames. A 1MB (1048576 byte) frame would be encoded as `0xfd`: 2 to the power of (13 + 7), or `2**20`.
+The final encoding form (`0xf0` - `0xfe`) is used as a shorthand for any power-of-2 block size, which is common for buffering large files. A 1GB file may be encoded using a 1MB buffer size, leading to 1MB frames. A 1MB (1048576 byte) frame length would be encoded as `0xfd`: 2 to the power of (13 + 7), or `2**20`.
 
-The frame size is usually dictated by the willingness of the encoder to buffer (or have pre-knowledge about the size of the file).
+The frame size is usually dictated by the willingness of the encoder to buffer (or have pre-knowledge about the size of the file). A decoder can treat each frame as a miniature stream, and is not required to buffer their complete contents.
 
 There are two special header bytes:
 
@@ -153,6 +153,7 @@ For a folder, the bottle's contents are nested bottles, representing the content
 
 For a file, the bottle contains exactly one data stream: the file's raw contents.
 
+
 ### Hashed data (1)
 
 Header fields:
@@ -167,16 +168,18 @@ There are two data streams in a hashed bottle:
 
 There is only one hash defined currently: SHA-512, with a 64-byte hash as the second data stream.
 
+
 ### Signed data (2)
 
 (Not implemented yet.)
+
 
 ### Encrypted data (3)
 
 Header fields:
 
 - encryption type [int 0]
-  - AES-256 [0]
+  - AES-256-CTR [0]
 - recipients [string 0]
 
 There are N + 1 data streams, where N is the number of recipients. The recipients' data streams come first, in the order listed, followed by the actual encrypted data.
@@ -201,6 +204,7 @@ N may be zero. There may be no recipients, in which case you must have received 
 
 The expected data flow for decryption is to identify which recipient is opening the bottle, ask them to decrypt their key message, and use the decrypted key and IV to decrypt the final data stream which contains the bottle.
 
+
 ### Compressed data (4)
 
 Header fields:
@@ -211,9 +215,11 @@ Header fields:
 
 There is only one data stream: a nested bottle as compressed data.
 
+
 ### Alternate versions (5)
 
 (Not implemented yet. This is reserved for use in cases where the same content may be encoded in multiple ways, and you only need to decode one. For example, a message encrypted with several different keys.)
+
 
 ### Partial (6)
 
