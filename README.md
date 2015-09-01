@@ -1,13 +1,13 @@
-# 4Q
+# 4bottle
 
-4Q: the final archive format.
+4Bottle: the final archive format.
 
-4Q is a data & file format for archiving collections of files & folders, like "tar", "zip", and "winrar". Its primary differentiating features are:
+4Bottle is a data & file format for archiving collections of files & folders, like "tar", "zip", and "winrar". Its primary differentiating features are:
 
 - All important unix/posix attributes are preserved (owner, group, permissions, create/modify timestamps).
 - The format is streamable: Files may be unpacked as an archive is read, and an archive may be written with minimal buffering.
 - Compression may occur per-file or over the whole archive, using snappy (very fast) or LZMA2 (very compact).
-- Modern crypto is used: SHA-512 for verification, and AES-256 for encryption. Encryption normally uses the keybase.io registry (and library), although the lib4q library allows for a pluggable key registry.
+- Modern crypto is used: SHA-512 for verification, and AES-256 for encryption. Encryption normally uses the keybase.io registry (and library), although the lib4bottle library allows for a pluggable key registry.
 
 ## Status
 

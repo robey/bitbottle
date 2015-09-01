@@ -1,34 +1,30 @@
 {
-  "name": "lib4q",
+  "name": "lib4bottle",
   "version": "1.0.0",
-  "description": "read and write the 4q archive format",
-  "main": "./lib/lib4q.js",
+  "description": "read and write the 4bottle archive format",
+  "main": "./lib/lib4bottle.js",
   "keywords": [
     "archive",
   ],
   "author": "Robey Pointer <robeypointer@gmail.com>",
-  "homepage": "https://github.com/robey/lib4q",
+  "homepage": "https://github.com/robey/lib4bottle",
   "repository": {
     "type": "git",
-    "url": "git://github.com/robey/lib4q.git",
+    "url": "git://github.com/robey/lib4bottle.git",
   },
-  "licenses": [
-    {
-      "type": "Apache License 2.0",
-      "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
-    }
-  ],
+  "license": "Apache-2.0",
   "scripts": {
+    "build": "npm run prepublish",
     "clean": "rm -rf lib test/lib",
     "distclean": "npm run clean && rm -rf node_modules",
-    "prepublish": "babel --source-maps --out-dir lib src && babel --source-maps --out-dir test/lib test/src",
+    "prepublish": "./package.js && babel --source-maps --out-dir lib src && babel --source-maps --out-dir test/lib test/src",
     "test": "mocha -R spec --colors test/lib"
   },
   "directories": {
     "doc": "docs",
   },
   "dependencies": {
-    "bluebird": "*",
+    "bluebird": "latest",
     "posix": "^2.0.0",
     "snappy": "*",
     "sprintf": "*",
@@ -36,7 +32,7 @@
     "xz": "^1.1.1",
   },
   "devDependencies": {
-    "babel": "*",
+    "babel": "latest",
     "mocha": "*",
     "mocha-sprinkles": "*",
     "should": "*",
