@@ -1,27 +1,26 @@
 "use strict";
 
-const bottle_header = require("./bottle_header");
-const framed_stream = require("./framed_stream");
-const Promise = require("bluebird");
-const stream = require("stream");
-const toolkit = require("stream-toolkit");
-const util = require("util");
-const zint = require("./zint");
+import Promise from "bluebird";
+import stream from "stream";
+import toolkit from "stream-toolkit";
+import * as bottle_header from "./bottle_header";
+import * as framed_stream from "./framed_stream";
+import * as zint from "./zint";
 
-const MAGIC = new Buffer([ 0xf0, 0x9f, 0x8d, 0xbc ]);
-const VERSION = 0x00;
+export const MAGIC = new Buffer([ 0xf0, 0x9f, 0x8d, 0xbc ]);
+export const VERSION = 0x00;
 
-const TYPE_FILE = 0;
-const TYPE_HASHED = 1;
-const TYPE_ENCRYPTED = 3;
-const TYPE_COMPRESSED = 4;
+export const TYPE_FILE = 0;
+export const TYPE_HASHED = 1;
+export const TYPE_ENCRYPTED = 3;
+export const TYPE_COMPRESSED = 4;
 
 const BOTTLE_END = 0xff;
 
 
 // Converts (Readable) stream objects into a stream of framed data blocks with
 // a 4Q bottle header/footer. Write Readable streams, read buffers.
-class BottleWriter extends stream.Transform {
+export class BottleWriter extends stream.Transform {
   constructor(type, header, options = {}) {
     super(options);
     toolkit.promisify(this, { name: "BottleWriter(" + type + ")" });
@@ -80,7 +79,7 @@ class BottleWriter extends stream.Transform {
 // header/footer. Write buffers, read buffers. This is a convenience version
 // of BottleWriter for the case (like a compression stream) where there will
 // be exactly one nested bottle.
-class LoneBottleWriter extends BottleWriter {
+export class LoneBottleWriter extends BottleWriter {
   constructor(type, header, options = {}) {
     if (options.objectModeRead == null) options.objectModeRead = false;
     if (options.objectModeWrite == null) options.objectModeWrite = false;
@@ -107,7 +106,7 @@ class LoneBottleWriter extends BottleWriter {
 
 // read a bottle from a stream, returning a BottleReader object, which is
 // a stream that provides sub-streams.
-function readBottleFromStream(stream) {
+export function readBottleFromStream(stream) {
   // avoid import loops.
   const file_bottle = require("./file_bottle");
   const hash_bottle = require("./hash_bottle");
@@ -153,7 +152,7 @@ function readBottleHeader(stream) {
 
 // stream that reads an underlying (buffer) stream, pulls out the header and
 // type, and generates data streams.
-class BottleReader extends stream.Readable {
+export class BottleReader extends stream.Readable {
   constructor(type, header, stream) {
     super({ objectMode: true });
     this.type = type;
@@ -215,14 +214,3 @@ class BottleReader extends stream.Readable {
     });
   }
 }
-
-
-exports.BottleReader = BottleReader;
-exports.BottleWriter = BottleWriter;
-exports.LoneBottleWriter = LoneBottleWriter;
-exports.MAGIC = MAGIC;
-exports.readBottleFromStream = readBottleFromStream;
-exports.TYPE_FILE = TYPE_FILE;
-exports.TYPE_HASHED = TYPE_HASHED;
-exports.TYPE_ENCRYPTED = TYPE_ENCRYPTED;
-exports.TYPE_COMPRESSED = TYPE_COMPRESSED;

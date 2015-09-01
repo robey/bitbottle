@@ -1,12 +1,11 @@
 "use strict";
 
-const bottle_header = require("./bottle_header");
-const bottle_stream = require("./bottle_stream");
-const snappy = require("snappy");
-const stream = require("stream");
-const toolkit = require("stream-toolkit");
-const util = require("util");
-const xz = require("xz");
+import snappy from "snappy";
+import stream from "stream";
+import toolkit from "stream-toolkit";
+import xz from "xz";
+import * as bottle_header from "./bottle_header";
+import * as bottle_stream from "./bottle_stream";
 
 const FIELDS = {
   NUMBERS: {
@@ -14,8 +13,8 @@ const FIELDS = {
   }
 };
 
-const COMPRESSION_LZMA2 = 0;
-const COMPRESSION_SNAPPY = 1;
+export const COMPRESSION_LZMA2 = 0;
+export const COMPRESSION_SNAPPY = 1;
 
 const COMPRESSION_NAMES = {
   [COMPRESSION_LZMA2]: "LZMA2",
@@ -53,7 +52,7 @@ function decompressionStreamForType(compressionType) {
 
 // Takes a Readable stream (usually a WritableBottleStream) and produces a new
 // Readable stream containing the compressed bottle.
-class CompressedBottleWriter extends bottle_stream.LoneBottleWriter {
+export class CompressedBottleWriter extends bottle_stream.LoneBottleWriter {
   constructor(compressionType) {
     super(
       bottle_stream.TYPE_COMPRESSED,
@@ -102,7 +101,7 @@ class CompressedBottleWriter extends bottle_stream.LoneBottleWriter {
 }
 
 
-function decodeCompressedHeader(h) {
+export function decodeCompressedHeader(h) {
   const rv = {};
   h.fields.forEach((field) => {
     switch (field.type) {
@@ -119,7 +118,7 @@ function decodeCompressedHeader(h) {
   return rv;
 }
 
-class CompressedBottleReader extends bottle_stream.BottleReader {
+export class CompressedBottleReader extends bottle_stream.BottleReader {
   constructor(header, stream) {
     super(bottle_stream.TYPE_COMPRESSED, header, stream);
   }
@@ -155,11 +154,3 @@ class SnappyDecompressor extends stream.Transform {
     });
   }
 }
-
-
-exports.COMPRESSION_LZMA2 = COMPRESSION_LZMA2;
-exports.COMPRESSION_SNAPPY = COMPRESSION_SNAPPY;
-
-exports.CompressedBottleReader = CompressedBottleReader;
-exports.CompressedBottleWriter = CompressedBottleWriter;
-exports.decodeCompressedHeader = decodeCompressedHeader;

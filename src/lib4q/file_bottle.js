@@ -1,10 +1,9 @@
 "use strict";
 
-const bottle_header = require("./bottle_header");
-const bottle_stream = require("./bottle_stream");
-const fs = require("fs");
-const posix = require("posix");
-const util = require("util");
+import * as bottle_header from "./bottle_header";
+import * as bottle_stream from "./bottle_stream";
+import fs from "fs";
+import posix from "posix";
 
 const FIELDS = {
   STRINGS: {
@@ -27,7 +26,7 @@ const FIELDS = {
 
 
 // build a file bottle header out of an fs.Stats object.
-function fileHeaderFromStats(filename, stats) {
+export function fileHeaderFromStats(filename, stats) {
   // for mysterious reasons, isDirectory() must be checked first, before it decays away.
   stats.folder = stats.isDirectory();
   stats.filename = filename;
@@ -46,7 +45,7 @@ function fileHeaderFromStats(filename, stats) {
   return stats;
 }
 
-function encodeFileHeader(stats, overrides) {
+export function encodeFileHeader(stats, overrides) {
   for (let key in overrides) stats[key] = overrides[key];
   const m = new bottle_header.Header();
   m.addString(FIELDS.STRINGS.FILENAME, stats.filename);
@@ -64,7 +63,7 @@ function encodeFileHeader(stats, overrides) {
   return m;
 }
 
-function decodeFileHeader(m) {
+export function decodeFileHeader(m) {
   const rv = { folder: false };
   m.fields.forEach((field) => {
     switch (field.type) {
@@ -117,22 +116,15 @@ function decodeFileHeader(m) {
 
 
 // wrap a single file stream (with its metadata) into a FileBottle.
-class FileBottleWriter extends bottle_stream.LoneBottleWriter {
+export class FileBottleWriter extends bottle_stream.LoneBottleWriter {
   constructor(header) {
     super(bottle_stream.TYPE_FILE, encodeFileHeader(header, { folder: false }));
   }
 }
 
 // FileBottle that contains multiple nested streams (usually other FileBottles).
-class FolderBottleWriter extends bottle_stream.BottleWriter {
+export class FolderBottleWriter extends bottle_stream.BottleWriter {
   constructor(header) {
     super(bottle_stream.TYPE_FILE, encodeFileHeader(header, { folder: true }));
   }
 }
-
-
-exports.decodeFileHeader = decodeFileHeader;
-exports.encodeFileHeader = encodeFileHeader;
-exports.FileBottleWriter = FileBottleWriter;
-exports.fileHeaderFromStats = fileHeaderFromStats;
-exports.FolderBottleWriter = FolderBottleWriter;

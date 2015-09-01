@@ -1,15 +1,14 @@
-const bottle_header = require("../../lib/lib4q/bottle_header");
-const bottle_stream = require("../../lib/lib4q/bottle_stream");
-const mocha_sprinkles = require("mocha-sprinkles");
-const Promise = require("bluebird");
-const stream = require("stream");
-const should = require("should");
-const toolkit = require("stream-toolkit");
-const util = require("util");
+"use strict";
 
-require("source-map-support").install();
+import Promise from "bluebird";
+import stream from "stream";
+import toolkit from "stream-toolkit";
+import { future } from "mocha-sprinkles";
+import * as bottle_header from "../../lib/lib4q/bottle_header";
+import * as bottle_stream from "../../lib/lib4q/bottle_stream";
 
-const future = mocha_sprinkles.future;
+import "should";
+import "source-map-support/register";
 
 const MAGIC_STRING = "f09f8dbc0000";
 

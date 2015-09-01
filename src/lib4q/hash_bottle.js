@@ -1,9 +1,10 @@
-const bottle_header = require("./bottle_header");
-const bottle_stream = require("./bottle_stream");
-const crypto = require("crypto");
-const stream = require("stream");
-const toolkit = require("stream-toolkit");
-const util = require("util");
+"use strict";
+
+import * as bottle_header from "./bottle_header";
+import * as bottle_stream from "./bottle_stream";
+import crypto from "crypto";
+import stream from "stream";
+import toolkit from "stream-toolkit";
 
 const FIELDS = {
   NUMBERS: {
@@ -11,7 +12,7 @@ const FIELDS = {
   }
 };
 
-const HASH_SHA512 = 0;
+export const HASH_SHA512 = 0;
 
 const HASH_NAMES = {
   [HASH_SHA512]: "SHA-512"
@@ -52,11 +53,11 @@ function hashStreamForType(hashType) {
 
 // Takes a Readable stream (usually a WritableBottleStream) and produces a new
 // Readable stream containing the original and its hash digest.
-class HashBottleWriter extends bottle_stream.BottleWriter {
+export class HashBottleWriter extends bottle_stream.BottleWriter {
   constructor(hashType) {
     super(
       bottle_stream.TYPE_HASHED,
-      new bottle_header.Header().addNumber(FIELDS.NUMBERS.HASH_TYPE, this.hashType),
+      new bottle_header.Header().addNumber(FIELDS.NUMBERS.HASH_TYPE, hashType),
       { objectModeRead: false, objectModeWrite: false }
     );
     this.hashType = hashType;
@@ -83,7 +84,7 @@ class HashBottleWriter extends bottle_stream.BottleWriter {
 }
 
 
-function decodeHashHeader(h) {
+export function decodeHashHeader(h) {
   const rv = {};
   h.fields.forEach((field) => {
     switch (field.type) {
@@ -100,7 +101,7 @@ function decodeHashHeader(h) {
   return rv;
 }
 
-class HashBottleReader extends bottle_stream.BottleReader {
+export class HashBottleReader extends bottle_stream.BottleReader {
   constructor(header, stream) {
     super(bottle_stream.TYPE_HASHED, header, stream);
   }
@@ -133,9 +134,3 @@ class HashBottleReader extends bottle_stream.BottleReader {
     });
   }
 }
-
-
-exports.decodeHashHeader = decodeHashHeader;
-exports.HASH_SHA512 = HASH_SHA512;
-exports.HashBottleReader = HashBottleReader;
-exports.HashBottleWriter = HashBottleWriter;

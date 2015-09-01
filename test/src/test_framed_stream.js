@@ -1,14 +1,14 @@
-const framed_stream = require("../../lib/lib4q/framed_stream");
-const mocha_sprinkles = require("mocha-sprinkles");
-const Promise = require("bluebird");
-const stream = require("stream");
-const should = require("should");
-const toolkit = require("stream-toolkit");
-const util = require("util");
+"use strict";
 
-require("source-map-support").install();
+import * as framed_stream from "../../lib/lib4q/framed_stream";
+import Promise from "bluebird";
+import stream from "stream";
+import toolkit from "stream-toolkit";
+import { future } from "mocha-sprinkles";
 
-const future = mocha_sprinkles.future;
+import "should";
+import "source-map-support";
+
 
 describe("WritableFramedStream", () => {
   it("writes a small frame", future(() => {

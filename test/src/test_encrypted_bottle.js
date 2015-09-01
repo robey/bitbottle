@@ -1,14 +1,14 @@
 "use strict";
 
-const bottle_stream = require("../../lib/lib4q/bottle_stream");
-const encrypted_bottle = require("../../lib/lib4q/encrypted_bottle");
-const file_bottle = require("../../lib/lib4q/file_bottle");
-const Promise = require("bluebird");
-const mocha_sprinkles = require("mocha-sprinkles");
-const toolkit = require("stream-toolkit");
-const util = require("util");
+import * as bottle_stream from "../../lib/lib4q/bottle_stream";
+import * as encrypted_bottle from "../../lib/lib4q/encrypted_bottle";
+import * as file_bottle from "../../lib/lib4q/file_bottle";
+import Promise from "bluebird";
+import toolkit from "stream-toolkit";
+import { future } from "mocha-sprinkles";
 
-const future = mocha_sprinkles.future;
+import "should";
+import "source-map-support/register";
 
 const DATA1 = new Buffer("hello sailor!");
 

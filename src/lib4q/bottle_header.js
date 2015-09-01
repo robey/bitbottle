@@ -1,11 +1,12 @@
-const util = require("util");
-const zint = require("./zint");
+"use strict";
 
-const TYPE_STRING = 0;
-const TYPE_ZINT = 2;
-const TYPE_BOOL = 3;
+import * as zint from "./zint";
 
-class Header {
+export const TYPE_STRING = 0;
+export const TYPE_ZINT = 2;
+export const TYPE_BOOL = 3;
+
+export class Header {
   constructor() {
     this.fields = [];
   }
@@ -60,7 +61,7 @@ class Header {
 }
 
 
-function unpack(buffer) {
+export function unpack(buffer) {
   const header = new Header();
   let i = 0;
   while (i < buffer.length) {
@@ -85,10 +86,3 @@ function unpack(buffer) {
   }
   return header;
 }
-
-
-exports.Header = Header;
-exports.TYPE_BOOL = TYPE_BOOL;
-exports.TYPE_STRING = TYPE_STRING;
-exports.TYPE_ZINT = TYPE_ZINT;
-exports.unpack = unpack;

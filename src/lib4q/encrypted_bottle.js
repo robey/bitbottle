@@ -1,12 +1,11 @@
 "use strict";
 
-const bottle_header = require("./bottle_header");
-const bottle_stream = require("./bottle_stream");
-const crypto = require("crypto");
-const Promise = require("bluebird");
-const stream = require("stream");
-const toolkit = require("stream-toolkit");
-const util = require("util");
+import * as bottle_header from "./bottle_header";
+import * as bottle_stream from "./bottle_stream";
+import crypto from "crypto";
+import Promise from "bluebird";
+import stream from "stream";
+import toolkit from "stream-toolkit";
 
 const FIELDS = {
   NUMBERS: {
@@ -17,7 +16,7 @@ const FIELDS = {
   }
 };
 
-const ENCRYPTION_AES_256_CTR = 0;
+export const ENCRYPTION_AES_256_CTR = 0;
 
 const ENCRYPTION_NAMES = {
   [ENCRYPTION_AES_256_CTR]: "AES-256-CTR"
@@ -64,7 +63,7 @@ function makeHeader(encryptionType, recipients) {
 // if recipients are given, 'encrypter' must be a function that encrypts a
 // buffer for a recipient:
 //     (recipient, buffer) -> promise(buffer)
-class EncryptedBottleWriter extends bottle_stream.BottleWriter {
+export class EncryptedBottleWriter extends bottle_stream.BottleWriter {
   constructor(encryptionType, recipients = [], encrypter = null) {
     super(
       bottle_stream.TYPE_ENCRYPTED,
@@ -111,13 +110,13 @@ class EncryptedBottleWriter extends bottle_stream.BottleWriter {
   }
 }
 
-function writeEncryptedBottle(encryptionType, recipients = [], encrypter = null) {
+export function writeEncryptedBottle(encryptionType, recipients = [], encrypter = null) {
   const bottle = new EncryptedBottleWriter(encryptionType, recipients, encrypter);
   return bottle.ready.then(() => bottle);
 }
 
 
-function decodeEncryptionHeader(h) {
+export function decodeEncryptionHeader(h) {
   const rv = {};
   h.fields.forEach((field) => {
     switch (field.type) {
@@ -143,7 +142,7 @@ function decodeEncryptionHeader(h) {
   return rv;
 }
 
-class EncryptedBottleReader extends bottle_stream.BottleReader {
+export class EncryptedBottleReader extends bottle_stream.BottleReader {
   constructor(header, stream) {
     super(bottle_stream.TYPE_ENCRYPTED, header, stream);
   }
@@ -176,10 +175,3 @@ class EncryptedBottleReader extends bottle_stream.BottleReader {
     ).then(() => this.keys);
   }
 }
-
-
-exports.decodeEncryptionHeader = decodeEncryptionHeader;
-exports.EncryptedBottleReader = EncryptedBottleReader;
-exports.EncryptedBottleWriter = EncryptedBottleWriter;
-exports.ENCRYPTION_AES_256_CTR = ENCRYPTION_AES_256_CTR;
-exports.writeEncryptedBottle = writeEncryptedBottle;

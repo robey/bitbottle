@@ -1,9 +1,8 @@
 "use strict";
 
-const bottle_stream = require("../../lib/lib4q/bottle_stream");
-const file_bottle = require("../../lib/lib4q/file_bottle");
-const toolkit = require("stream-toolkit");
-const util = require("util");
+import toolkit from "stream-toolkit";
+import * as bottle_stream from "../../lib/lib4q/bottle_stream";
+import * as file_bottle from "../../lib/lib4q/file_bottle";
 
 const KNOWN_FILES = {
   "file.txt": {
@@ -16,7 +15,7 @@ const KNOWN_FILES = {
 };
 
 // write a file bottle into a buffer.
-function writeFile(filename) {
+export function writeFile(filename) {
   const data = KNOWN_FILES[filename].data;
   const bottleWriter = new file_bottle.FileBottleWriter({ filename: filename, size: data.length });
   toolkit.sourceStream(data).pipe(bottleWriter);
@@ -28,7 +27,7 @@ function writeFile(filename) {
 }
 
 // given a decoded file bottle, validate that it contains the right data.
-function validateFile(fileBottle, filename) {
+export function validateFile(fileBottle, filename) {
   const data = KNOWN_FILES[filename].data;
   fileBottle.type.should.eql(bottle_stream.TYPE_FILE);
   fileBottle.header.filename.should.eql(filename);
@@ -48,7 +47,7 @@ function validateFile(fileBottle, filename) {
 }
 
 // read a file bottle out of another bottle.
-function readFile(bottle, filename) {
+export function readFile(bottle, filename) {
   return bottle.readPromise().then((fileStream) => {
     return bottle_stream.readBottleFromStream(fileStream).then((fileBottle) => {
       return validateFile(fileBottle, filename);
@@ -61,8 +60,3 @@ function readFile(bottle, filename) {
     });
   });
 }
-
-
-exports.readFile = readFile;
-exports.validateFile = validateFile;
-exports.writeFile = writeFile;

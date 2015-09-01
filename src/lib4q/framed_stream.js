@@ -1,9 +1,8 @@
 "use strict";
 
-const stream = require("stream");
-const toolkit = require("stream-toolkit");
-const util = require("util");
-const zint = require("./zint");
+import stream from "stream";
+import toolkit from "stream-toolkit";
+import * as zint from "./zint";
 
 const DEFAULT_BLOCK_SIZE = Math.pow(2, 20);  // 1MB
 
@@ -137,14 +136,10 @@ function logBase2(x) {
 }
 
 
-function readableFramedStream(stream) {
+export function readableFramedStream(stream) {
   return toolkit.promisify(new ReadableFramedStream(stream), { name: "ReadableFramedStream" });
 }
 
-function writableFramedStream(stream) {
+export function writableFramedStream(stream) {
   return toolkit.promisify(new WritableFramedStream(stream), { name: "WritableFramedStream" });
 }
-
-
-exports.readableFramedStream = readableFramedStream;
-exports.writableFramedStream = writableFramedStream;

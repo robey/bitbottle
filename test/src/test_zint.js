@@ -1,9 +1,10 @@
-const should = require("should");
-const toolkit = require("stream-toolkit");
-const util = require("util");
-const zint = require("../../lib/lib4q/zint");
+"use strict";
 
-require("source-map-support").install();
+import toolkit from "stream-toolkit";
+import * as zint from "../../lib/lib4q/zint";
+
+import "should";
+import "source-map-support/register";
 
 describe("zint", () => {
   it("encode", () => {

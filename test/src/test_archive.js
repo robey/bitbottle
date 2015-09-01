@@ -1,15 +1,12 @@
 "use strict";
 
-const archive = require("../../lib/lib4q/archive");
-const fs = require("fs");
-const mocha_sprinkles = require("mocha-sprinkles");
-const toolkit = require("stream-toolkit");
-const util = require("util");
+import * as archive from "../../lib/lib4q/archive";
+import fs from "fs";
+import toolkit from "stream-toolkit";
+import { future, withTempFolder } from "mocha-sprinkles";
 
-require("source-map-support").install();
-
-const future = mocha_sprinkles.future;
-const withTempFolder = mocha_sprinkles.withTempFolder;
+import "should";
+import "source-map-support/register";
 
 function archiveWriter() {
   const w = new archive.ArchiveWriter();

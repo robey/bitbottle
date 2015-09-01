@@ -1,7 +1,10 @@
-const bottle_header = require("../../lib/lib4q/bottle_header");
-const should = require("should");
-const toolkit = require("stream-toolkit");
-const util = require("util");
+"use strict";
+
+import * as bottle_header from "../../lib/lib4q/bottle_header";
+import toolkit from "stream-toolkit";
+
+import "should";
+import "source-map-support/register";
 
 describe("bottle_header", () => {
   it("pack", () => {

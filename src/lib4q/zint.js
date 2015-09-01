@@ -1,8 +1,6 @@
 "use strict";
 
-const util = require("util");
-
-function encodePackedInt(number) {
+export function encodePackedInt(number) {
   if (number < 0) throw new Error("Unsigned ints only, plz");
   const bytes = [];
   while (number > 0xff) {
@@ -14,7 +12,7 @@ function encodePackedInt(number) {
   return new Buffer(bytes);
 }
 
-function decodePackedInt(buffer) {
+export function decodePackedInt(buffer) {
   let rv = 0;
   let multiplier = 1;
 
@@ -24,7 +22,3 @@ function decodePackedInt(buffer) {
   }
   return rv;
 }
-
-
-exports.decodePackedInt = decodePackedInt;
-exports.encodePackedInt = encodePackedInt;

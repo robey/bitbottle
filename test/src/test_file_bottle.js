@@ -1,16 +1,13 @@
 "use strict";
 
-const bottle_stream = require("../../lib/lib4q/bottle_stream");
-const file_bottle = require("../../lib/lib4q/file_bottle");
-const fs = require("fs");
-const mocha_sprinkles = require("mocha-sprinkles");
-const toolkit = require("stream-toolkit");
-const util = require("util");
+import * as bottle_stream from "../../lib/lib4q/bottle_stream";
+import * as file_bottle from "../../lib/lib4q/file_bottle";
+import fs from "fs";
+import toolkit from "stream-toolkit";
+import { future, withTempFolder } from "mocha-sprinkles";
 
-require("source-map-support").install();
-
-const future = mocha_sprinkles.future;
-const withTempFolder = mocha_sprinkles.withTempFolder;
+import "should";
+import "source-map-support/register";
 
 describe("FileBottleWriter", () => {
   it("writes and decodes from data", future(() => {

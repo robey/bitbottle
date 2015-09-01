@@ -1,17 +1,15 @@
 "use strict";
 
-const bottle_stream = require("../../lib/lib4q/bottle_stream");
-const files = require("./files");
-const file_bottle = require("../../lib/lib4q/file_bottle");
-const hash_bottle = require("../../lib/lib4q/hash_bottle");
-const mocha_sprinkles = require("mocha-sprinkles");
-const Promise = require("bluebird");
-const toolkit = require("stream-toolkit");
-const util = require("util");
+import Promise from "bluebird";
+import toolkit from "stream-toolkit";
+import { future } from "mocha-sprinkles";
+import * as bottle_stream from "../../lib/lib4q/bottle_stream";
+import * as files from "./files";
+import * as file_bottle from "../../lib/lib4q/file_bottle";
+import * as hash_bottle from "../../lib/lib4q/hash_bottle";
 
-require("source-map-support").install();
-
-const future = mocha_sprinkles.future;
+import "should";
+import "source-map-support/register";
 
 describe("HashBottleWriter", () => {
   it("writes and hashes a file stream", future(() => {

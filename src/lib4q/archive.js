@@ -1,18 +1,17 @@
 "use strict";
 
-const bottle_stream = require("./bottle_stream");
-const events = require("events");
-const file_bottle = require("./file_bottle");
-const fs = require("fs");
-const path = require("path");
-const Promise = require("bluebird");
-const stream = require("stream");
-const toolkit = require("stream-toolkit");
-const util = require("util");
+import events from "events";
+import fs from "fs";
+import path from "path";
+import Promise from "bluebird";
+import stream from "stream";
+import toolkit from "stream-toolkit";
+import * as bottle_stream from "./bottle_stream";
+import * as file_bottle from "./file_bottle";
 
-fs.openPromise = Promise.promisify(fs.open);
-fs.readdirPromise = Promise.promisify(fs.readdir);
-fs.statPromise = Promise.promisify(fs.stat);
+const openPromise = Promise.promisify(fs.open);
+const readdirPromise = Promise.promisify(fs.readdir);
+const statPromise = Promise.promisify(fs.stat);
 
 // higher-level API for maniplating 4Q archives of files & folders.
 
@@ -22,7 +21,7 @@ fs.statPromise = Promise.promisify(fs.stat);
  *   - "status", (filename, byteCount) -> current # of bytes read from the current file
  *   - "error", (error) -> an error occurred during the data streaming
  */
-class ArchiveWriter extends events.EventEmitter {
+export class ArchiveWriter extends events.EventEmitter {
   constructor() {
     super();
   }
@@ -53,12 +52,12 @@ class ArchiveWriter extends events.EventEmitter {
 
   _processFile(filename, prefix) {
     const basename = path.basename(filename);
-    return fs.statPromise(filename).then((stats) => {
+    return statPromise(filename).then((stats) => {
       const header = file_bottle.fileHeaderFromStats(basename, stats);
       const displayName = (prefix ? path.join(prefix, basename) : basename) + (header.folder ? "/" : "");
       this.emit("filename", displayName, header);
       if (header.folder) return this._processFolder(filename, displayName, header);
-      return fs.openPromise(filename, "r").then((fd) => {
+      return openPromise(filename, "r").then((fd) => {
         const countingFileStream = toolkit.countingStream();
         countingFileStream.on("count", (n) => {
           this.emit("status", displayName, n);
@@ -71,7 +70,7 @@ class ArchiveWriter extends events.EventEmitter {
   }
 
   _processFolder(folderName, prefix, header, files = null) {
-    return (files ? Promise.resolve(files) : fs.readdirPromise(folderName)).then((files) => {
+    return (files ? Promise.resolve(files) : readdirPromise(folderName)).then((files) => {
       const folderBottle = new file_bottle.FolderBottleWriter(header);
       // fill the bottle in the background, closing it when done.
       Promise.map(files, (filename) => {
@@ -116,7 +115,7 @@ class ArchiveWriter extends events.EventEmitter {
  * - processFile(dataStream) -> handle contents of a file, return a promise for completion
  * - decryptKey(keyMap) -> decrypt one of these buffers if possible
  */
-class ArchiveReader extends events.EventEmitter {
+export class ArchiveReader extends events.EventEmitter {
   constructor() {
     super();
   }
