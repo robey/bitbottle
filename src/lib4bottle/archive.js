@@ -121,7 +121,7 @@ export class ArchiveReader extends events.EventEmitter {
   }
 
   scanStream(inStream) {
-    return bottle_stream.readBottleFromStream(inStream).then((bottle) => {
+    return bottle_stream.readBottleFromStream(inStream).then(bottle => {
       return this.scan(bottle);
     });
   }

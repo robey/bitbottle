@@ -3,6 +3,7 @@
 import Promise from "bluebird";
 import stream from "stream";
 import toolkit from "stream-toolkit";
+import util from "util";
 import * as bottle_header from "./bottle_header";
 import * as framed_stream from "./framed_stream";
 import * as zint from "./zint";
@@ -18,8 +19,10 @@ export const TYPE_COMPRESSED = 4;
 const BOTTLE_END = 0xff;
 
 
-// Converts (Readable) stream objects into a stream of framed data blocks with
-// a 4Q bottle header/footer. Write Readable streams, read buffers.
+/*
+ * Converts (Readable) stream objects into a stream of framed data blocks with
+ * a 4bottle header/footer. Write Readable streams, read buffers.
+ */
 export class BottleWriter extends stream.Transform {
   constructor(type, header, options = {}) {
     super(options);

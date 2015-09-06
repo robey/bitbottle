@@ -1,8 +1,8 @@
 "use strict";
 
-import * as bottle_stream from "../../lib/lib4q/bottle_stream";
-import * as encrypted_bottle from "../../lib/lib4q/encrypted_bottle";
-import * as file_bottle from "../../lib/lib4q/file_bottle";
+import * as bottle_stream from "../../lib/lib4bottle/bottle_stream";
+import * as encrypted_bottle from "../../lib/lib4bottle/encrypted_bottle";
+import * as file_bottle from "../../lib/lib4bottle/file_bottle";
 import Promise from "bluebird";
 import toolkit from "stream-toolkit";
 import { future } from "mocha-sprinkles";

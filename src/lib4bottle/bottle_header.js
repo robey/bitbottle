@@ -1,5 +1,6 @@
 "use strict";
 
+import util from "util";
 import * as zint from "./zint";
 
 export const TYPE_STRING = 0;

@@ -1,7 +1,7 @@
 "use strict";
 
-import * as bottle_stream from "../../lib/lib4q/bottle_stream";
-import * as file_bottle from "../../lib/lib4q/file_bottle";
+import * as bottle_stream from "../../lib/lib4bottle/bottle_stream";
+import * as file_bottle from "../../lib/lib4bottle/file_bottle";
 import fs from "fs";
 import toolkit from "stream-toolkit";
 import { future, withTempFolder } from "mocha-sprinkles";

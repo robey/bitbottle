@@ -110,17 +110,17 @@ export class HashBottleReader extends bottle_stream.BottleReader {
     return `hashed/${HASH_NAMES[this.header.hashType]}`;
   }
 
-  // returns a promise: { bottle: BottleReader, valid: Promise(Bool) }
+  // returns a promise: { bottle: BottleReader, valid: Promise(Bool), hex: Promise(String) }
   // - bottle: the inner stream (another bottle)
   // - valid: a promise resolving to true/false after the bottle is finished,
   //     true if the hash validated correctly, false if not
   validate() {
     const hashStream = hashStreamForType(this.header.hashType);
-    return this.readPromise().then((innerStream) => {
+    return this.readPromise().then(innerStream => {
       innerStream.pipe(hashStream);
-      return bottle_stream.readBottleFromStream(hashStream).then((innerBottle) => {
+      return bottle_stream.readBottleFromStream(hashStream).then(innerBottle => {
         const hashPromise = innerBottle.endPromise().then(() => {
-          return this.readPromise().then((digestStream) => {
+          return this.readPromise().then(digestStream => {
             return toolkit.pipeToBuffer(digestStream).then((digestBuffer) => {
               return digestBuffer.toString("hex");
             });

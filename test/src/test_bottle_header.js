@@ -1,6 +1,6 @@
 "use strict";
 
-import * as bottle_header from "../../lib/lib4q/bottle_header";
+import * as bottle_header from "../../lib/lib4bottle/bottle_header";
 import toolkit from "stream-toolkit";
 
 import "should";

@@ -130,7 +130,7 @@ export class CompressedBottleReader extends bottle_stream.BottleReader {
   decompress() {
     const zStream = decompressionStreamForType(this.header.compressionType);
     toolkit.promisify(zStream, { name: COMPRESSION_NAMES[this.compressionType] });
-    return this.readPromise().then((compressedStream) => {
+    return this.readPromise().then(compressedStream => {
       compressedStream.pipe(zStream);
       return bottle_stream.readBottleFromStream(zStream);
     });

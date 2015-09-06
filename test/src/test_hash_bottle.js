@@ -3,10 +3,10 @@
 import Promise from "bluebird";
 import toolkit from "stream-toolkit";
 import { future } from "mocha-sprinkles";
-import * as bottle_stream from "../../lib/lib4q/bottle_stream";
+import * as bottle_stream from "../../lib/lib4bottle/bottle_stream";
 import * as files from "./files";
-import * as file_bottle from "../../lib/lib4q/file_bottle";
-import * as hash_bottle from "../../lib/lib4q/hash_bottle";
+import * as file_bottle from "../../lib/lib4bottle/file_bottle";
+import * as hash_bottle from "../../lib/lib4bottle/hash_bottle";
 
 import "should";
 import "source-map-support/register";

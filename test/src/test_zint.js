@@ -1,7 +1,7 @@
 "use strict";
 
 import toolkit from "stream-toolkit";
-import * as zint from "../../lib/lib4q/zint";
+import * as zint from "../../lib/lib4bottle/zint";
 
 import "should";
 import "source-map-support/register";

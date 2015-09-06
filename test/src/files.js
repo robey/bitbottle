@@ -1,8 +1,8 @@
 "use strict";
 
 import toolkit from "stream-toolkit";
-import * as bottle_stream from "../../lib/lib4q/bottle_stream";
-import * as file_bottle from "../../lib/lib4q/file_bottle";
+import * as bottle_stream from "../../lib/lib4bottle/bottle_stream";
+import * as file_bottle from "../../lib/lib4bottle/file_bottle";
 
 const KNOWN_FILES = {
   "file.txt": {

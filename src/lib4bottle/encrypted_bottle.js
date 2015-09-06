@@ -155,7 +155,7 @@ export class EncryptedBottleReader extends bottle_stream.BottleReader {
   // *must be called after 'readKeys'*
   decrypt(keyBuffer) {
     const stream = decryptedStreamForType(this.header.encryptionType, keyBuffer);
-    return this.readPromise().then((innerStream) => {
+    return this.readPromise().then(innerStream => {
       innerStream.pipe(stream);
       return stream;
     });

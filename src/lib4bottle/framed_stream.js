@@ -2,6 +2,7 @@
 
 import stream from "stream";
 import toolkit from "stream-toolkit";
+import util from "util";
 import * as zint from "./zint";
 
 const DEFAULT_BLOCK_SIZE = Math.pow(2, 20);  // 1MB
@@ -39,7 +40,7 @@ class WritableFramedStream extends stream.Transform {
     if (this.bufferSize == 0) return callback();
     // hook: let the caller do a final transform on the buffers before we calculate the length.
     if (this.innerTransform) {
-      this.innerTransform(this.buffer, (buffers) => {
+      this.innerTransform(this.buffer, buffers => {
         this.buffer = buffers;
         this.bufferSize = 0;
         for (let b of buffers) this.bufferSize += b.length;
@@ -70,10 +71,10 @@ class ReadableFramedStream extends stream.Readable {
   }
 
   _read(bytes) {
-    return readLength(this.stream).then((length) => {
+    return readLength(this.stream).then(length => {
       this.stream.__log("frame: len=" + length);
       if (length == null || length == 0) return this.push(null);
-      return this.stream.readPromise(length).then((data) => {
+      return this.stream.readPromise(length).then(data => {
         if (this.stream.__debug) this.stream.__log("frame: data=" + util.inspect(data));
         this.push(data);
       });

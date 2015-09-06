@@ -1,6 +1,6 @@
 "use strict";
 
-import * as framed_stream from "../../lib/lib4q/framed_stream";
+import * as framed_stream from "../../lib/lib4bottle/framed_stream";
 import Promise from "bluebird";
 import stream from "stream";
 import toolkit from "stream-toolkit";

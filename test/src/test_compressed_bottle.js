@@ -3,8 +3,8 @@
 import toolkit from "stream-toolkit";
 import { future } from "mocha-sprinkles";
 import { validateFile, writeFile } from "./files";
-import * as bottle_stream from "../../lib/lib4q/bottle_stream";
-import * as compressed_bottle from "../../lib/lib4q/compressed_bottle";
+import * as bottle_stream from "../../lib/lib4bottle/bottle_stream";
+import * as compressed_bottle from "../../lib/lib4bottle/compressed_bottle";
 
 import "should";
 import "source-map-support/register";

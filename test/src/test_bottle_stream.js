@@ -4,8 +4,8 @@ import Promise from "bluebird";
 import stream from "stream";
 import toolkit from "stream-toolkit";
 import { future } from "mocha-sprinkles";
-import * as bottle_header from "../../lib/lib4q/bottle_header";
-import * as bottle_stream from "../../lib/lib4q/bottle_stream";
+import * as bottle_header from "../../lib/lib4bottle/bottle_header";
+import * as bottle_stream from "../../lib/lib4bottle/bottle_stream";
 
 import "should";
 import "source-map-support/register";
