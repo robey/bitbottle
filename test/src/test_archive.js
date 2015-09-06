@@ -1,6 +1,6 @@
 "use strict";
 
-import * as archive from "../../lib/lib4q/archive";
+import * as archive from "../../lib/lib4bottle/archive";
 import fs from "fs";
 import toolkit from "stream-toolkit";
 import { future, withTempFolder } from "mocha-sprinkles";
@@ -87,7 +87,7 @@ describe("ArchiveReader", () => {
     ].join("");
     const r = archiveReader();
     return r.scanStream(toolkit.sourceStream(new Buffer(data, "hex"))).then(() => {
-      r.collectedEvents.map((e) => e.event).should.eql([
+      r.collectedEvents.map(e => e.event).should.eql([
         "start-bottle",
         "start-bottle",
         "data",
@@ -102,6 +102,33 @@ describe("ArchiveReader", () => {
       r.collectedEvents[2].data.toString().should.eql("one!");
       r.collectedEvents[4].bottle.header.filename.should.eql("two.txt");
       r.collectedEvents[5].data.toString().should.eql("two!");
+    });
+  }));
+
+  it("reads a compressed, hashed file", future(() => {
+    const r = archiveReader();
+    return r.scanStream(fs.createReadStream("./test/fixtures/a.4q")).then(() => {
+      r.collectedEvents.map(e => e.event).should.eql([
+        'start-bottle',
+        'start-bottle',
+        'start-bottle',
+        'data',
+        'end-bottle',
+        'end-bottle',
+        'hash-valid',
+        'end-bottle'
+      ]);
+
+      r.collectedEvents[0].bottle.typeName().should.eql("hashed/SHA-512");
+      r.collectedEvents[1].bottle.typeName().should.eql("compressed/LZMA2");
+      r.collectedEvents[2].bottle.typeName().should.eql("file");
+      r.collectedEvents[2].bottle.header.filename.should.eql("qls.js");
+      r.collectedEvents[4].bottle.typeName().should.eql("file");
+      r.collectedEvents[4].bottle.header.filename.should.eql("qls.js");
+      r.collectedEvents[5].bottle.typeName().should.eql("compressed/LZMA2");
+      r.collectedEvents[6].isValid.should.eql(true);
+      r.collectedEvents[6].hex.slice(0, 16).should.eql("aa32eaf0c2b5b95b");
+      r.collectedEvents[7].bottle.typeName().should.eql("hashed/SHA-512");
     });
   }));
 });
