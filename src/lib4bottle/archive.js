@@ -147,24 +147,23 @@ export class ArchiveReader extends events.EventEmitter {
         break;
     }
     return Promise.all([
-      // io.js requires a read() to notice end-of-stream.
-      promise.then(() => bottle.read(0)),
+      promise,
       bottle.endPromise()
     ]).then(() => {
       this.emit("end-bottle", bottle);
     });
   }
 
-  // scan each internal stream recursively
+  // scan each internal stream recursively.
   _scanFolder(bottle) {
-    return bottle.readPromise().then((nextStream) => {
+    return bottle.readPromise(1).then(nextStream => {
       if (nextStream == null) return;
       return this.scanStream(nextStream).then(() => this._scanFolder(bottle));
     });
   }
 
   _scanFile(bottle) {
-    return bottle.readPromise().then((nextStream) => {
+    return bottle.readPromise(1).then(nextStream => {
       if (nextStream == null) return;
       return this.processFile(nextStream).then(() => this._scanFile(bottle));
     });
@@ -187,38 +186,38 @@ export class ArchiveReader extends events.EventEmitter {
   _scanHashed(bottle) {
     return bottle.validate().then(({ bottle: innerBottle, valid: validPromise, hex: hexPromise }) => {
       return this.scan(innerBottle).then(() => {
-        return validPromise.then((isValid) => {
-          return hexPromise.then((hex) => {
+        return validPromise.then(isValid => {
+          return hexPromise.then(hex => {
             this.emit("hash", bottle, isValid, hex);
           });
         });
       });
-    });
+    }).then(() => bottle.drain());
   }
 
   _scanEncrypted(bottle) {
     this.emit("encrypt", bottle);
-    return bottle.readKeys().then((keymap) => {
-      return this.decryptKey(keymap).then((keyBuffer) => {
-        return bottle.decrypt(keyBuffer).then((stream) => {
-          return bottle_stream.readBottleFromStream(stream).then((bottle) => {
+    return bottle.readKeys().then(keymap => {
+      return this.decryptKey(keymap).then(keyBuffer => {
+        return bottle.decrypt(keyBuffer).then(stream => {
+          return bottle_stream.readBottleFromStream(stream).then(bottle => {
             return this.scan(bottle);
           });
         });
       });
-    });
+    }).then(() => bottle.drain());
   }
 
   _scanCompressed(bottle) {
     this.emit("compress", bottle);
-    return bottle.decompress().then((nextBottle) => {
+    return bottle.decompress().then(nextBottle => {
       return this.scan(nextBottle);
-    });
+    }).then(() => bottle.drain());
   }
 
   _skipBottle(bottle) {
     this.emit("skip", bottle);
-    return bottle.readPromise().then((s) => {
+    return bottle.readPromise(1).then(s => {
       if (s == null) return;
       const sink = new toolkit.NullSinkStream();
       s.pipe(sink);

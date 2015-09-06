@@ -191,7 +191,7 @@ export class BottleReader extends stream.Readable {
     return this.lastPromise.then(() => {
       this.__log("inner stream ended! reading next data stream");
       return this._readDataStream();
-    }).then((stream) => {
+    }).then(stream => {
       if (!stream) {
         // just in case we're tripping that io.js bug, read 0 bytes, to trigger the 'end' signal.
         this.stream.read(0);
@@ -202,8 +202,19 @@ export class BottleReader extends stream.Readable {
       this.__log("pushing new stream: " + (stream.__name || "?"));
       this.lastPromise = stream.endPromise();
       this.push(stream);
-    }).catch((error) => {
+    }).catch(error => {
       this.emit("error", error);
+    });
+  }
+
+  drain() {
+    return this.readPromise(1).then(stream => {
+      if (!stream) return;
+      const sink = toolkit.nullSinkStream();
+      stream.pipe(sink);
+      return sink.endPromise().then(() => {
+        return this.drain();
+      });
     });
   }
 

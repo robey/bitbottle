@@ -121,7 +121,7 @@ export class HashBottleReader extends bottle_stream.BottleReader {
       return bottle_stream.readBottleFromStream(hashStream).then(innerBottle => {
         const hashPromise = innerBottle.endPromise().then(() => {
           return this.readPromise().then(digestStream => {
-            return toolkit.pipeToBuffer(digestStream).then((digestBuffer) => {
+            return toolkit.pipeToBuffer(digestStream).then(digestBuffer => {
               return digestBuffer.toString("hex");
             });
           });
