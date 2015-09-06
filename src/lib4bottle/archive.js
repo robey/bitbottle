@@ -13,7 +13,7 @@ const openPromise = Promise.promisify(fs.open);
 const readdirPromise = Promise.promisify(fs.readdir);
 const statPromise = Promise.promisify(fs.stat);
 
-// higher-level API for maniplating 4Q archives of files & folders.
+// higher-level API for maniplating 4bottle archives of files & folders.
 
 /*
  * Create a file or folder bottle stream, emitting events for:

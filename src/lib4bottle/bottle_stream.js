@@ -78,10 +78,12 @@ export class BottleWriter extends stream.Transform {
 }
 
 
-// Converts a Readable stream into a framed data stream with a 4Q bottle
-// header/footer. Write buffers, read buffers. This is a convenience version
-// of BottleWriter for the case (like a compression stream) where there will
-// be exactly one nested bottle.
+/*
+ * Converts a Readable stream into a framed data stream with a 4bottle
+ * header/footer. Write buffers, read buffers. This is a convenience version
+ * of BottleWriter for the case (like a compression stream) where there will
+ * be exactly one nested bottle.
+ */
 export class LoneBottleWriter extends BottleWriter {
   constructor(type, header, options = {}) {
     if (options.objectModeRead == null) options.objectModeRead = false;
@@ -138,7 +140,7 @@ function readBottleHeader(stream) {
   return stream.readPromise(8).then((buffer) => {
     if (!buffer) throw new Error("End of stream");
     for (let i = 0; i < 4; i++) {
-      if (buffer[i] != MAGIC[i]) throw new Error("Incorrect magic (not a 4Q archive)");
+      if (buffer[i] != MAGIC[i]) throw new Error("Incorrect magic (not a 4bottle archive)");
     }
     if (buffer[4] != VERSION) throw new Error(`Incompatible version: ${buffer[4].toString(16)}`);
     if (buffer[5] != 0) throw new Error(`Incompatible flags: ${buffer[5].toString(16)}`);
