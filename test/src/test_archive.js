@@ -107,7 +107,7 @@ describe("ArchiveReader", () => {
 
   it("reads a compressed, hashed file", future(() => {
     const r = archiveReader();
-    return r.scanStream(fs.createReadStream("./test/fixtures/a.4q")).then(() => {
+    return r.scanStream(fs.createReadStream("./test/fixtures/a.4b")).then(() => {
       r.collectedEvents.map(e => e.event).should.eql([
         'start-bottle',
         'start-bottle',
