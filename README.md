@@ -1,8 +1,8 @@
 # 4bottle
 
-4Bottle: the final archive format.
+4bottle: the final archive format.
 
-4Bottle is a data & file format for archiving collections of files & folders, like "tar", "zip", and "winrar". Its primary differentiating features are:
+4bottle is a data & file format for archiving collections of files & folders, like "tar", "zip", and "winrar". Its primary differentiating features are:
 
 - All important unix/posix attributes are preserved (owner, group, permissions, create/modify timestamps).
 - The format is streamable: Files may be unpacked as an archive is read, and an archive may be written with minimal buffering.

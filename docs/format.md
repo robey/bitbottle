@@ -1,7 +1,7 @@
 
-# 4Bottle Archive Format
+# 4bottle Archive Format
 
-This is a low-level description of the file/stream format used by 4Bottle.
+This is a low-level description of the file/stream format used by 4bottle.
 
 
 ## Goals
@@ -19,7 +19,7 @@ Everything is nested "bottles".
 
 A bottle is a small header and one or more data streams. Each data stream is either another bottle, or in the case of file bottles, the raw file data. A data stream is made up of zero or more frames (blocks).
 
-    4Bottle archive
+    4bottle archive
     +---------------------+---------------------------------------------- ...
     | Bottle header       | Data stream (nested bottle)
     | (type = compressed) | +-----------------+-------------------------- ...
@@ -41,7 +41,7 @@ The bottle header is made up of 8 bytes of magic & version info, followed by a s
     | VVVVvvvv | 00000000 | tttt   nnnnnnnnnnnn |
     +----------+----------+---------------------+
 
-The first 8 bytes are always big-endian `0xf09f8dbc`, to identify the file or stream as being a 4Bottle bottle.
+The first 8 bytes are always big-endian `0xf09f8dbc`, to identify the file or stream as being a bottle.
 
 The next byte is the format version: the 4 high bits (V) are the major version, and the low 4 bits (v) are the minor version. The current version is (0, 0) so this byte is always 0x00. This is used to encode format compatibility (described below).
 
