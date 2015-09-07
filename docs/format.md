@@ -181,8 +181,15 @@ Header fields:
 - encryption type [int 0]
   - AES-256-CTR [0]
 - recipients [string 0]
+- scrypt [string 1]
 
-There are N + 1 data streams, where N is the number of recipients. The recipients' data streams come first, in the order listed, followed by the actual encrypted data.
+Either recipients or scrypt (but not both) may be set. If neither is set, the key is expected to be "known" out-of-band ahead of time, and the only data stream is the encrypted bottle.
+
+The end result of each process is a set of key bytes containing the encryption key followed by its IV. For AES-256, this will be 48 bytes: 32 bytes of key followed by 16 bytes of IV.
+
+#### Recipients
+
+If the "recipients" field is set, there are N + 1 data streams, where N is the number of recipients. The recipients' data streams come first, in the order listed, followed by the actual encrypted data.
 
 Recipients are namespaced by protocol:
 
@@ -198,11 +205,23 @@ The only currently defined protocol is "keybase". The user identifier for keybas
 
 then the encrypted bottle has two recipients: "robey" on keybase, and "max" on keybase. The first data stream will be an encrypted message for robey; the second data stream is the same encrypted message for max; and the final stream is the encrypted bottle.
 
-The encrypted message is always the encryption key (for the final data stream) followed by its IV. For AES-256, this will be 48 bytes: 32 bytes of key followed by 16 bytes of IV. In the keybase protocol, the data stream itself will be a binary (not armored) message of the type keybase generates by default.
-
-N may be zero. There may be no recipients, in which case you must have received the encryption key and IV out-of-band in order to decrypt the bottle.
+The encrypted message is always the key bytes as described above. In the keybase protocol, the data stream itself will be a binary (not armored) message of the type keybase generates by default.
 
 The expected data flow for decryption is to identify which recipient is opening the bottle, ask them to decrypt their key message, and use the decrypted key and IV to decrypt the final data stream which contains the bottle.
+
+#### Scrypt
+
+The key bytes are generated via scrypt from a "known password". (Usually, you'll need to prompt the user for the password.) The format of the scrypt string header is:
+
+    <N-power>:<r>:<p>:<salt-base64>
+
+For example, for an scrypt generated using the "interactive login" parameters, it might be:
+
+    14:8:1:5R+cP24QATY=
+
+Given these parameters and the password, scrypt will generate a set of key bytes, to be used as described above.
+
+There is only one data stream: the encrypted bottle.
 
 
 ### Compressed data (4)
