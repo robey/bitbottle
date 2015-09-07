@@ -19,15 +19,15 @@ Everything is nested "bottles".
 
 A bottle is a small header and one or more data streams. Each data stream is either another bottle, or in the case of file bottles, the raw file data. A data stream is made up of zero or more frames (blocks).
 
-    4bottle archive
+    4bottle archive (example)
     +---------------------+---------------------------------------------- ...
-    | Bottle header       | Data stream (nested bottle)
-    | (type = compressed) | +-----------------+-------------------------- ...
-    |                     | | Bottle header   | Data stream (nested bottle)
-    |                     | | (type = folder) | +---------------+-------- ...
-    |                     | |                 | | Bottle header | File
-    |                     | |                 | | (type = file) | data...
-    +---------------------+-+-----------------+-+---------------+-------- ...
+    | Bottle header       | Data stream: nested bottle
+    | type: compressed    +-----------------+---------------------------- ...
+    |                     | Bottle header   | Data stream: nested bottle
+    |                     | type: folder    +---------------+------------ ...
+    |                     |                 | Bottle header | File data
+    |                     |                 | type: file    |
+    +---------------------+-----------------+---------------+------------ ...
 
 
 ## Bottle header
@@ -45,16 +45,16 @@ The first 8 bytes are always big-endian `0xf09f8dbc`, to identify the file or st
 
 The next byte is the format version: the 4 high bits (V) are the major version, and the low 4 bits (v) are the minor version. The current version is (0, 0) so this byte is always 0x00. This is used to encode format compatibility (described below).
 
-The next byte is reserved, and is currently always `0x00`.
+The next byte is reserved, and is always `0x00` in version (0, 0).
 
-The next two bytes are a big-endian 16-bit value. The 4 high bits of the next byte identify the bottle type, 0 - 15. (The types are defined below.) The low 12 bits are the length of the header to follow, 0 - 4095.
+The next two bytes are a big-endian 16-bit value. The 4 high bits of the next byte identify the bottle type, 0 - 15. These types are defined below. The low 12 bits are the length of the header to follow, 0 - 4095.
 
 
 ## Format compatibility
 
 The 32-bit magic (`0xf09f8dbc`) identifies the basic structure of the header and framing: the magic, the header encoding, and the data stream frames.
 
-The major version increments if the bottle types or streams change in such a way that older parsers won't understand the contents or be able to extract files.
+The major version increments if the bottle types or streams change in such a way that older parsers won't understand the contents or be able to extract files. When the major version is incremented, the minor version resets to zero.
 
 The minor version increments if new bottle types are added, or the format changes in such a way that older parsers can understand the contents and extract files, but may not be able to take advantage of new features.
 
