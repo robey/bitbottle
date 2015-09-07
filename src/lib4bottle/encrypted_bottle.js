@@ -4,6 +4,7 @@ import * as bottle_header from "./bottle_header";
 import * as bottle_stream from "./bottle_stream";
 import crypto from "crypto";
 import Promise from "bluebird";
+import scrypt from "js-scrypt";
 import stream from "stream";
 import toolkit from "stream-toolkit";
 
@@ -12,7 +13,8 @@ const FIELDS = {
     ENCRYPTION_TYPE: 0
   },
   STRINGS: {
-    RECIPIENTS: 0
+    RECIPIENTS: 0,
+    SCRYPT: 1
   }
 };
 
@@ -21,6 +23,10 @@ export const ENCRYPTION_AES_256_CTR = 0;
 const ENCRYPTION_NAMES = {
   [ENCRYPTION_AES_256_CTR]: "AES-256-CTR"
 };
+
+const SCRYPT_N = 14;
+const SCRYPT_R = 8;
+const SCRYPT_P = 1;
 
 
 function encryptedStreamForType(encryptionType, keyBuffer) {
@@ -48,46 +54,77 @@ function decryptedStreamForType(encryptionType, keyBuffer) {
   }
 }
 
-function makeHeader(encryptionType, recipients) {
+function makeHeader(encryptionType, options = {}) {
   const header = new bottle_header.Header();
   header.addNumber(FIELDS.NUMBERS.ENCRYPTION_TYPE, encryptionType);
-  if (recipients.length > 0) {
-    header.addStringList(FIELDS.STRINGS.RECIPIENTS, recipients);
+  if (options.recipients && options.recipients.length > 0) {
+    header.addStringList(FIELDS.STRINGS.RECIPIENTS, options.recipients);
+  }
+  if (options.password) {
+    // make a salt and stuff
+    options.salt = crypto.randomBytes(8);
+    header.addString(FIELDS.STRINGS.SCRYPT, `${SCRYPT_N}:${SCRYPT_R}:${SCRYPT_P}:${options.salt.toString("base64")}`);
   }
   return header;
 }
 
-// Takes a Readable stream (usually a WritableBottleStream) and produces a new
-// Readable stream containing the encrypted contents and the key encrypted for
-// an optional set of recipients.
-// if recipients are given, 'encrypter' must be a function that encrypts a
-// buffer for a recipient:
-//     (recipient, buffer) -> promise(buffer)
+/*
+ * Produces an encrypted bottle of whatever is piped into it. The data is
+ * encrypted either by:
+ * - passing in a `key`, if you already have one
+ * - passing in a `recipients` list and an `encrypter`, if you'd like the key
+ *   to be generated and then encrypted using a service like keybase
+ * - passing in a `password`, if you want to generate the key with scrypt
+ *
+ * Options:
+ * - `key`: `Buffer` the key to use for encryption, if you have one already
+ * - `recipients`: list of recipients to generate encrypted key buffers for;
+ *   if you use this, you must also pass in an `encrypter`
+ * - `encrypter`: `(recipient: String, key: Buffer) => Promise(Buffer)`
+ *   function to generate an encrypted key for this recipient
+ * - `password`: `String` to use to generate a key
+ */
 export class EncryptedBottleWriter extends bottle_stream.BottleWriter {
-  constructor(encryptionType, recipients = [], encrypter = null) {
+  constructor(encryptionType, options = {}) {
     super(
       bottle_stream.TYPE_ENCRYPTED,
-      makeHeader(encryptionType, recipients),
+      makeHeader(encryptionType, options),
       { objectModeRead: false, objectModeWrite: false }
     );
     this.encryptionType = encryptionType;
-    this.recipients = recipients;
-    this.encrypter = encrypter;
+    this.options = options;
 
-    // make a single framed stream that we channel.
-    const keyBuffer = (recipients.length == 0 ? this.encrypter : null);
-    this.ready = encryptedStreamForType(this.encryptionType, keyBuffer).then(({ key, stream }) => {
-      this.encryptionKey = key;
-      this.encryptedStream = stream;
-      return Promise.all(
-        Promise.map(this.recipients, (recipient) => {
-          return this.encrypter(recipient, key).then((buffer) => {
-            return this._process(toolkit.sourceStream(buffer));
-          })
-        }, { concurrency: 1 })
-      );
-    });
-    this.ready.catch((error) => {
+    this.ready = Promise.resolve();
+    if (options.key) {
+      this.ready = encryptedStreamForType(this.encryptionType, options.key).then(({ key, stream }) => {
+        this.encryptedStream = stream;
+      });
+    } else if (options.recipients && options.encrypter) {
+      this.ready = encryptedStreamForType(this.encryptionType).then(({ key, stream }) => {
+        this.encryptedStream = stream;
+        return Promise.all(
+          Promise.map(options.recipients, recipient => {
+            return options.encrypter(recipient, key).then(buffer => {
+              return this._process(toolkit.sourceStream(buffer));
+            });
+          }, { concurrency: 1 })
+        );
+      });
+    } else if (options.password) {
+      this.ready = Promise.promisify(scrypt.hash)(options.password, options.salt, {
+        cost: Math.pow(2, SCRYPT_N),
+        blockSize: SCRYPT_R,
+        parallel: SCRYPT_P
+      }).then(key => {
+        return encryptedStreamForType(this.encryptionType, key);
+      }).then(({ key, stream }) => {
+        this.encryptedStream = stream;
+      });
+    } else {
+      throw new Error("Must pass a key, encrypter, or password");
+    }
+
+    this.ready.catch(error => {
       this.emit("error", error);
     });
     this.ready.then(() => {
@@ -110,8 +147,8 @@ export class EncryptedBottleWriter extends bottle_stream.BottleWriter {
   }
 }
 
-export function writeEncryptedBottle(encryptionType, recipients = [], encrypter = null) {
-  const bottle = new EncryptedBottleWriter(encryptionType, recipients, encrypter);
+export function writeEncryptedBottle(encryptionType, options = {}) {
+  const bottle = new EncryptedBottleWriter(encryptionType, options);
   return bottle.ready.then(() => bottle);
 }
 
@@ -132,13 +169,15 @@ export function decodeEncryptionHeader(h) {
           case FIELDS.STRINGS.RECIPIENTS:
             rv.recipients = field.list;
             break;
+          case FIELDS.STRINGS.SCRYPT:
+            rv.scrypt = field.string.split(":");
+            break;
         }
         break;
     }
   });
   if (rv.encryptionType == null) rv.encryptionType = ENCRYPTION_AES_256;
   rv.encryptionName = ENCRYPTION_NAMES[rv.encryptionType];
-  if (!rv.recipients) rv.recipients = [];
   return rv;
 }
 
@@ -161,17 +200,36 @@ export class EncryptedBottleReader extends bottle_stream.BottleReader {
     });
   }
 
-  // returns a promise for a map of recipient name to encrypted buffer
+  /*
+   * returns:
+   * - keymap: a map of recipient name to encrypted buffer
+   * - scrypt: possible scrypt parameters
+   */
   readKeys() {
     this.keys = {};
     return Promise.all(
-      Promise.map(this.header.recipients, (recipient) => {
-        return this.readPromise().then((innerStream) => {
-          return toolkit.pipeToBuffer(innerStream).then((buffer) => {
+      Promise.map(this.header.recipients || [], recipient => {
+        return this.readPromise().then(innerStream => {
+          return toolkit.pipeToBuffer(innerStream).then(buffer => {
             this.keys[recipient] = buffer;
           });
         });
       }, { concurrency: 1 })
-    ).then(() => this.keys);
+    ).then(() => {
+      return { keymap: this.keys, scrypt: this.header.scrypt }
+    });
+  }
+
+  /*
+   * given a user-provided password, and the scyrpt parameters from the
+   * header, generate the key used.
+   */
+  generateKey(password, params) {
+    const [ n, r, p, salt ] = params;
+    return Promise.promisify(scrypt.hash)(password, new Buffer(salt, "base64"), {
+      cost: Math.pow(2, parseInt(n, 10)),
+      blockSize: parseInt(r, 10),
+      parallel: parseInt(p, 10)
+    });
   }
 }

@@ -26,6 +26,7 @@
   "dependencies": {
     "bluebird": "latest",
     "posix": "^2.0.0",
+    "js-scrypt": "latest",
     "snappy": "*",
     "sprintf": "*",
     "stream-toolkit": "^2.0.0",

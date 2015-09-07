@@ -16,10 +16,15 @@ const statPromise = Promise.promisify(fs.stat);
 // higher-level API for maniplating 4bottle archives of files & folders.
 
 /*
- * Create a file or folder bottle stream, emitting events for:
- *   - "filename", (filename, header) -> begin processing a new file
- *   - "status", (filename, byteCount) -> current # of bytes read from the current file
- *   - "error", (error) -> an error occurred during the data streaming
+ * Create a file or folder bottle stream.
+ *
+ * Events are emitted for:
+ *   - `filename`
+ *     - `(filename, header)` - begin processing a new file
+ *   - `status`
+ *     - `(filename, byteCount)` - bytes read so far from the current file
+ *   - `error`,
+ *     - `(error: Error)` - an error occurred during the data streaming
  */
 export class ArchiveWriter extends events.EventEmitter {
   constructor() {
@@ -103,21 +108,55 @@ export class ArchiveWriter extends events.EventEmitter {
 
 
 /*
- * events:
- * - "start-bottle", (bottle) -> beginning processing of a bottle
- * - "end-bottle", (bottle) -> done processing a bottle
- * - "skip", (bottle) -> unknown bottle type, skipping
- * - "hash", (bottle, isValid, hex) -> after validating a hashed bottle
- * - "encrypt", (bottle) -> before attempting to decrypt an encrypted bottle
- * - "compress", (bottle) -> before uncompressing a compressed bottle
+ * Read an archive from a stream.
+ *
+ * Options:
+ * - `processFile: (stream) => Promise()`
+ *   - process the data stream of a file, and return a Promise that indicates
+ *     that the stream has been completely read (default behavior is to read
+ *     the stream into a bit bucket and move on)
+ * - `decryptKey: (keymap) => Promise(Buffer)`
+ *   - decrypt (or otherwise determine) the key for an encrypted stream,
+ *     based on the keymap (an object mapping recipient names to encrypted
+ *     buffers)
+ * - `getPassword: () => Promise(String)`
+ *   - request a password from the user, for an encrypted stream using
+ *     scrypt key generation
+ *
+ * Events are emitted for:
+ * - `start-bottle`
+ *   - `(bottle: BottleReader)` - beginning processing of a bottle
+ * - `end-bottle`
+ *   - `(bottle: BottleReader)` - done processing a bottle
+ * - `skip`
+ *   - `(bottle: BottleReader)` - unknown bottle type, skipping
+ * - `hash`
+ *    - `(bottle: BottleReader, isValid, hex)` - after validating a hashed
+ *      bottle
+ * - `encrypt`
+ *   - `(bottle: BottleReader)` - before attempting to decrypt an encrypted bottle
+ * - `compress`
+ *   - `(bottle: BottleReader)` - before uncompressing a compressed bottle
  *
  * callbacks:
  * - processFile(dataStream) -> handle contents of a file, return a promise for completion
  * - decryptKey(keyMap) -> decrypt one of these buffers if possible
  */
 export class ArchiveReader extends events.EventEmitter {
-  constructor() {
+  constructor(options = {}) {
     super();
+    this.processFile = options.processFile || (dataStream => {
+      // default: just skip this stream.
+      const sink = toolkit.nullSinkStream();
+      dataStream.pipe(sink);
+      return sink.finishPromise();
+    });
+    this.decryptKey = options.decryptKey || (keymap => {
+      return Promise.reject(new Error("Encrypted bottle; no keys"));
+    });
+    this.getPassword = options.getPassword || (() => {
+      return Promise.reject(new error("Encrypted bottle; requires password"));
+    });
   }
 
   scanStream(inStream) {
@@ -169,20 +208,6 @@ export class ArchiveReader extends events.EventEmitter {
     });
   }
 
-  // override this method to do something besides just skip the stream and move on.
-  processFile(dataStream) {
-    const sink = toolkit.nullSinkStream();
-    dataStream.pipe(sink);
-    return sink.finishPromise();
-  }
-
-  // given a map of (name -> buffer), where the buffer is an encrypted blob,
-  // try to find a name we recognize and can decrypt, and decrypt the buffer,
-  // returning it as a promise. reject the promise if we can't.
-  decryptKey(keymap) {
-    return Promise.reject(new Error("Encrypted bottle; no keys"));
-  }
-
   _scanHashed(bottle) {
     return bottle.validate().then(({ bottle: innerBottle, valid: validPromise, hex: hexPromise }) => {
       return this.scan(innerBottle).then(() => {
@@ -197,8 +222,12 @@ export class ArchiveReader extends events.EventEmitter {
 
   _scanEncrypted(bottle) {
     this.emit("encrypt", bottle);
-    return bottle.readKeys().then(keymap => {
-      return this.decryptKey(keymap).then(keyBuffer => {
+    return bottle.readKeys().then(({ keymap, scrypt }) => {
+      return (
+        keymap && Object.keys(keymap).length > 0 ?
+        this.decryptKey(keymap) :
+        this.getPassword().then(password => bottle.generateKey(password, scrypt))
+      ).then(keyBuffer => {
         return bottle.decrypt(keyBuffer).then(stream => {
           return bottle_stream.readBottleFromStream(stream).then(bottle => {
             return this.scan(bottle);

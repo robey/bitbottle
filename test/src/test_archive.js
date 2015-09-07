@@ -1,6 +1,6 @@
 "use strict";
 
-import * as archive from "../../lib/lib4bottle/archive";
+import * as lib4bottle from "../../lib/lib4bottle";
 import fs from "fs";
 import toolkit from "stream-toolkit";
 import { future, withTempFolder } from "mocha-sprinkles";
@@ -9,24 +9,27 @@ import "should";
 import "source-map-support/register";
 
 function archiveWriter() {
-  const w = new archive.ArchiveWriter();
+  const w = new lib4bottle.ArchiveWriter();
   w.collectedEvents = [];
   w.on("filename", (filename, stats) => w.collectedEvents.push({ event: "filename", filename, stats }));
   w.on("status", (filename, byteCount) => w.collectedEvents.push({ event: "status", filename, byteCount }));
   return w;
 }
 
-function archiveReader() {
-  const r = new archive.ArchiveReader();
-  r.collectedEvents = [];
-  r.on("start-bottle", (bottle) => r.collectedEvents.push({ event: "start-bottle", bottle }));
-  r.on("end-bottle", (bottle) => r.collectedEvents.push({ event: "end-bottle", bottle }));
-  r.on("hash", (bottle, isValid, hex) => r.collectedEvents.push({ event: "hash-valid", bottle, isValid, hex }));
-  r.processFile = (dataStream) => {
+function archiveReader(options = {}) {
+  options.processFile = (dataStream) => {
     return toolkit.pipeToBuffer(dataStream).then((data) => {
       r.collectedEvents.push({ event: "data", data });
     });
   };
+
+  const r = new lib4bottle.ArchiveReader(options);
+  r.collectedEvents = [];
+  r.on("start-bottle", (bottle) => r.collectedEvents.push({ event: "start-bottle", bottle }));
+  r.on("end-bottle", (bottle) => r.collectedEvents.push({ event: "end-bottle", bottle }));
+  r.on("hash", (bottle, isValid, hex) => r.collectedEvents.push({ event: "hash-valid", bottle, isValid, hex }));
+  r.on("encrypt", bottle => r.collectedEvents.push({ event: "encrypt", bottle }));
+  r.on("compress", bottle => r.collectedEvents.push({ event: "compress", bottle }));
   return r;
 }
 
@@ -43,18 +46,48 @@ describe("ArchiveWriter", () => {
     });
   })));
 
-  it("processes a folder", future(withTempFolder((folder) => {
+  it("processes a folder", future(withTempFolder(folder => {
     fs.mkdirSync(`${folder}/stuff`);
     fs.writeFileSync(`${folder}/stuff/one.txt`, "one!");
     fs.writeFileSync(`${folder}/stuff/two.txt`, "two!");
     const w = archiveWriter();
-    return w.archiveFile(`${folder}/stuff`).then((bottle) => {
-      return toolkit.pipeToBuffer(bottle).then((data) => {
-        w.collectedEvents.filter((e) => e.event == "filename").map((e) => e.filename).should.eql([
+    return w.archiveFile(`${folder}/stuff`).then(bottle => {
+      return toolkit.pipeToBuffer(bottle).then(data => {
+        w.collectedEvents.filter(e => e.event == "filename").map(e => e.filename).should.eql([
           "stuff/",
           "stuff/one.txt",
           "stuff/two.txt"
         ]);
+      });
+    });
+  })));
+
+  it("creates and reads an encrypted archive", future(withTempFolder(folder => {
+    fs.writeFileSync(`${folder}/hello.txt`, "hello, i must be going!");
+
+    return lib4bottle.writeEncryptedBottle(
+      lib4bottle.ENCRYPTION_AES_256_CTR,
+      { password: "throwing muses" }
+    ).then(bottle => {
+      const w = archiveWriter();
+      return w.archiveFile(`${folder}/hello.txt`).then(archiveBottle => {
+        archiveBottle.pipe(bottle);
+        return toolkit.pipeToBuffer(bottle);
+      });
+    }).then(data => {
+      const r = archiveReader({
+        getPassword: () => Promise.resolve("throwing muses"),
+      });
+      return r.scanStream(toolkit.sourceStream(data)).then(() => {
+        r.collectedEvents.map(e => e.event).should.eql([
+          "start-bottle",
+          "encrypt",
+          "start-bottle",
+          "data",
+          "end-bottle",
+          "end-bottle"
+        ]);
+        r.collectedEvents[3].data.toString().should.eql("hello, i must be going!");
       });
     });
   })));
@@ -69,7 +102,7 @@ describe("ArchiveReader", () => {
     ].join("");
     const r = archiveReader();
     return r.scanStream(toolkit.sourceStream(new Buffer(data, "hex"))).then(() => {
-      r.collectedEvents.map((e) => e.event).should.eql([ "start-bottle", "data", "end-bottle" ]);
+      r.collectedEvents.map(e => e.event).should.eql([ "start-bottle", "data", "end-bottle" ]);
       r.collectedEvents[0].bottle.header.filename.should.eql("test.txt");
       r.collectedEvents[1].data.toString().should.eql("hello");
     });
@@ -109,26 +142,27 @@ describe("ArchiveReader", () => {
     const r = archiveReader();
     return r.scanStream(fs.createReadStream("./test/fixtures/a.4b")).then(() => {
       r.collectedEvents.map(e => e.event).should.eql([
-        'start-bottle',
-        'start-bottle',
-        'start-bottle',
-        'data',
-        'end-bottle',
-        'end-bottle',
-        'hash-valid',
-        'end-bottle'
+        "start-bottle",
+        "start-bottle",
+        "compress",
+        "start-bottle",
+        "data",
+        "end-bottle",
+        "end-bottle",
+        "hash-valid",
+        "end-bottle"
       ]);
 
       r.collectedEvents[0].bottle.typeName().should.eql("hashed/SHA-512");
       r.collectedEvents[1].bottle.typeName().should.eql("compressed/LZMA2");
-      r.collectedEvents[2].bottle.typeName().should.eql("file");
-      r.collectedEvents[2].bottle.header.filename.should.eql("qls.js");
-      r.collectedEvents[4].bottle.typeName().should.eql("file");
-      r.collectedEvents[4].bottle.header.filename.should.eql("qls.js");
-      r.collectedEvents[5].bottle.typeName().should.eql("compressed/LZMA2");
-      r.collectedEvents[6].isValid.should.eql(true);
-      r.collectedEvents[6].hex.slice(0, 16).should.eql("aa32eaf0c2b5b95b");
-      r.collectedEvents[7].bottle.typeName().should.eql("hashed/SHA-512");
+      r.collectedEvents[3].bottle.typeName().should.eql("file");
+      r.collectedEvents[3].bottle.header.filename.should.eql("qls.js");
+      r.collectedEvents[5].bottle.typeName().should.eql("file");
+      r.collectedEvents[5].bottle.header.filename.should.eql("qls.js");
+      r.collectedEvents[6].bottle.typeName().should.eql("compressed/LZMA2");
+      r.collectedEvents[7].isValid.should.eql(true);
+      r.collectedEvents[7].hex.slice(0, 16).should.eql("aa32eaf0c2b5b95b");
+      r.collectedEvents[8].bottle.typeName().should.eql("hashed/SHA-512");
     });
   }));
 });
