@@ -111,11 +111,12 @@ export class EncryptedBottleWriter extends bottle_stream.BottleWriter {
         );
       });
     } else if (options.password) {
-      this.ready = Promise.promisify(scrypt.hash)(options.password, options.salt, {
+      // must use the sync version here: async version can cause the interpreter to forget to die.
+      this.ready = Promise.resolve(scrypt.hashSync(options.password, options.salt, {
         cost: Math.pow(2, SCRYPT_N),
         blockSize: SCRYPT_R,
         parallel: SCRYPT_P
-      }).then(key => {
+      })).then(key => {
         return encryptedStreamForType(this.encryptionType, key);
       }).then(({ key, stream }) => {
         this.encryptedStream = stream;
@@ -226,10 +227,10 @@ export class EncryptedBottleReader extends bottle_stream.BottleReader {
    */
   generateKey(password, params) {
     const [ n, r, p, salt ] = params;
-    return Promise.promisify(scrypt.hash)(password, new Buffer(salt, "base64"), {
+    return Promise.resolve(scrypt.hashSync(password, new Buffer(salt, "base64"), {
       cost: Math.pow(2, parseInt(n, 10)),
       blockSize: parseInt(r, 10),
       parallel: parseInt(p, 10)
-    });
+    }));
   }
 }

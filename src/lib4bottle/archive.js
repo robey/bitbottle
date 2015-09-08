@@ -23,7 +23,7 @@ const statPromise = Promise.promisify(fs.stat);
  *     - `(filename, header)` - begin processing a new file
  *   - `status`
  *     - `(filename, byteCount)` - bytes read so far from the current file
- *   - `error`,
+ *   - `error`
  *     - `(error: Error)` - an error occurred during the data streaming
  */
 export class ArchiveWriter extends events.EventEmitter {
@@ -57,14 +57,14 @@ export class ArchiveWriter extends events.EventEmitter {
 
   _processFile(filename, prefix) {
     const basename = path.basename(filename);
-    return statPromise(filename).then((stats) => {
+    return statPromise(filename).then(stats => {
       const header = file_bottle.fileHeaderFromStats(basename, stats);
       const displayName = (prefix ? path.join(prefix, basename) : basename) + (header.folder ? "/" : "");
       this.emit("filename", displayName, header);
       if (header.folder) return this._processFolder(filename, displayName, header);
-      return openPromise(filename, "r").then((fd) => {
+      return openPromise(filename, "r").then(fd => {
         const countingFileStream = toolkit.countingStream();
-        countingFileStream.on("count", (n) => {
+        countingFileStream.on("count", n => {
           this.emit("status", displayName, n);
         });
         const fileBottle = new file_bottle.FileBottleWriter(header);
@@ -75,17 +75,17 @@ export class ArchiveWriter extends events.EventEmitter {
   }
 
   _processFolder(folderName, prefix, header, files = null) {
-    return (files ? Promise.resolve(files) : readdirPromise(folderName)).then((files) => {
+    return (files ? Promise.resolve(files) : readdirPromise(folderName)).then(files => {
       const folderBottle = new file_bottle.FolderBottleWriter(header);
       // fill the bottle in the background, closing it when done.
-      Promise.map(files, (filename) => {
+      Promise.map(files, filename => {
         const fullPath = folderName ? path.join(folderName, filename) : filename;
-        return this._processFile(fullPath, prefix).then((fileStream) => {
+        return this._processFile(fullPath, prefix).then(fileStream => {
           return folderBottle.writePromise(fileStream);
         });
       }, { concurrency: 1 }).then(() => {
         return folderBottle.end();
-      }).catch((error) => {
+      }).catch(error => {
         this.emit("error", error);
       });
       return folderBottle;
@@ -155,7 +155,7 @@ export class ArchiveReader extends events.EventEmitter {
       return Promise.reject(new Error("Encrypted bottle; no keys"));
     });
     this.getPassword = options.getPassword || (() => {
-      return Promise.reject(new error("Encrypted bottle; requires password"));
+      return Promise.reject(new Error("Encrypted bottle; requires password"));
     });
   }
 
