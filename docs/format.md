@@ -1,7 +1,7 @@
 
-# 4Q Archive Format
+# 4bottle Archive Format
 
-This is a low-level description of the file/stream format used by 4Q.
+This is a low-level description of the file/stream format used by 4bottle.
 
 
 ## Goals
@@ -19,15 +19,15 @@ Everything is nested "bottles".
 
 A bottle is a small header and one or more data streams. Each data stream is either another bottle, or in the case of file bottles, the raw file data. A data stream is made up of zero or more frames (blocks).
 
-    4Q archive
+    4bottle archive (example)
     +---------------------+---------------------------------------------- ...
-    | Bottle header       | Data stream (nested bottle)
-    | (type = compressed) | +-----------------+-------------------------- ...
-    |                     | | Bottle header   | Data stream (nested bottle) 
-    |                     | | (type = folder) | +---------------+-------- ...
-    |                     | |                 | | Bottle header | File
-    |                     | |                 | | (type = file) | data...
-    +---------------------+-+-----------------+-+---------------+-------- ...
+    | Bottle header       | Data stream: nested bottle
+    | type: compressed    +-----------------+---------------------------- ...
+    |                     | Bottle header   | Data stream: nested bottle
+    |                     | type: folder    +---------------+------------ ...
+    |                     |                 | Bottle header | File data
+    |                     |                 | type: file    |
+    +---------------------+-----------------+---------------+------------ ...
 
 
 ## Bottle header
@@ -41,20 +41,20 @@ The bottle header is made up of 8 bytes of magic & version info, followed by a s
     | VVVVvvvv | 00000000 | tttt   nnnnnnnnnnnn |
     +----------+----------+---------------------+
 
-The first 8 bytes are always big-endian `0xf09f8dbc`, to identify the file or stream as being a 4Q bottle.
+The first 8 bytes are always big-endian `0xf09f8dbc`, to identify the file or stream as being a bottle.
 
 The next byte is the format version: the 4 high bits (V) are the major version, and the low 4 bits (v) are the minor version. The current version is (0, 0) so this byte is always 0x00. This is used to encode format compatibility (described below).
 
-The next byte is reserved, and is currently always `0x00`.
+The next byte is reserved, and is always `0x00` in version (0, 0).
 
-The next two bytes are a big-endian 16-bit value. The 4 high bits of the next byte identify the bottle type, 0 - 15. (The types are defined below.) The low 12 bits are the length of the header to follow, 0 - 4095.
+The next two bytes are a big-endian 16-bit value. The 4 high bits of the next byte identify the bottle type, 0 - 15. These types are defined below. The low 12 bits are the length of the header to follow, 0 - 4095.
 
 
 ## Format compatibility
 
 The 32-bit magic (`0xf09f8dbc`) identifies the basic structure of the header and framing: the magic, the header encoding, and the data stream frames.
 
-The major version increments if the bottle types or streams change in such a way that older parsers won't understand the contents or be able to extract files.
+The major version increments if the bottle types or streams change in such a way that older parsers won't understand the contents or be able to extract files. When the major version is incremented, the minor version resets to zero.
 
 The minor version increments if new bottle types are added, or the format changes in such a way that older parsers can understand the contents and extract files, but may not be able to take advantage of new features.
 
@@ -84,7 +84,7 @@ Unsigned integers are stored in the least number of bytes required, LSB order. S
 
 A boolean field is false by default, so if it's present, it always has a zero-length value and represents "true".
 
-A field is uniquely identified, per bottle type, by the field type and ID. So integer #0 is a different field from string #0, and string #0 in bottle type 3 is a different field from string #0 in bottle type 4. Each bottle defines the exhaustive list of fields for that bottle.
+A field is uniquely identified, per bottle type, by the field type and ID. So integer \#0 is a different field from string \#0, and string \#0 in bottle type 3 is a different field from string \#0 in bottle type 4. Each bottle defines the exhaustive list of fields for that bottle.
 
 
 ## Encoding of data streams
@@ -99,6 +99,7 @@ Data streams are framed, so that streaming readers can clearly identify where ea
 
 For example, a frame of length 100 would be encoded as `0x64`, followed by 100 bytes of data. A frame of one million and one (1000001) bytes would be encoded as `0xc1 0x11 0x7a`: the first byte's highest 3 bits are `110`, indicating a 3-byte length in LSB order that decodes to `0xf4241`.
 
+```
     -------========~~~~~
     11110100001001000001
 
@@ -109,10 +110,11 @@ For example, a frame of length 100 would be encoded as `0x64`, followed by 100 b
     v  v     v         v
     ***~~~~~ ========  -------
     11000001 00010010 01111010
+```
 
-The final encoding form (`0xf0` - `0xfe`) is used as a shorthand for any power-of-2 block size, which is common for buffering large files. A 1GB file may be encoded using a 1MB buffer size, leading to 1MB frames. A 1MB (1048576 byte) frame would be encoded as `0xfd`: 2 to the power of (13 + 7), or `2**20`.
+The final encoding form (`0xf0` - `0xfe`) is used as a shorthand for any power-of-2 block size, which is common for buffering large files. A 1GB file may be encoded using a 1MB buffer size, leading to 1MB frames. A 1MB (1048576 byte) frame length would be encoded as `0xfd`: 2 to the power of (13 + 7), or `2**20`.
 
-The frame size is usually dictated by the willingness of the encoder to buffer (or have pre-knowledge about the size of the file).
+The frame size is usually dictated by the willingness of the encoder to buffer (or have pre-knowledge about the size of the file). A decoder can treat each frame as a miniature stream, and is not required to buffer their complete contents.
 
 There are two special header bytes:
 
@@ -151,6 +153,7 @@ For a folder, the bottle's contents are nested bottles, representing the content
 
 For a file, the bottle contains exactly one data stream: the file's raw contents.
 
+
 ### Hashed data (1)
 
 Header fields:
@@ -165,19 +168,28 @@ There are two data streams in a hashed bottle:
 
 There is only one hash defined currently: SHA-512, with a 64-byte hash as the second data stream.
 
+
 ### Signed data (2)
 
 (Not implemented yet.)
+
 
 ### Encrypted data (3)
 
 Header fields:
 
 - encryption type [int 0]
-  - AES-256 [0]
+  - AES-256-CTR [0]
 - recipients [string 0]
+- scrypt [string 1]
 
-There are N + 1 data streams, where N is the number of recipients. The recipients' data streams come first, in the order listed, followed by the actual encrypted data.
+Either recipients or scrypt (but not both) may be set. If neither is set, the key is expected to be "known" out-of-band ahead of time, and the only data stream is the encrypted bottle.
+
+The end result of each process is a set of key bytes containing the encryption key followed by its IV. For AES-256, this will be 48 bytes: 32 bytes of key followed by 16 bytes of IV.
+
+#### Recipients
+
+If the "recipients" field is set, there are N + 1 data streams, where N is the number of recipients. The recipients' data streams come first, in the order listed, followed by the actual encrypted data.
 
 Recipients are namespaced by protocol:
 
@@ -193,11 +205,24 @@ The only currently defined protocol is "keybase". The user identifier for keybas
 
 then the encrypted bottle has two recipients: "robey" on keybase, and "max" on keybase. The first data stream will be an encrypted message for robey; the second data stream is the same encrypted message for max; and the final stream is the encrypted bottle.
 
-The encrypted message is always the encryption key (for the final data stream) followed by its IV. For AES-256, this will be 48 bytes: 32 bytes of key followed by 16 bytes of IV. In the keybase protocol, the data stream itself will be a binary (not armored) message of the type keybase generates by default.
-
-N may be zero. There may be no recipients, in which case you must have received the encryption key and IV out-of-band in order to decrypt the bottle.
+The encrypted message is always the key bytes as described above. In the keybase protocol, the data stream itself will be a binary (not armored) message of the type keybase generates by default.
 
 The expected data flow for decryption is to identify which recipient is opening the bottle, ask them to decrypt their key message, and use the decrypted key and IV to decrypt the final data stream which contains the bottle.
+
+#### Scrypt
+
+The key bytes are generated via scrypt from a "known password". (Usually, you'll need to prompt the user for the password.) The format of the scrypt string header is:
+
+    <N-power>:<r>:<p>:<salt-base64>
+
+For example, for an scrypt generated using the "interactive login" parameters, it might be:
+
+    14:8:1:5R+cP24QATY=
+
+Given these parameters and the password, scrypt will generate a set of key bytes, to be used as described above.
+
+There is only one data stream: the encrypted bottle.
+
 
 ### Compressed data (4)
 
@@ -209,9 +234,11 @@ Header fields:
 
 There is only one data stream: a nested bottle as compressed data.
 
+
 ### Alternate versions (5)
 
 (Not implemented yet. This is reserved for use in cases where the same content may be encoded in multiple ways, and you only need to decode one. For example, a message encrypted with several different keys.)
+
 
 ### Partial (6)
 

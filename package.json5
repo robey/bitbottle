@@ -1,54 +1,47 @@
 {
-  "name": "4q",
-  "version": "0.5.0",
-  "description": "the 4q archive format",
-  "main": "./lib/4q/lib4q.js",
+  "name": "lib4bottle",
+  "version": "1.0.0",
+  "description": "read and write the 4bottle archive format",
+  "main": "./lib/lib4bottle.js",
   "keywords": [
     "archive",
   ],
   "author": "Robey Pointer <robeypointer@gmail.com>",
-  "homepage": "https://github.com/robey/4q",
+  "homepage": "https://github.com/robey/lib4bottle",
   "repository": {
     "type": "git",
-    "url": "git://github.com/robey/4q.git",
+    "url": "git://github.com/robey/lib4bottle.git",
   },
-  "licenses": [
-    {
-      "type": "Apache License 2.0",
-      "url": "http://www.apache.org/licenses/LICENSE-2.0.txt",
-    }
-  ],
+  "license": "Apache-2.0",
   "scripts": {
-    "test": "./node_modules/plz/bin/plz -v clean build test",
+    "build": "npm run prepublish",
+    "clean": "rm -rf lib test/lib",
+    "distclean": "npm run clean && rm -rf node_modules",
+    "prepublish": "./package.js && babel --source-maps --out-dir lib src && babel --source-maps --out-dir test/lib test/src",
+    "test": "mocha -R spec --colors test/lib"
   },
   "directories": {
     "doc": "docs",
   },
   "dependencies": {
-    "antsy": "*",
-    "bluebird": "*",
-    "errno": "*",
-    "minimist": "*",
-    "posix": "^1.0.3",
+    "bluebird": "latest",
+    "posix": "^2.0.0",
+    "js-scrypt": "latest",
     "snappy": "*",
     "sprintf": "*",
     "stream-toolkit": "^2.0.0",
-    "strftime": "*",
-    "xz": "^1.0.1",
+    "xz": "^1.1.1",
   },
   "devDependencies": {
-    "coffee-script": "^1.7",
+    "babel": "latest",
     "mocha": "*",
     "mocha-sprinkles": "*",
-    "plz": "^2.0.3",
     "should": "*",
+    "source-map-support": "*",
     // for building this file :)
     json5: "*",
   },
-  "main": "./lib/4q",
   "files": [
-    "bin",
-    "build.plz",
     "docs",
     "lib",
     "test",
