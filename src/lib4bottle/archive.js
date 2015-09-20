@@ -4,7 +4,6 @@ import events from "events";
 import fs from "fs";
 import path from "path";
 import Promise from "bluebird";
-import stream from "stream";
 import toolkit from "stream-toolkit";
 import * as bottle_stream from "./bottle_stream";
 import * as file_bottle from "./file_bottle";
@@ -151,7 +150,7 @@ export class ArchiveReader extends events.EventEmitter {
       dataStream.pipe(sink);
       return sink.finishPromise();
     });
-    this.decryptKey = options.decryptKey || (keymap => {
+    this.decryptKey = options.decryptKey || (() => {
       return Promise.reject(new Error("Encrypted bottle; no keys"));
     });
     this.getPassword = options.getPassword || (() => {

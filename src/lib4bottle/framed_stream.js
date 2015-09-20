@@ -3,7 +3,6 @@
 import stream from "stream";
 import toolkit from "stream-toolkit";
 import util from "util";
-import * as zint from "./zint";
 
 const DEFAULT_BLOCK_SIZE = Math.pow(2, 20);  // 1MB
 
@@ -43,7 +42,7 @@ class WritableFramedStream extends stream.Transform {
       this.innerTransform(this.buffer, buffers => {
         this.buffer = buffers;
         this.bufferSize = 0;
-        for (let b of buffers) this.bufferSize += b.length;
+        for (const b of buffers) this.bufferSize += b.length;
         this.__drain(callback);
       });
     } else {
@@ -70,7 +69,7 @@ class ReadableFramedStream extends stream.Readable {
     toolkit.promisify(this.stream);
   }
 
-  _read(bytes) {
+  _read() {
     return readLength(this.stream).then(length => {
       this.stream.__log("frame: len=" + length);
       if (length == null || length == 0) return this.push(null);
@@ -117,7 +116,7 @@ function readLength(stream) {
     if ((prefix[0] & 0xf0) == 0xe0) {
       return stream.readPromise(3).then((data) => {
         if (data == null) return null;
-        return (prefix[0] & 0xf) + (data[0] << 4) + (data[1] << 12) + (data[2] << 20)
+        return (prefix[0] & 0xf) + (data[0] << 4) + (data[1] << 12) + (data[2] << 20);
       });
     }
     return null;

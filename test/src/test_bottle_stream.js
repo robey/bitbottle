@@ -14,8 +14,8 @@ const MAGIC_STRING = "f09f8dbc0000";
 
 function shouldQThrow(promise, message) {
   return promise.then(() => {
-    throw new Error("Expected exception, got valid promise")
-  }, (error) => {
+    throw new Error("Expected exception, got valid promise");
+  }, error => {
     (() => {
       throw error;
     }).should.throw(message);
@@ -29,7 +29,7 @@ describe("BottleWriter", () => {
     m.addNumber(0, 150);
     const b = new bottle_stream.BottleWriter(10, m);
     b.end();
-    return toolkit.pipeToBuffer(b).then((data) => {
+    return toolkit.pipeToBuffer(b).then(data => {
       data.toString("hex").should.eql(`${MAGIC_STRING}a003800196ff`);
     });
   }));
@@ -39,7 +39,7 @@ describe("BottleWriter", () => {
     const b = new bottle_stream.BottleWriter(10, new bottle_header.Header());
     b.write(data);
     b.end();
-    return toolkit.pipeToBuffer(b).then((data) => {
+    return toolkit.pipeToBuffer(b).then(data => {
       data.toString("hex").should.eql(`${MAGIC_STRING}a00004ff00ff0000ff`);
     });
   }));
@@ -59,7 +59,7 @@ describe("BottleWriter", () => {
     // just to verify that the data is written as it comes in, and the event isn't triggered until completion.
     const data = new Buffer("c44c", "hex");
     const slowStream = new stream.Readable();
-    slowStream._read = (n) => null;
+    slowStream._read = () => null;
     slowStream.push(data);
     const b = new bottle_stream.BottleWriter(14, new bottle_header.Header());
     Promise.delay(100).then(() => {
@@ -144,52 +144,52 @@ describe("BottleReader", () => {
   }));
 
   it("reads several datas", future(() => {
-    return bottle_stream.readBottleFromStream(toolkit.sourceStream(new Buffer(`${BASIC_MAGIC}03f0f0f00003e0e0e00003cccccc00ff`, "hex"))).then((b) => {
+    return bottle_stream.readBottleFromStream(toolkit.sourceStream(new Buffer(`${BASIC_MAGIC}03f0f0f00003e0e0e00003cccccc00ff`, "hex"))).then(b => {
       return b.readPromise().then((dataStream) => {
-        return toolkit.pipeToBuffer(dataStream).then((data) => {
+        return toolkit.pipeToBuffer(dataStream).then(data => {
           data.toString("hex").should.eql("f0f0f0");
           return b.readPromise();
         });
-      }).then((dataStream) => {
-        return toolkit.pipeToBuffer(dataStream).then((data) => {
+      }).then(dataStream => {
+        return toolkit.pipeToBuffer(dataStream).then(data => {
           data.toString("hex").should.eql("e0e0e0");
           return b.readPromise();
         });
-      }).then((dataStream) => {
-        return toolkit.pipeToBuffer(dataStream).then((data) => {
+      }).then(dataStream => {
+        return toolkit.pipeToBuffer(dataStream).then(data => {
           data.toString("hex").should.eql("cccccc");
           return b.readPromise();
         });
-      }).then((dataStream) => {
+      }).then(dataStream => {
         (dataStream == null).should.eql(true);
       });
     });
   }));
 
   it("reads several bottles from the same stream", future(() => {
-    const source = toolkit.sourceStream(new Buffer(`${BASIC_MAGIC}0363617400ff${BASIC_MAGIC}0368617400ff`, "hex"))
+    const source = toolkit.sourceStream(new Buffer(`${BASIC_MAGIC}0363617400ff${BASIC_MAGIC}0368617400ff`, "hex"));
     return bottle_stream.readBottleFromStream(source).then((b) => {
-      return toolkit.qread(b).then((dataStream) => {
+      return toolkit.qread(b).then(dataStream => {
         return toolkit.pipeToBuffer(dataStream).then((data) => {
           data.toString().should.eql("cat");
           return toolkit.qread(b);
         });
-      }).then((dataStream) => {
+      }).then(dataStream => {
         (dataStream == null).should.eql(true);
         return bottle_stream.readBottleFromStream(source);
       });
-    }).then((b) => {
-      return toolkit.qread(b).then((dataStream) => {
+    }).then(b => {
+      return toolkit.qread(b).then(dataStream => {
         return toolkit.pipeToBuffer(dataStream).then((data) => {
           data.toString().should.eql("hat");
           return toolkit.qread(b);
         });
-      }).then((dataStream) => {
+      }).then(dataStream => {
         (dataStream == null).should.eql(true);
         return bottle_stream.readBottleFromStream(source);
       });
-    }).then(((b) => {
-      throw new Error("expected end of stream")
-    }), ((err) => null));
+    }).then(() => {
+      throw new Error("expected end of stream");
+    }, () => null);
   }));
 });

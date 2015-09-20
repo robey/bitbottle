@@ -2,7 +2,6 @@
 
 import * as bottle_stream from "../../lib/lib4bottle/bottle_stream";
 import * as encrypted_bottle from "../../lib/lib4bottle/encrypted_bottle";
-import * as file_bottle from "../../lib/lib4bottle/file_bottle";
 import Promise from "bluebird";
 import toolkit from "stream-toolkit";
 import { future } from "mocha-sprinkles";
@@ -33,7 +32,7 @@ describe("EncryptedBottleWriter", () => {
         encryptedBottle.header.encryptionType.should.eql(encrypted_bottle.ENCRYPTION_AES_256_CTR);
         encryptedBottle.header.recipients.should.eql([ "garfield" ]);
         (encryptedBottle.header.scrypt == null).should.eql(true);
-        return encryptedBottle.readKeys().then(({ keymap, scrypt }) => {
+        return encryptedBottle.readKeys().then(({ keymap }) => {
           Object.keys(keymap).should.eql([ "garfield" ]);
           keymap.garfield.toString().should.eql("odie");
           return encryptedBottle.decrypt(savedKey);
@@ -66,7 +65,7 @@ describe("EncryptedBottleWriter", () => {
         encryptedBottle.header.encryptionType.should.eql(encrypted_bottle.ENCRYPTION_AES_256_CTR);
         encryptedBottle.header.recipients.should.eql([ "garfield", "odie" ]);
         (encryptedBottle.header.scrypt == null).should.eql(true);
-        return encryptedBottle.readKeys().then(({ keymap, scrypt }) => {
+        return encryptedBottle.readKeys().then(({ keymap }) => {
           Object.keys(keymap).should.eql([ "garfield", "odie" ]);
           const key = keymap.garfield.slice(8);
           return encryptedBottle.decrypt(key);
@@ -94,7 +93,7 @@ describe("EncryptedBottleWriter", () => {
         encryptedBottle.header.encryptionType.should.eql(encrypted_bottle.ENCRYPTION_AES_256_CTR);
         (encryptedBottle.header.recipients == null).should.eql(true);
         (encryptedBottle.header.scrypt == null).should.eql(true);
-        return encryptedBottle.readKeys().then(({ keymap, scrypt }) => {
+        return encryptedBottle.readKeys().then(({ keymap }) => {
           Object.keys(keymap).should.eql([]);
           return encryptedBottle.decrypt(keyBuffer);
         }).then(stream => {
@@ -123,7 +122,7 @@ describe("EncryptedBottleWriter", () => {
           Object.keys(keymap).should.eql([]);
           return encryptedBottle.generateKey("kwyjibo", scrypt).then(key => {
             return encryptedBottle.decrypt(key);
-          })
+          });
         }).then(stream => {
           return toolkit.pipeToBuffer(stream);
         }).then(buffer => {

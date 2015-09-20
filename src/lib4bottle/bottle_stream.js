@@ -6,7 +6,6 @@ import toolkit from "stream-toolkit";
 import util from "util";
 import * as bottle_header from "./bottle_header";
 import * as framed_stream from "./framed_stream";
-import * as zint from "./zint";
 
 export const MAGIC = new Buffer([ 0xf0, 0x9f, 0x8d, 0xbc ]);
 export const VERSION = 0x00;

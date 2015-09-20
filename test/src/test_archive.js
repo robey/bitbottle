@@ -52,7 +52,7 @@ describe("ArchiveWriter", () => {
     fs.writeFileSync(`${folder}/stuff/two.txt`, "two!");
     const w = archiveWriter();
     return w.archiveFile(`${folder}/stuff`).then(bottle => {
-      return toolkit.pipeToBuffer(bottle).then(data => {
+      return toolkit.pipeToBuffer(bottle).then(() => {
         w.collectedEvents.filter(e => e.event == "filename").map(e => e.filename).should.eql([
           "stuff/",
           "stuff/one.txt",
@@ -76,7 +76,7 @@ describe("ArchiveWriter", () => {
       });
     }).then(data => {
       const r = archiveReader({
-        getPassword: () => Promise.resolve("throwing muses"),
+        getPassword: () => Promise.resolve("throwing muses")
       });
       return r.scanStream(toolkit.sourceStream(data)).then(() => {
         r.collectedEvents.map(e => e.event).should.eql([

@@ -5,7 +5,6 @@ import * as bottle_stream from "./bottle_stream";
 import crypto from "crypto";
 import Promise from "bluebird";
 import scrypt from "js-scrypt";
-import stream from "stream";
 import toolkit from "stream-toolkit";
 
 const FIELDS = {
@@ -96,7 +95,7 @@ export class EncryptedBottleWriter extends bottle_stream.BottleWriter {
 
     this.ready = Promise.resolve();
     if (options.key) {
-      this.ready = encryptedStreamForType(this.encryptionType, options.key).then(({ key, stream }) => {
+      this.ready = encryptedStreamForType(this.encryptionType, options.key).then(({ stream }) => {
         this.encryptedStream = stream;
       });
     } else if (options.recipients && options.encrypter) {
@@ -118,7 +117,7 @@ export class EncryptedBottleWriter extends bottle_stream.BottleWriter {
         parallel: SCRYPT_P
       })).then(key => {
         return encryptedStreamForType(this.encryptionType, key);
-      }).then(({ key, stream }) => {
+      }).then(({ stream }) => {
         this.encryptedStream = stream;
       });
     } else {
@@ -177,7 +176,7 @@ export function decodeEncryptionHeader(h) {
         break;
     }
   });
-  if (rv.encryptionType == null) rv.encryptionType = ENCRYPTION_AES_256;
+  if (rv.encryptionType == null) rv.encryptionType = ENCRYPTION_AES_256_CTR;
   rv.encryptionName = ENCRYPTION_NAMES[rv.encryptionType];
   return rv;
 }
@@ -217,7 +216,7 @@ export class EncryptedBottleReader extends bottle_stream.BottleReader {
         });
       }, { concurrency: 1 })
     ).then(() => {
-      return { keymap: this.keys, scrypt: this.header.scrypt }
+      return { keymap: this.keys, scrypt: this.header.scrypt };
     });
   }
 

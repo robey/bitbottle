@@ -2,7 +2,6 @@
 
 import * as bottle_header from "./bottle_header";
 import * as bottle_stream from "./bottle_stream";
-import fs from "fs";
 import posix from "posix";
 
 const FIELDS = {
@@ -37,16 +36,20 @@ export function fileHeaderFromStats(filename, stats) {
   stats.username = null;
   try {
     stats.username = posix.getpwnam(stats.uid).name;
-  } catch (error) {}
+  } catch (error) {
+    // pass
+  }
   stats.groupname = null;
   try {
     stats.groupname = posix.getgrnam(stats.gid).name;
-  } catch (error) {}
+  } catch (error) {
+    // pass
+  }
   return stats;
 }
 
 export function encodeFileHeader(stats, overrides) {
-  for (let key in overrides) stats[key] = overrides[key];
+  for (const key in overrides) stats[key] = overrides[key];
   const m = new bottle_header.Header();
   m.addString(FIELDS.STRINGS.FILENAME, stats.filename);
   if (stats.mode) m.addNumber(FIELDS.NUMBERS.POSIX_MODE, stats.mode);

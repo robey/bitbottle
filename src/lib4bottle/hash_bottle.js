@@ -75,7 +75,7 @@ export class HashBottleWriter extends bottle_stream.BottleWriter {
       this._process(toolkit.sourceStream(this.hashStream.digest)).then(() => {
         this._close();
         callback();
-      }).catch((error) => {
+      }).catch(error => {
         callback(error);
       });
     });
@@ -110,7 +110,7 @@ export class HashBottleReader extends bottle_stream.BottleReader {
     return `hashed/${HASH_NAMES[this.header.hashType]}`;
   }
 
-  // returns a promise: { bottle: BottleReader, valid: Promise(Bool), hex: Promise(String) }
+  // returns a promise: { bottle: BottleReader, valid: Promise(Boolean), hex: Promise(String) }
   // - bottle: the inner stream (another bottle)
   // - valid: a promise resolving to true/false after the bottle is finished,
   //     true if the hash validated correctly, false if not
@@ -126,7 +126,7 @@ export class HashBottleReader extends bottle_stream.BottleReader {
             });
           });
         });
-        const validPromise = hashPromise.then((hex) => {
+        const validPromise = hashPromise.then(hex => {
           return hex == hashStream.digest.toString("hex");
         });
         return { bottle: innerBottle, valid: validPromise, hex: hashPromise };

@@ -1,7 +1,6 @@
 "use strict";
 
 import * as bottle_header from "../../lib/lib4bottle/bottle_header";
-import toolkit from "stream-toolkit";
 
 import "should";
 import "source-map-support/register";

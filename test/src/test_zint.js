@@ -1,6 +1,5 @@
 "use strict";
 
-import toolkit from "stream-toolkit";
 import * as zint from "../../lib/lib4bottle/zint";
 
 import "should";
