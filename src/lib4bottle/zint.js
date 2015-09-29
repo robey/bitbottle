@@ -47,6 +47,39 @@ export function encodeLength(n) {
   throw new Error(`>:-P -> ${n}`);
 }
 
+/*
+ * Determine how many bytes will be needed to get the full length.
+ */
+export function lengthLength(byte) {
+  if ((byte & 0xf0) == 0xf0 || (byte & 0x80) == 0) return 1;
+  if ((byte & 0xc0) == 0x80) return 2;
+  if ((byte & 0xe0) == 0xc0) return 3;
+  if ((byte & 0xf0) == 0xe0) return 4;
+}
+
+/*
+ * Returns the length, or 0 for end-of-stream, or -1 for end of all streams.
+ * Use `lengthLength` on the first byte to ensure that you have as many bytes
+ * as you need.
+ */
+export function decodeLength(buffer) {
+  if (buffer[0] == 0xff) return -1;
+  if ((buffer[0] & 0x80) == 0) return buffer[0];
+  if ((buffer[0] & 0xf0) == 0xf0) return Math.pow(2, 7 + (buffer[0] & 0xf));
+
+  if ((buffer[0] & 0xc0) == 0x80) {
+    return (buffer[0] & 0x3f) + (buffer[1] << 6);
+  }
+
+  if ((buffer[0] & 0xe0) == 0xc0) {
+    return (buffer[0] & 0x3f) + (buffer[1] << 5) + (buffer[2] << 13);
+  }
+
+  if ((buffer[0] & 0xf0) == 0xe0) {
+    return (buffer[0] & 0xf) + (buffer[1] << 4) + (buffer[2] << 12) + (buffer[3] << 20);
+  }
+}
+
 export function readLength(stream) {
   return stream.readPromise(1).then(prefix => {
     if (prefix == null || prefix[0] == 0) return null;
