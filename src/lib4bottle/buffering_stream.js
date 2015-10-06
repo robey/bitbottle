@@ -1,7 +1,7 @@
 "use strict";
 
 import stream from "stream";
-import toolkit from "stream-toolkit";
+import { promisify } from "stream-toolkit";
 
 const DEFAULT_BLOCK_SIZE = Math.pow(2, 20);  // 1MB
 
@@ -53,5 +53,5 @@ export default function bufferingStream(options = {}) {
     callback();
   };
 
-  return toolkit.promisify(transform, { name: "bufferingStream(" + blockSize + ")" });
+  return promisify(transform, { name: "bufferingStream(" + blockSize + ")" });
 }
