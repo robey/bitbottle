@@ -1,6 +1,5 @@
 "use strict";
 
-import util from "util";
 import * as zint from "./zint";
 
 export const TYPE_STRING = 0;
@@ -54,7 +53,7 @@ export class Header {
       switch (f.type) {
         case TYPE_BOOL: return `B${f.id}`;
         case TYPE_ZINT: return `I${f.id}=${f.number}`;
-        case TYPE_STRING: return `S${f.id}=${util.inspect(f.list)}`;
+        case TYPE_STRING: return `S${f.id}=${f.list.join(", ")}`;
       }
     });
     return "Header(" + strings.join(", ") + ")";
