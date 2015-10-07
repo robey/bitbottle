@@ -33,21 +33,6 @@ export class Header {
     return this;
   }
 
-  pack() {
-    // each header item has a 16-bit prefix: TTDDDDLL LLLLLLLL (T = type, D = id#, L = length)
-    const buffers = [];
-    this.fields.forEach((f) => {
-      if (f.id > 15 || f.id < 0) throw new Error(`Header ID out of range: ${f.id}`);
-      if (f.content.length > 1023) throw new Error(`Header ${f.id} too large (${f.content.length}, max 1023)`);
-      buffers.push(new Buffer([
-        (f.type << 6) | (f.id << 2) | ((f.content.length >> 8) & 0x2),
-        (f.content.length & 0xff)
-      ]));
-      buffers.push(f.content);
-    });
-    return buffers;
-  }
-
   toString() {
     const strings = this.fields.map((f) => {
       switch (f.type) {
@@ -61,7 +46,22 @@ export class Header {
 }
 
 
-export function unpack(buffer) {
+export function packHeader(header) {
+  // each header item has a 16-bit prefix: TTDDDDLL LLLLLLLL (T = type, D = id#, L = length)
+  const buffers = [];
+  header.fields.forEach(f => {
+    if (f.id > 15 || f.id < 0) throw new Error(`Header ID out of range: ${f.id}`);
+    if (f.content.length > 1023) throw new Error(`Header ${f.id} too large (${f.content.length}, max 1023)`);
+    buffers.push(new Buffer([
+      (f.type << 6) | (f.id << 2) | ((f.content.length >> 8) & 0x2),
+      (f.content.length & 0xff)
+    ]));
+    buffers.push(f.content);
+  });
+  return Buffer.concat(buffers);
+}
+
+export function unpackHeader(buffer) {
   const header = new Header();
   let i = 0;
   while (i < buffer.length) {
