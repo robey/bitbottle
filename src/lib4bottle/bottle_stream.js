@@ -1,10 +1,8 @@
 "use strict";
 
-// import Promise from "bluebird";
-// import stream from "stream";
-import { promisify, Transform } from "stream-toolkit";
-import { packHeader } from "./bottle_header";
-import { framingStream } from "./framed_stream";
+import { promisify, PullTransform, Transform } from "stream-toolkit";
+import { packHeader, unpackHeader } from "./bottle_header";
+import { framingStream, unframingStream } from "./framed_stream";
 
 export const MAGIC = new Buffer([ 0xf0, 0x9f, 0x8d, 0xbc ]);
 export const VERSION = 0x00;
@@ -60,41 +58,6 @@ function writeHeader(type, header, stream) {
 }
 
 // /*
-//  * Converts (Readable) stream objects into a stream of framed data blocks with
-//  * a 4bottle header/footer. Write Readable streams, read buffers.
-//  */
-// export class BottleWriter extends stream.Transform {
-//   constructor(type, header, options = {}) {
-//     super(options);
-//     toolkit.promisify(this, { name: "BottleWriter(" + type + ")" });
-//     this._writableState.objectMode = options.objectModeWrite != null ? options.objectModeWrite : true;
-//     this._readableState.objectMode = options.objectModeRead != null ? options.objectModeRead : false;
-//     this._writeHeader(type, header);
-//   }
-//
-
-//   _transform(inStream, _, callback) {
-//     this._process(inStream).then(() => {
-//       callback();
-//     }).catch((error) => {
-//       callback(error);
-//     });
-//   }
-//
-//
-//   _flush(callback) {
-//     this._close();
-//     callback();
-//   }
-//
-//   _close() {
-//     this.__log("end of bottle");
-//     this.push(new Buffer([ BOTTLE_END ]));
-//   }
-// }
-//
-//
-// /*
 //  * Converts a Readable stream into a framed data stream with a 4bottle
 //  * header/footer. Write buffers, read buffers. This is a convenience version
 //  * of BottleWriter for the case (like a compression stream) where there will
@@ -124,8 +87,62 @@ function writeHeader(type, header, stream) {
 //     });
 //   }
 // }
-//
-//
+
+
+/*
+ * Stream transform that accepts a byte stream and emits a header, then one
+ * or more child streams.
+ */
+export function bottleReader(options = {}) {
+  const streamOptions = {
+    readableObjectMode: true,
+    transform: t => {
+      return readHeader(t).then(header => {
+        t.push(header);
+        return next(t);
+      });
+    }
+  };
+  for (const k in options) streamOptions[k] = options[k];
+  return new PullTransform(streamOptions);
+
+  function next(t) {
+    return t.get(1).then(byte => {
+      if (!byte || byte[0] == BOTTLE_END) {
+        t.push(null);
+        return;
+      }
+      // put it back. it's part of a data stream!
+      t.unget(byte);
+
+      // unframe and emit.
+      const unframing = unframingStream();
+      t.subpipe(unframing);
+      t.push(unframing);
+      return unframing.endPromise().then(() => next(t));
+    });
+  }
+}
+
+function readHeader(transform) {
+  transform.__log("readBottleHeader");
+  return transform.get(8).then(buffer => {
+    if (!buffer || buffer.length < 8) throw new Error("End of stream");
+    for (let i = 0; i < 4; i++) {
+      if (buffer[i] != MAGIC[i]) throw new Error("Incorrect magic (not a 4bottle archive)");
+    }
+    if (buffer[4] != VERSION) throw new Error(`Incompatible version: ${buffer[4].toString(16)}`);
+    if (buffer[5] != 0) throw new Error(`Incompatible flags: ${buffer[5].toString(16)}`);
+    const type = (buffer[6] >> 4) & 0xf;
+    const headerLength = ((buffer[6] & 0xf) * 256) + (buffer[7] & 0xff);
+    return transform.get(headerLength).then(headerBuffer => {
+      const rv = { type, header: unpackHeader(headerBuffer || new Buffer(0)) };
+      if (transform.__debug) transform.__log("readBottleHeader -> " + type + ", " + rv.header.toString());
+      return rv;
+    });
+  });
+}
+
 // // read a bottle from a stream, returning a BottleReader object, which is
 // // a stream that provides sub-streams.
 // export function readBottleFromStream(stream) {
@@ -151,25 +168,7 @@ function writeHeader(type, header, stream) {
 //   });
 // }
 //
-// function readBottleHeader(stream) {
-//   toolkit.promisify(stream, { name: "BottleHeader" });
-//   stream.__log("readBottleHeader");
-//   return stream.readPromise(8).then((buffer) => {
-//     if (!buffer) throw new Error("End of stream");
-//     for (let i = 0; i < 4; i++) {
-//       if (buffer[i] != MAGIC[i]) throw new Error("Incorrect magic (not a 4bottle archive)");
-//     }
-//     if (buffer[4] != VERSION) throw new Error(`Incompatible version: ${buffer[4].toString(16)}`);
-//     if (buffer[5] != 0) throw new Error(`Incompatible flags: ${buffer[5].toString(16)}`);
-//     const type = (buffer[6] >> 4) & 0xf;
-//     const headerLength = ((buffer[6] & 0xf) * 256) + (buffer[7] & 0xff);
-//     return stream.readPromise(headerLength).then((headerBuffer) => {
-//       const rv = { type, header: bottle_header.unpack(headerBuffer) };
-//       if (stream.__debug) stream.__log("readBottleHeader -> " + util.inspect(rv, { depth: null }));
-//       return rv;
-//     });
-//   });
-// }
+
 //
 //
 // // stream that reads an underlying (buffer) stream, pulls out the header and
@@ -236,14 +235,5 @@ function writeHeader(type, header, stream) {
 //       });
 //     });
 //   }
-//
-//   _readDataStream() {
-//     return this.stream.readPromise(1).then((buffer) => {
-//       this.__log("stream header: " + buffer[0]);
-//       if (!buffer || buffer[0] == BOTTLE_END) return null;
-//       // put it back. it's part of a data stream!
-//       this.stream.unshift(buffer);
-//       return framed_stream.readableFramedStream(this.stream);
-//     });
-//   }
+
 // }
