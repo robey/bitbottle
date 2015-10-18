@@ -12,7 +12,7 @@ const END_OF_STREAM = new Buffer([ 0 ]);
  * bufferingStream first.
  */
 export function framingStream() {
-  const transform = new stream.Transform();
+  const transform = new stream.Transform({ name: "framingStream" });
 
   transform._transform = (data, _, callback) => {
     transform.__log("frame bytes=" + data.length);
@@ -48,6 +48,7 @@ export function unframingStream() {
   };
 
   const transform = new PullTransform({
+    name: "unframingStream",
     transform: t => {
       return readLength(t).then(length => {
         if (length == null || length <= 0) {

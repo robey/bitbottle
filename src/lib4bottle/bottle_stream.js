@@ -12,6 +12,16 @@ export const TYPE_HASHED = 1;
 export const TYPE_ENCRYPTED = 3;
 export const TYPE_COMPRESSED = 4;
 
+export function bottleTypeName(n) {
+  switch (n) {
+    case TYPE_FILE: return "file";
+    case TYPE_HASHED: return "hashed";
+    case TYPE_ENCRYPTED: return "encrypted";
+    case TYPE_COMPRESSED: return "compressed";
+    default: return n.toString();
+  }
+}
+
 const BOTTLE_END = 0xff;
 
 /*
@@ -20,12 +30,12 @@ const BOTTLE_END = 0xff;
  */
 export function bottleWriter(type, header, options = {}) {
   const streamOptions = {
-    name: `BottleWriter(${type})`,
+    name: "bottleWriterGuts",
     writableObjectMode: true,
     readableObjectMode: true,
     transform: inStream => {
       const framedStream = framingStream();
-      transform.__log("writing stream into " + framedStream.__name);
+      transform.__log("writing stream " + (inStream.__name || "?") + " into " + framedStream.__name);
       inStream.pipe(framedStream);
       return framedStream;
     },
@@ -38,7 +48,11 @@ export function bottleWriter(type, header, options = {}) {
 
   const transform = new Transform(streamOptions);
   transform.push(sourceStream(writeHeader(type, header)));
-  return weld(transform, compoundStream(), { writableObjectMode: true });
+  const outStream = compoundStream();
+  return weld(transform, outStream, {
+    name: `BottleWriter(${bottleTypeName(type)})`,
+    writableObjectMode: true
+  });
 }
 
 function writeHeader(type, header) {
