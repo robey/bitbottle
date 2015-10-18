@@ -1,6 +1,6 @@
 "use strict";
 
-import { promisify, PullTransform, Transform } from "stream-toolkit";
+import { compoundStream, PullTransform, sourceStream, Transform, weld } from "stream-toolkit";
 import { packHeader, unpackHeader } from "./bottle_header";
 import { framingStream, unframingStream } from "./framed_stream";
 
@@ -20,32 +20,32 @@ const BOTTLE_END = 0xff;
  */
 export function bottleWriter(type, header, options = {}) {
   const streamOptions = {
+    name: `BottleWriter(${type})`,
     writableObjectMode: true,
+    readableObjectMode: true,
     transform: inStream => {
       const framedStream = framingStream();
       transform.__log("writing stream into " + framedStream.__name);
-      framedStream.on("data", data => transform.push(data));
       inStream.pipe(framedStream);
-      return framedStream.endPromise();
+      return framedStream;
     },
     flush: () => {
       transform.__log("end of bottle");
-      transform.push(new Buffer([ BOTTLE_END ]));
+      return sourceStream(new Buffer([ BOTTLE_END ]));
     }
   };
   for (const k in options) streamOptions[k] = options[k];
 
   const transform = new Transform(streamOptions);
-  promisify(transform, { name: `BottleWriter(${type})` });
-  writeHeader(type, header, transform);
-  return transform;
+  transform.push(sourceStream(writeHeader(type, header)));
+  return weld(transform, compoundStream(), { writableObjectMode: true });
 }
 
-function writeHeader(type, header, stream) {
+function writeHeader(type, header) {
   if (type < 0 || type > 15) throw new Error(`Bottle type out of range: ${type}`);
   const buffer = packHeader(header);
   if (buffer.length > 4095) throw new Error(`Header too long: ${buffer.length} > 4095`);
-  stream.push(Buffer.concat([
+  return Buffer.concat([
     MAGIC,
     new Buffer([
       VERSION,
@@ -54,7 +54,7 @@ function writeHeader(type, header, stream) {
       (buffer.length & 0xff)
     ]),
     buffer
-  ]));
+  ]);
 }
 
 // /*

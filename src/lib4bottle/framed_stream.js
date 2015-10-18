@@ -50,7 +50,10 @@ export function unframingStream() {
   const transform = new PullTransform({
     transform: t => {
       return readLength(t).then(length => {
-        if (length == null || length <= 0) return null;
+        if (length == null || length <= 0) {
+          t.push(null);
+          return;
+        }
         return t.get(length);
       });
     }
