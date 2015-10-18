@@ -1,44 +1,64 @@
 "use strict";
 
-import toolkit from "stream-toolkit";
+import { pipeToBuffer, sourceStream, setDebugLogger } from "stream-toolkit";
 import { future } from "mocha-sprinkles";
-import { validateFile, writeFile } from "./files";
-import * as bottle_stream from "../../lib/lib4bottle/bottle_stream";
-import * as compressed_bottle from "../../lib/lib4bottle/compressed_bottle";
+import { bottleReader, TYPE_COMPRESSED } from "../../lib/lib4bottle/bottle_stream";
+import {
+  compressedBottleReader,
+  compressedBottleWriter,
+  COMPRESSION_LZMA2,
+  COMPRESSION_SNAPPY,
+  decodeCompressionHeader
+} from "../../lib/lib4bottle/compressed_bottle";
 
 import "should";
 import "source-map-support/register";
 
-describe("CompressedBottleWriter", () => {
-  it("compresses a file stream with lzma2", future(() => {
-    return writeFile("file.txt").then((fileBuffer) => {
-      const x = new compressed_bottle.CompressedBottleWriter(compressed_bottle.COMPRESSION_LZMA2);
-      toolkit.sourceStream(fileBuffer).pipe(x);
-      return toolkit.pipeToBuffer(x).then((buffer) => {
-        // now decode it.
-        return bottle_stream.readBottleFromStream(toolkit.sourceStream(buffer));
-      });
-    }).then((zbottle) => {
-      zbottle.type.should.eql(bottle_stream.TYPE_COMPRESSED);
-      zbottle.header.compressionType.should.eql(compressed_bottle.COMPRESSION_LZMA2);
-      return zbottle.decompress().then((bottle) => {
-        return validateFile(bottle, "file.txt");
+const TestString = "My cat's breath smells like cat food.";
+
+describe("compressedBottleWriter", () => {
+  it("compresses a stream with lzma2", future(() => {
+    const { compressor, bottle } = compressedBottleWriter(COMPRESSION_LZMA2);
+    sourceStream(TestString).pipe(compressor);
+    return pipeToBuffer(bottle).then(data => {
+      // now decode it.
+      const reader = bottleReader();
+      sourceStream(data).pipe(reader);
+      return reader.readPromise().then(data => {
+        data.type.should.eql(TYPE_COMPRESSED);
+        const header = decodeCompressionHeader(data.header);
+        header.compressionType.should.eql(COMPRESSION_LZMA2);
+        header.compressionName.should.eql("LZMA2");
+
+        return compressedBottleReader(data.header, reader).then(decompressor => {
+          return decompressor.readPromise().then(content => {
+            content.toString().should.eql(TestString);
+          });
+        });
       });
     });
   }));
 
-  it("compresses a file stream with snappy", future(() => {
-    return writeFile("file.txt").then((fileBuffer) => {
-      const x = new compressed_bottle.CompressedBottleWriter(compressed_bottle.COMPRESSION_SNAPPY);
-      toolkit.sourceStream(fileBuffer).pipe(x);
-      return toolkit.pipeToBuffer(x).then((buffer) => {
-        // now decode it.
-        return bottle_stream.readBottleFromStream(toolkit.sourceStream(buffer));
-      }).then((zbottle) => {
-        zbottle.type.should.eql(bottle_stream.TYPE_COMPRESSED);
-        zbottle.header.compressionType.should.eql(compressed_bottle.COMPRESSION_SNAPPY);
-        return zbottle.decompress().then((bottle) => {
-          return validateFile(bottle, "file.txt");
+  it("compresses a stream with snappy", future(() => {
+    setDebugLogger(x => console.log(x));
+    const { compressor, bottle } = compressedBottleWriter(COMPRESSION_SNAPPY);
+    compressor.write(TestString.slice(0, 20));
+    compressor.write(TestString.slice(20));
+    compressor.end();
+    return pipeToBuffer(bottle).then(data => {
+      // now decode it.
+      const reader = bottleReader();
+      sourceStream(data).pipe(reader);
+      return reader.readPromise().then(data => {
+        data.type.should.eql(TYPE_COMPRESSED);
+        const header = decodeCompressionHeader(data.header);
+        header.compressionType.should.eql(COMPRESSION_SNAPPY);
+        header.compressionName.should.eql("Snappy");
+
+        return compressedBottleReader(data.header, reader).then(decompressor => {
+          return decompressor.readPromise().then(content => {
+            content.toString().should.eql(TestString);
+          });
         });
       });
     });
