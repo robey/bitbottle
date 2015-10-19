@@ -1,7 +1,7 @@
 "use strict";
 
-import * as bottle_header from "./bottle_header";
-import * as bottle_stream from "./bottle_stream";
+import { Header, TYPE_BOOL, TYPE_STRING, TYPE_ZINT } from "./bottle_header";
+import { bottleWriter, TYPE_FILE } from "./bottle_stream";
 import posix from "posix";
 
 const FIELDS = {
@@ -23,6 +23,33 @@ const FIELDS = {
   }
 };
 
+
+// wrap a single file stream (with its metadata) into a FileBottle.
+export function fileBottleWriter(stats) {
+  return bottleWriter(TYPE_FILE, encodeFileHeader(stats, { folder: false }));
+}
+
+export function folderBottleWriter(stats) {
+  return bottleWriter(TYPE_FILE, encodeFileHeader(stats, { folder: true }));
+}
+
+export function encodeFileHeader(stats, overrides) {
+  for (const key in overrides) stats[key] = overrides[key];
+  const header = new Header();
+  header.addString(FIELDS.STRINGS.FILENAME, stats.filename);
+  if (stats.mode) header.addNumber(FIELDS.NUMBERS.POSIX_MODE, stats.mode);
+  if (stats.createdNanos) header.addNumber(FIELDS.NUMBERS.CREATED_NANOS, stats.createdNanos);
+  if (stats.modifiedNanos) header.addNumber(FIELDS.NUMBERS.MODIFIED_NANOS, stats.modifiedNanos);
+  if (stats.accessedNanos) header.addNumber(FIELDS.NUMBERS.ACCESSED_NANOS, stats.accessedNanos);
+  if (stats.folder) {
+    header.addBool(FIELDS.BOOLS.IS_FOLDER);
+  } else {
+    header.addNumber(FIELDS.NUMBERS.SIZE, stats.size);
+  }
+  if (stats.username) header.addString(FIELDS.STRINGS.POSIX_USERNAME, stats.username);
+  if (stats.groupname) header.addString(FIELDS.STRINGS.POSIX_GROUPNAME, stats.groupname);
+  return header;
+}
 
 // build a file bottle header out of an fs.Stats object.
 export function fileHeaderFromStats(filename, stats) {
@@ -48,29 +75,11 @@ export function fileHeaderFromStats(filename, stats) {
   return stats;
 }
 
-export function encodeFileHeader(stats, overrides) {
-  for (const key in overrides) stats[key] = overrides[key];
-  const m = new bottle_header.Header();
-  m.addString(FIELDS.STRINGS.FILENAME, stats.filename);
-  if (stats.mode) m.addNumber(FIELDS.NUMBERS.POSIX_MODE, stats.mode);
-  if (stats.createdNanos) m.addNumber(FIELDS.NUMBERS.CREATED_NANOS, stats.createdNanos);
-  if (stats.modifiedNanos) m.addNumber(FIELDS.NUMBERS.MODIFIED_NANOS, stats.modifiedNanos);
-  if (stats.accessedNanos) m.addNumber(FIELDS.NUMBERS.ACCESSED_NANOS, stats.accessedNanos);
-  if (stats.folder) {
-    m.addBool(FIELDS.BOOLS.IS_FOLDER);
-  } else {
-    m.addNumber(FIELDS.NUMBERS.SIZE, stats.size);
-  }
-  if (stats.username) m.addString(FIELDS.STRINGS.POSIX_USERNAME, stats.username);
-  if (stats.groupname) m.addString(FIELDS.STRINGS.POSIX_GROUPNAME, stats.groupname);
-  return m;
-}
-
-export function decodeFileHeader(m) {
+export function decodeFileHeader(header) {
   const rv = { folder: false };
-  m.fields.forEach((field) => {
+  header.fields.forEach(field => {
     switch (field.type) {
-      case bottle_header.TYPE_STRING:
+      case TYPE_STRING:
         switch (field.id) {
           case FIELDS.STRINGS.FILENAME:
             rv.filename = field.list[0];
@@ -86,7 +95,7 @@ export function decodeFileHeader(m) {
             break;
         }
         break;
-      case bottle_header.TYPE_ZINT:
+      case TYPE_ZINT:
         switch (field.id) {
           case FIELDS.NUMBERS.SIZE:
             rv.size = field.number;
@@ -105,7 +114,7 @@ export function decodeFileHeader(m) {
             break;
         }
         break;
-      case bottle_header.TYPE_BOOL:
+      case TYPE_BOOL:
         switch (field.id) {
           case FIELDS.BOOLS.IS_FOLDER:
             rv.folder = true;
@@ -115,19 +124,4 @@ export function decodeFileHeader(m) {
     }
   });
   return rv;
-}
-
-
-// wrap a single file stream (with its metadata) into a FileBottle.
-export class FileBottleWriter extends bottle_stream.LoneBottleWriter {
-  constructor(header) {
-    super(bottle_stream.TYPE_FILE, encodeFileHeader(header, { folder: false }));
-  }
-}
-
-// FileBottle that contains multiple nested streams (usually other FileBottles).
-export class FolderBottleWriter extends bottle_stream.BottleWriter {
-  constructor(header) {
-    super(bottle_stream.TYPE_FILE, encodeFileHeader(header, { folder: true }));
-  }
 }
