@@ -1,6 +1,6 @@
 "use strict";
 
-import { pipeToBuffer, sourceStream, setDebugLogger } from "stream-toolkit";
+import { pipeToBuffer, sourceStream } from "stream-toolkit";
 import { future } from "mocha-sprinkles";
 import { bottleReader, TYPE_COMPRESSED } from "../../lib/lib4bottle/bottle_stream";
 import {
@@ -40,7 +40,6 @@ describe("compressedBottleWriter", () => {
   }));
 
   it("compresses a stream with snappy", future(() => {
-    setDebugLogger(x => console.log(x));
     const { compressor, bottle } = compressedBottleWriter(COMPRESSION_SNAPPY);
     compressor.write(TestString.slice(0, 20));
     compressor.write(TestString.slice(20));
