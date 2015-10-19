@@ -3,6 +3,7 @@
 import { compoundStream, PullTransform, sourceStream, Transform, weld } from "stream-toolkit";
 import { packHeader, unpackHeader } from "./bottle_header";
 import { framingStream, unframingStream } from "./framed_stream";
+import bufferingStream from "./buffering_stream";
 
 export const MAGIC = new Buffer([ 0xf0, 0x9f, 0x8d, 0xbc ]);
 export const VERSION = 0x00;
@@ -11,6 +12,8 @@ export const TYPE_FILE = 0;
 export const TYPE_HASHED = 1;
 export const TYPE_ENCRYPTED = 3;
 export const TYPE_COMPRESSED = 4;
+
+const MIN_BUFFER = 1024;
 
 export function bottleTypeName(n) {
   switch (n) {
@@ -34,9 +37,12 @@ export function bottleWriter(type, header, options = {}) {
     writableObjectMode: true,
     readableObjectMode: true,
     transform: inStream => {
+      // prevent tiny packets by requiring it to buffer at least 1KB
+      const bufferStream = bufferingStream(MIN_BUFFER);
       const framedStream = framingStream();
       transform.__log("writing stream " + (inStream.__name || "?") + " into " + framedStream.__name);
-      inStream.pipe(framedStream);
+      inStream.pipe(bufferStream);
+      bufferStream.pipe(framedStream);
       return framedStream;
     },
     flush: () => {
