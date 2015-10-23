@@ -1,8 +1,7 @@
 "use strict";
 
-import bufferingStream from "../../lib/lib4bottle/buffering_stream";
 import { framingStream, unframingStream } from "../../lib/lib4bottle/framed_stream";
-import { pipeToBuffer, sourceStream } from "stream-toolkit";
+import { bufferStream, pipeToBuffer, sourceStream } from "stream-toolkit";
 import { future } from "mocha-sprinkles";
 
 import "should";
@@ -21,7 +20,7 @@ describe("framingStream", () => {
   }));
 
   it("buffers up a frame", future(() => {
-    const bs = bufferingStream();
+    const bs = bufferStream();
     const fs = framingStream();
     bs.pipe(fs);
     const p = pipeToBuffer(fs);

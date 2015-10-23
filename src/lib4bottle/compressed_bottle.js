@@ -1,11 +1,10 @@
 "use strict";
 
 import snappy from "snappy";
-import { promisify, Transform, weld } from "stream-toolkit";
+import { bufferStream, promisify, Transform, weld } from "stream-toolkit";
 import xz from "xz";
 import { Header, TYPE_ZINT } from "./bottle_header";
 import { bottleWriter, TYPE_COMPRESSED } from "./bottle_stream";
-import bufferingStream from "./buffering_stream";
 
 const FIELDS = {
   NUMBERS: {
@@ -78,7 +77,7 @@ function compressionTransformForType(compressionType) {
           });
         }
       });
-      return weld(bufferingStream(), transform);
+      return weld(bufferStream(), transform);
     case COMPRESSION_LZMA2:
       return promisify(new xz.Compressor(LZMA_PRESET), { name: "lzma2-compress" });
     default:

@@ -1,9 +1,8 @@
 "use strict";
 
-import { compoundStream, PullTransform, sourceStream, Transform, weld } from "stream-toolkit";
+import { bufferStream, compoundStream, PullTransform, sourceStream, Transform, weld } from "stream-toolkit";
 import { packHeader, unpackHeader } from "./bottle_header";
 import { framingStream, unframingStream } from "./framed_stream";
-import bufferingStream from "./buffering_stream";
 
 export const MAGIC = new Buffer([ 0xf0, 0x9f, 0x8d, 0xbc ]);
 export const VERSION = 0x00;
@@ -38,11 +37,11 @@ export function bottleWriter(type, header, options = {}) {
     readableObjectMode: true,
     transform: inStream => {
       // prevent tiny packets by requiring it to buffer at least 1KB
-      const bufferStream = bufferingStream(MIN_BUFFER);
+      const buffered = bufferStream(MIN_BUFFER);
       const framedStream = framingStream();
       transform.__log("writing stream " + (inStream.__name || "?") + " into " + framedStream.__name);
-      inStream.pipe(bufferStream);
-      bufferStream.pipe(framedStream);
+      inStream.pipe(buffered);
+      buffered.pipe(framedStream);
       return framedStream;
     },
     flush: () => {

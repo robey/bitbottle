@@ -2,8 +2,7 @@
 
 import Promise from "bluebird";
 import stream from "stream";
-import bufferingStream from "../../lib/lib4bottle/buffering_stream";
-import { pipeToBuffer, PullTransform, sourceStream } from "stream-toolkit";
+import { bufferStream, pipeToBuffer, PullTransform, sourceStream } from "stream-toolkit";
 import { future } from "mocha-sprinkles";
 import { Header } from "../../lib/lib4bottle/bottle_header";
 import { bottleReader, bottleWriter } from "../../lib/lib4bottle/bottle_stream";
@@ -40,7 +39,7 @@ describe("bottleWriter", () => {
   it("writes nested bottle data", future(() => {
     const b = new bottleWriter(10, new Header());
     const b2 = new bottleWriter(14, new Header());
-    b.write(b2.pipe(bufferingStream()));
+    b.write(b2.pipe(bufferStream()));
     b.end();
     b2.end();
     return pipeToBuffer(b).then(data => {
@@ -61,7 +60,7 @@ describe("bottleWriter", () => {
         slowStream.push(null);
       });
     });
-    b.write(slowStream.pipe(bufferingStream()));
+    b.write(slowStream.pipe(bufferStream()));
     b.end();
     return pipeToBuffer(b).then(data => {
       data.toString("hex").should.eql(`${MAGIC_STRING}e00004c44cc44c00ff`);
