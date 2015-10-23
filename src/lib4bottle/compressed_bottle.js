@@ -33,7 +33,7 @@ export function compressedBottleWriter(compressionType) {
   bottle.write(compressor);
   bottle.end();
 
-  return { compressor, bottle };
+  return Promise.resolve({ writer: compressor, bottle });
 }
 
 export function compressedBottleReader(header, bottleReader) {
