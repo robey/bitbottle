@@ -1,14 +1,17 @@
 "use strict";
 
-import * as bottle_header from "./bottle_header";
-import * as bottle_stream from "./bottle_stream";
 import crypto from "crypto";
-import stream from "stream";
-import toolkit from "stream-toolkit";
+import Promise from "bluebird";
+import { Header, TYPE_STRING, TYPE_ZINT } from "./bottle_header";
+import { bottleWriter, TYPE_HASHED } from "./bottle_stream";
+import { pipeToBuffer, sourceStream, Transform } from "stream-toolkit";
 
 const FIELDS = {
   NUMBERS: {
     HASH_TYPE: 0
+  },
+  STRINGS: {
+    SIGNED_BY: 0
   }
 };
 
@@ -19,81 +22,81 @@ const HASH_NAMES = {
 };
 
 
-// crypto's streaming hash doesn't quite work: https://github.com/joyent/node/issues/5216
-// but it's simple to replace, so just do that.
-class HashingStream extends stream.Transform {
-  constructor(hashName, options) {
-    super(options);
-    toolkit.promisify(this, { name: "HashingStream" });
-    this.hasher = crypto.createHash(hashName);
-  }
+/*
+ * Produle a bottle that hashes (and optionally signs) a stream.
+ *
+ * Options:
+ *   - signedBy: `String` if the hash should be signed, who was it signed by
+ *   - signer: `Buffer => Promise(Buffer)`: perform the signing, and
+ *     return a signed blob that contains the original buffer inside it
+ */
+export function hashBottleWriter(hashType, options = {}) {
+  const signer = options.signer || (hash => Promise.resolve(hash));
 
-  _transform(buffer, _, callback) {
-    this.hasher.update(buffer);
-    this.push(buffer);
-    callback();
-  }
+  const header = new Header();
+  header.addNumber(FIELDS.NUMBERS.HASH_TYPE, hashType);
+  if (options.signedBy) header.addString(FIELDS.STRINGS.SIGNED_BY, options.signedBy);
 
-  _flush(callback) {
-    this.digest = this.hasher.digest();
-    callback();
-  }
+  const bottle = bottleWriter(TYPE_HASHED, header);
+  const writer = hashStreamForType(hashType);
+  bottle.write(writer);
+  writer.on("end", () => {
+    return Promise.try(() => signer(writer.digest)).then(hashData => {
+      bottle.write(sourceStream(hashData));
+      bottle.end();
+    }, error => bottle.emit("error", error));
+  });
+  return Promise.resolve({ writer, bottle });
 }
-
 
 function hashStreamForType(hashType) {
   switch (hashType) {
     case HASH_SHA512:
-      return new HashingStream("sha512");
+      return hashingStream("sha512");
     default:
       throw new Error(`Unknown hash type: ${hashType}`);
   }
 }
 
+// crypto's streaming hash doesn't quite work: https://github.com/joyent/node/issues/5216
+// but it's simple to replace, so just do that.
+function hashingStream(hashName) {
+  const hasher = crypto.createHash(hashName);
 
-// Takes a Readable stream (usually a WritableBottleStream) and produces a new
-// Readable stream containing the original and its hash digest.
-export class HashBottleWriter extends bottle_stream.BottleWriter {
-  constructor(hashType) {
-    super(
-      bottle_stream.TYPE_HASHED,
-      new bottle_header.Header().addNumber(FIELDS.NUMBERS.HASH_TYPE, hashType),
-      { objectModeRead: false, objectModeWrite: false }
-    );
-    this.hashType = hashType;
-    // make a single framed stream that we channel
-    this.hashStream = hashStreamForType(this.hashType);
-    this._process(this.hashStream);
-  }
-
-  _transform(data, _, callback) {
-    this.hashStream.write(data, _, callback);
-  }
-
-  _flush(callback) {
-    this.hashStream.on("end", () => {
-      this._process(toolkit.sourceStream(this.hashStream.digest)).then(() => {
-        this._close();
-        callback();
-      }).catch(error => {
-        callback(error);
-      });
-    });
-    this.hashStream.end();
-  }
+  const rv = new Transform({
+    transform: data => {
+      hasher.update(data);
+      return data;
+    },
+    flush: () => {
+      rv.digest = hasher.digest();
+      return null;
+    }
+  });
+  return rv;
 }
 
 
+// -----
+
 export function decodeHashHeader(h) {
   const rv = {};
-  h.fields.forEach((field) => {
+  h.fields.forEach(field => {
     switch (field.type) {
-      case bottle_header.TYPE_ZINT:
+      case TYPE_ZINT:
         switch (field.id) {
           case FIELDS.NUMBERS.HASH_TYPE:
             rv.hashType = field.number;
             break;
         }
+        break;
+      case TYPE_STRING:
+        switch (field.id) {
+          case FIELDS.STRINGS.SIGNED_BY:
+            rv.signedBy = field.string;
+            break;
+        }
+        break;
     }
   });
   if (rv.hashType == null) rv.hashType = HASH_SHA512;
@@ -101,36 +104,43 @@ export function decodeHashHeader(h) {
   return rv;
 }
 
-export class HashBottleReader extends bottle_stream.BottleReader {
-  constructor(header, stream) {
-    super(bottle_stream.TYPE_HASHED, header, stream);
-  }
+/*
+ * Returns a promise containing:
+ *   - reader: inner stream
+ *   - hex: promise for a hex of the hash, resolved if it matched or was
+ *     signed correctly (rejected if not)
+ *
+ * Options:
+ *   - verifier: `(Buffer, signedBy: String) => Promise(Buffer)`: if the
+ *     hash was signed, unpack the signature, verify that it was signed by
+ *     `signedBy`, and return either the signed data or an exception
+ */
+export function hashBottleReader(header, bottleReader, options = {}) {
+  const hashStream = hashStreamForType(header.hashType);
+  if (header.signedBy && !options.verifier) throw new Error("No verifier given");
+  const verifier = options.verifier || (buffer => Promise.resolve(buffer));
 
-  typeName() {
-    return `hashed/${HASH_NAMES[this.header.hashType]}`;
-  }
+  return bottleReader.readPromise().then(stream => {
+    stream.pipe(hashStream);
 
-  // returns a promise: { bottle: BottleReader, valid: Promise(Boolean), hex: Promise(String) }
-  // - bottle: the inner stream (another bottle)
-  // - valid: a promise resolving to true/false after the bottle is finished,
-  //     true if the hash validated correctly, false if not
-  validate() {
-    const hashStream = hashStreamForType(this.header.hashType);
-    return this.readPromise().then(innerStream => {
-      innerStream.pipe(hashStream);
-      return bottle_stream.readBottleFromStream(hashStream).then(innerBottle => {
-        const hashPromise = innerBottle.endPromise().then(() => {
-          return this.readPromise().then(digestStream => {
-            return toolkit.pipeToBuffer(digestStream).then(digestBuffer => {
-              return digestBuffer.toString("hex");
-            });
+    const hex = new Promise((resolve, reject) => {
+      hashStream.endPromise().then(() => {
+        return bottleReader.readPromise().then(digestStream => {
+          return pipeToBuffer(digestStream).then(signedBuffer => {
+            return verifier(signedBuffer, header.signedBy);
+          }).then(digestBuffer => {
+            const realHex = hashStream.digest.toString("hex");
+            const gotHex = digestBuffer.toString("hex");
+            if (realHex == gotHex) {
+              resolve(gotHex);
+            } else {
+              reject(new Error(`Incorrect hash (expected ${realHex}, got ${gotHex})`));
+            }
           });
         });
-        const validPromise = hashPromise.then(hex => {
-          return hex == hashStream.digest.toString("hex");
-        });
-        return { bottle: innerBottle, valid: validPromise, hex: hashPromise };
-      });
+      }).catch(error => reject(error));
     });
-  }
+
+    return { reader: hashStream, hex };
+  });
 }

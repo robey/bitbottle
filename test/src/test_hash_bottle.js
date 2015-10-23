@@ -1,56 +1,131 @@
 "use strict";
 
-import toolkit from "stream-toolkit";
+import { pipeToBuffer, sourceStream } from "stream-toolkit";
 import { future } from "mocha-sprinkles";
-import * as bottle_stream from "../../lib/lib4bottle/bottle_stream";
-import * as files from "./files";
-import * as hash_bottle from "../../lib/lib4bottle/hash_bottle";
+import { bottleReader, TYPE_HASHED } from "../../lib/lib4bottle/bottle_stream";
+import { readFile, writeFile } from "./files";
+import { decodeHashHeader, hashBottleReader, hashBottleWriter, HASH_SHA512 } from "../../lib/lib4bottle/hash_bottle";
 
 import "should";
 import "source-map-support/register";
 
-describe("HashBottleWriter", () => {
-  it("writes and hashes a file stream", future(() => {
-    return files.writeFile("file.txt").then((fileBuffer) => {
-      const hashStream = new hash_bottle.HashBottleWriter(hash_bottle.HASH_SHA512);
-      toolkit.sourceStream(fileBuffer).pipe(hashStream);
-      return toolkit.pipeToBuffer(hashStream).then((buffer) => {
+function signer(data) {
+  return Promise.resolve(Buffer.concat([ new Buffer("sign"), data ]));
+}
+
+function verifier(data, signedBy) {
+  if (signedBy != "garfield") return Promise.reject(new Error("not garfield"));
+  if (data.slice(0, 4).toString() != "sign") return Promise.reject(new Error("not signed"));
+  return Promise.resolve(data.slice(4));
+}
+
+
+describe("hashBottleWriter", () => {
+  it("hashes a small stream", future(() => {
+    return hashBottleWriter(HASH_SHA512).then(({ writer, bottle }) => {
+      sourceStream("i choose you!").pipe(writer);
+      return pipeToBuffer(bottle).then(buffer => {
         // now decode it.
-        return bottle_stream.readBottleFromStream(toolkit.sourceStream(buffer));
+        const reader = bottleReader();
+        sourceStream(buffer).pipe(reader);
+        return reader.readPromise().then(data => {
+          data.type.should.eql(TYPE_HASHED);
+          const header = decodeHashHeader(data.header);
+          header.hashType.should.eql(HASH_SHA512);
+
+          return hashBottleReader(header, reader);
+        }).then(({ reader, hex }) => {
+          return pipeToBuffer(reader).then(buffer => {
+            buffer.toString().should.eql("i choose you!");
+            return hex;
+          });
+        }).then(hex => {
+          hex.should.eql(
+            "d134df6f6314fca50918f8c2dea596a49bb723eb9ec156c21abe2c9d9803c614" +
+            "86d07f8006c7428c780846209e9ffa6ed60dbf2a0408a109509c802545ee65b9"
+          );
+        });
       });
-    }).then((bottle) => {
-      bottle.type.should.eql(bottle_stream.TYPE_HASHED);
-      bottle.header.hashType.should.eql(hash_bottle.HASH_SHA512);
-      bottle.typeName().should.eql("hashed/SHA-512");
-      return files.readFile(bottle, "file.txt").then(() => {
-        return bottle.readPromise().then((hashStream) => {
-          return toolkit.pipeToBuffer(hashStream).then((buffer) => {
-            buffer.toString("hex").should.eql(
-              "872613ed7e437f332b77ae992925ea33a4565e3f26c9d623da6c78aea9522d90261c4f52824b64f5ad4fdd020a4678c47bf862f53f02a62183749a1e0616b940"
+    });
+  }));
+
+  it("writes and hashes a file stream", future(() => {
+    return writeFile("file.txt").then(fileBuffer => {
+      return hashBottleWriter(HASH_SHA512).then(({ writer, bottle }) => {
+        sourceStream(fileBuffer).pipe(writer);
+        return pipeToBuffer(bottle).then(buffer => {
+          // now decode it.
+          const reader = bottleReader();
+          sourceStream(buffer).pipe(reader);
+          return reader.readPromise().then(data => {
+            data.type.should.eql(TYPE_HASHED);
+            const header = decodeHashHeader(data.header);
+            header.hashType.should.eql(HASH_SHA512);
+
+            return hashBottleReader(header, reader);
+          }).then(({ reader, hex }) => {
+            return readFile(reader, "file.txt").then(() => {
+              return hex;
+            });
+          }).then(hex => {
+            hex.should.eql(
+              "872613ed7e437f332b77ae992925ea33a4565e3f26c9d623da6c78aea9522d90" +
+              "261c4f52824b64f5ad4fdd020a4678c47bf862f53f02a62183749a1e0616b940"
             );
           });
         });
       });
     });
   }));
-});
 
-describe("HashBottleReader", () => {
-  it("reads a hashed stream", future(() => {
-    const hashStream = new hash_bottle.HashBottleWriter(hash_bottle.HASH_SHA512);
-    return files.writeFile("file.txt").then((fileBuffer) => {
-      toolkit.sourceStream(fileBuffer).pipe(hashStream);
-      return toolkit.pipeToBuffer(hashStream).then((buffer) => {
-        // now decode it.
-        return bottle_stream.readBottleFromStream(toolkit.sourceStream(buffer));
+  it("signs a bottle", future(() => {
+    return writeFile("file.txt").then(fileBuffer => {
+      return hashBottleWriter(HASH_SHA512, { signedBy: "garfield", signer }).then(({ writer, bottle }) => {
+        sourceStream(fileBuffer).pipe(writer);
+        return pipeToBuffer(bottle).then(buffer => {
+          // now decode it.
+          const reader = bottleReader();
+          sourceStream(buffer).pipe(reader);
+          return reader.readPromise().then(data => {
+            data.type.should.eql(TYPE_HASHED);
+            const header = decodeHashHeader(data.header);
+            header.hashType.should.eql(HASH_SHA512);
+            header.signedBy.should.eql("garfield");
+
+            return hashBottleReader(header, reader, { verifier });
+          }).then(({ reader, hex }) => {
+            return readFile(reader, "file.txt").then(() => {
+              return hex;
+            });
+          }).then(hex => {
+            hex.should.eql(
+              "872613ed7e437f332b77ae992925ea33a4565e3f26c9d623da6c78aea9522d90" +
+              "261c4f52824b64f5ad4fdd020a4678c47bf862f53f02a62183749a1e0616b940"
+            );
+          });
+        });
       });
-    }).then((bottle) => {
-      bottle.type.should.eql(bottle_stream.TYPE_HASHED);
-      bottle.header.hashType.should.eql(hash_bottle.HASH_SHA512);
-      return bottle.validate().then(({ bottle, valid }) => {
-        return files.validateFile(bottle, "file.txt").then(() => {
-          return valid.then((valid) => {
-            valid.should.eql(true);
+    });
+  }));
+
+  it("rejects a badly signed hashed stream", future(() => {
+    return writeFile("file.txt").then(fileBuffer => {
+      return hashBottleWriter(HASH_SHA512, { signedBy: "odie", signer }).then(({ writer, bottle }) => {
+        sourceStream(fileBuffer).pipe(writer);
+        return pipeToBuffer(bottle).then(buffer => {
+          // now decode it.
+          const reader = bottleReader();
+          sourceStream(buffer).pipe(reader);
+          return reader.readPromise().then(data => {
+            return hashBottleReader(decodeHashHeader(data.header), reader, { verifier });
+          }).then(({ reader, hex }) => {
+            return readFile(reader, "file.txt").then(() => {
+              return hex;
+            });
+          }).then(hex => {
+            hex.should.eql("nothing good can be here");
+          }, error => {
+            error.message.should.match(/not garfield/);
           });
         });
       });
