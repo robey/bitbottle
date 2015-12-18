@@ -154,24 +154,26 @@ For a folder, the bottle's contents are nested bottles, representing the content
 For a file, the bottle contains exactly one data stream: the file's raw contents.
 
 
-### Hashed data (1)
+### Hashed or signed data (1)
 
 Header fields:
 
 - hash type [int 0]
   - SHA-512 [0]
+- signed by [string 0]
 
 There are two data streams in a hashed bottle:
 
 - the hashed contents (a nested bottle)
-- the hash value, as bytes
+- the hash or signature, as bytes
 
 There is only one hash defined currently: SHA-512, with a 64-byte hash as the second data stream.
 
+If the "signed by" header field is present, the hash is signed by the namespaced entity listed. The format is the same as that for encrypted recipients, described below. Currently, only the "keybase" namespace is defined, so "signed by" should contain a string like
 
-### Signed data (2)
+    keybase:robey
 
-(Not implemented yet.)
+The signature must be an armored GPG/keybase signature that contains the original SHA-512 and its signature. The signature is valid only if it was signed by the entity it claims to be, and the signed hash is the same as the computed hash for the data stream.
 
 
 ### Encrypted data (3)
