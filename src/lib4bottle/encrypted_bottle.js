@@ -7,8 +7,6 @@ import Promise from "bluebird";
 import scrypt from "js-scrypt";
 import { pipeToBuffer, sourceStream } from "stream-toolkit";
 
-import "babel/polyfill";
-
 const FIELDS = {
   NUMBERS: {
     ENCRYPTION_TYPE: 0
@@ -33,18 +31,18 @@ const SCRYPT_P = 1;
 /*
  * Produces an encrypted bottle of whatever is piped into it. The data is
  * encrypted either by:
- * - passing in a `key`, if you already have one
- * - passing in a `recipients` list and an `encrypter`, if you'd like the key
- *   to be generated and then encrypted using a service like keybase
- * - passing in a `password`, if you want to generate the key with scrypt
+ *   - passing in a `key`, if you already have one
+ *   - passing in a `recipients` list and an `encrypter`, if you'd like the
+ *     key to be generated and then encrypted using a service like keybase
+ *   - passing in a `password`, if you want to generate the key with scrypt
  *
  * Options:
- * - `key`: `Buffer` the key to use for encryption, if you have one already
- * - `recipients`: list of recipients to generate encrypted key buffers for;
- *   if you use this, you must also pass in an `encrypter`
- * - `encrypter`: `(recipient: String, key: Buffer) => Promise(Buffer)`
- *   function to generate an encrypted key for this recipient
- * - `password`: `String` to use to generate a key
+ *   - `key`: `Buffer` the key to use for encryption, if you have one already
+ *   - `recipients`: list of recipients to generate encrypted key buffers
+ *     for; if you use this, you must also pass in an `encrypter`
+ *   - `encrypter`: `(recipient: String, key: Buffer) => Promise(Buffer)`
+ *     function to generate an encrypted key for this recipient
+ *   - `password`: `String` to use to generate a key
  */
 export function encryptedBottleWriter(encryptionType, options = {}) {
   const header = new Header();
@@ -141,12 +139,12 @@ export function decodeEncryptionHeader(h) {
 
 /*
  * Options:
- * - `key`: `Buffer` the key to use for decryption, if you have one already
- * - `decrypter`: `(keymap: Map(String, Buffer)) => Promise(Buffer)`
- *   function to generate an decrypted key, given a map of recipients to
- *   encrypted keys
- * - `getPassword`: `() => Promise(String)` requested when the key is
- *   encrypted with scrypt
+ *   - `key`: `Buffer` the key to use for decryption, if you have one already
+ *   - `decrypter`: `(keymap: Map(String, Buffer)) => Promise(Buffer)`
+ *     function to generate an decrypted key, given a map of recipients to
+ *     encrypted keys
+ *   - `getPassword`: `() => Promise(String)` requested when the key is
+ *     encrypted with scrypt
  */
 export function encryptedBottleReader(header, bottleReader, options = {}) {
   const decrypter = options.decrypter || (() => Promise.reject(new Error("No decrypter given")));

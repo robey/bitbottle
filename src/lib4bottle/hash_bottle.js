@@ -31,7 +31,8 @@ const HASH_NAMES = {
  *     return a signed blob that contains the original buffer inside it
  */
 export function hashBottleWriter(hashType, options = {}) {
-  const signer = options.signer || (hash => Promise.resolve(hash));
+  const _babel_bug = hash => Promise.resolve(hash);
+  const signer = options.signer || _babel_bug;
 
   const header = new Header();
   header.addNumber(FIELDS.NUMBERS.HASH_TYPE, hashType);
@@ -118,7 +119,8 @@ export function decodeHashHeader(h) {
 export function hashBottleReader(header, bottleReader, options = {}) {
   const hashStream = hashStreamForType(header.hashType);
   if (header.signedBy && !options.verifier) throw new Error("No verifier given");
-  const verifier = options.verifier || (buffer => Promise.resolve(buffer));
+  const _babel_bug = buffer => Promise.resolve(buffer);
+  const verifier = options.verifier || _babel_bug;
 
   return bottleReader.readPromise().then(stream => {
     stream.pipe(hashStream);

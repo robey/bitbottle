@@ -8,7 +8,6 @@ import { Header } from "../../lib/lib4bottle/bottle_header";
 import { bottleReader, bottleWriter } from "../../lib/lib4bottle/bottle_stream";
 
 import "should";
-import "should-promised";
 import "source-map-support/register";
 
 const MAGIC_STRING = "f09f8dbc0000";
