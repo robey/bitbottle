@@ -15,10 +15,11 @@
   "license": "Apache-2.0",
   "scripts": {
     "build": "./package.js && eslint src test/src && babel --source-maps --out-dir lib src",
+    "build-test": "babel --source-maps --out-dir test/lib test/src",
     "clean": "rm -rf lib test/lib",
     "distclean": "npm run clean && rm -rf node_modules",
     "prepublish": "npm run build",
-    "test": "npm run build && babel --source-maps --out-dir test/lib test/src && mocha -R spec --colors test/lib"
+    "test": "npm run build && npm run build-test && mocha -R spec --colors test/lib"
   },
   "directories": {
     "doc": "docs"
