@@ -2,7 +2,7 @@
 
 import { pipeToBuffer, sourceStream } from "stream-toolkit";
 import { future } from "mocha-sprinkles";
-import { bottleReader, TYPE_COMPRESSED } from "../../lib/lib4bottle/bottle_stream";
+import { readBottle, TYPE_COMPRESSED } from "../../lib/lib4bottle/bottle_stream";
 import {
   readCompressedBottle,
   writeCompressedBottle,
@@ -22,7 +22,7 @@ describe("compressedBottleWriter", () => {
       sourceStream(TestString).pipe(writer);
       return pipeToBuffer(bottle).then(data => {
         // now decode it.
-        const reader = bottleReader();
+        const reader = readBottle();
         sourceStream(data).pipe(reader);
         return reader.readPromise().then(data => {
           data.type.should.eql(TYPE_COMPRESSED);
@@ -47,7 +47,7 @@ describe("compressedBottleWriter", () => {
       writer.end();
       return pipeToBuffer(bottle).then(data => {
         // now decode it.
-        const reader = bottleReader();
+        const reader = readBottle();
         sourceStream(data).pipe(reader);
         return reader.readPromise().then(data => {
           data.type.should.eql(TYPE_COMPRESSED);

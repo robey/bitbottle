@@ -6,8 +6,9 @@ export {
 } from "./lib4bottle/archive";
 
 export {
-  BottleWriter,
-  readBottleFromStream,
+  bottleTypeName,
+  readBottle,
+  writeBottle,
   TYPE_FILE,
   TYPE_HASHED,
   TYPE_ENCRYPTED,
@@ -23,17 +24,21 @@ export {
 } from "./lib4bottle/file_bottle";
 
 export {
-  validateHashBottle,
-  HashBottleWriter,
+  decodeHashHeader,
+  readHashBottle,
+  writeHashBottle,
   HASH_SHA512
 } from "./lib4bottle/hash_bottle";
 
 export {
-  encryptedBottleWriter,
+  decodeEncryptionHeader,
+  readEncryptedBottle,
+  writeEncryptedBottle,
   ENCRYPTION_AES_256_CTR
 } from "./lib4bottle/encrypted_bottle";
 
 export {
+  decodeCompressionHeader,
   readCompressedBottle,
   writeCompressedBottle,
   COMPRESSION_LZMA2,

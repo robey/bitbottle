@@ -1,7 +1,7 @@
 "use strict";
 
 import fs from "fs";
-import { bottleReader, TYPE_FILE } from "../../lib/lib4bottle/bottle_stream";
+import { readBottle, TYPE_FILE } from "../../lib/lib4bottle/bottle_stream";
 import { decodeFileHeader, writeFileBottle, writeFolderBottle } from "../../lib/lib4bottle/file_bottle";
 import { pipeToBuffer, sourceStream } from "stream-toolkit";
 import { future, withTempFolder } from "mocha-sprinkles";
@@ -23,7 +23,7 @@ describe("writeFileBottle", () => {
     bottle.end();
     return pipeToBuffer(bottle).then(data => {
       // now decode it.
-      const reader = bottleReader();
+      const reader = readBottle();
       sourceStream(data).pipe(reader);
       return reader.readPromise().then(data => {
         data.type.should.eql(TYPE_FILE);
@@ -53,7 +53,7 @@ describe("writeFileBottle", () => {
     bottle.end();
     return pipeToBuffer(bottle).then(data => {
       // now decode it.
-      const reader = bottleReader();
+      const reader = readBottle();
       sourceStream(data).pipe(reader);
       return reader.readPromise().then(data => {
         data.type.should.eql(TYPE_FILE);

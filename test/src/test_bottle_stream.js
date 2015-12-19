@@ -5,7 +5,7 @@ import stream from "stream";
 import { bufferStream, pipeToBuffer, PullTransform, sourceStream } from "stream-toolkit";
 import { future } from "mocha-sprinkles";
 import { Header } from "../../lib/lib4bottle/bottle_header";
-import { bottleReader, bottleWriter } from "../../lib/lib4bottle/bottle_stream";
+import { readBottle, writeBottle } from "../../lib/lib4bottle/bottle_stream";
 
 import "should";
 import "source-map-support/register";
@@ -18,7 +18,7 @@ describe("bottleWriter", () => {
   it("writes a bottle header", future(() => {
     const h = new Header();
     h.addNumber(0, 150);
-    const b = bottleWriter(10, h);
+    const b = writeBottle(10, h);
     b.end();
     return pipeToBuffer(b).then(data => {
       data.toString("hex").should.eql(`${MAGIC_STRING}a003800196ff`);
@@ -27,7 +27,7 @@ describe("bottleWriter", () => {
 
   it("writes data", future(() => {
     const data = sourceStream(new Buffer("ff00ff00", "hex"));
-    const b = bottleWriter(10, new Header());
+    const b = writeBottle(10, new Header());
     b.write(data);
     b.end();
     return pipeToBuffer(b).then(data => {
@@ -36,8 +36,8 @@ describe("bottleWriter", () => {
   }));
 
   it("writes nested bottle data", future(() => {
-    const b = new bottleWriter(10, new Header());
-    const b2 = new bottleWriter(14, new Header());
+    const b = new writeBottle(10, new Header());
+    const b2 = new writeBottle(14, new Header());
     b.write(b2.pipe(bufferStream()));
     b.end();
     b2.end();
@@ -52,7 +52,7 @@ describe("bottleWriter", () => {
     const slowStream = new stream.Readable();
     slowStream._read = () => null;
     slowStream.push(data);
-    const b = new bottleWriter(14, new Header());
+    const b = new writeBottle(14, new Header());
     Promise.delay(100).then(() => {
       slowStream.push(data);
       Promise.delay(100).then(() => {
@@ -70,7 +70,7 @@ describe("bottleWriter", () => {
     const data1 = sourceStream(new Buffer("f0f0f0", "hex"));
     const data2 = sourceStream(new Buffer("e0e0e0", "hex"));
     const data3 = sourceStream(new Buffer("cccccc", "hex"));
-    const b = bottleWriter(14, new Header());
+    const b = writeBottle(14, new Header());
     b.write(data1);
     b.write(data2);
     b.write(data3);
@@ -84,14 +84,14 @@ describe("bottleWriter", () => {
 
 describe("bottleReader", () => {
   it("validates the header", future(() => {
-    const b = bottleReader();
+    const b = readBottle();
     return new Promise(resolve => {
       b.on("error", error => resolve(error));
       sourceStream(new Buffer("00", "hex")).pipe(b);
     }).then(error => {
       error.message.should.match(/End of stream/);
 
-      const b2 = bottleReader();
+      const b2 = readBottle();
       return new Promise(resolve => {
         b2.on("error", error => resolve(error));
         sourceStream(new Buffer("00ff00ff00ff00ff", "hex")).pipe(b2);
@@ -99,7 +99,7 @@ describe("bottleReader", () => {
     }).then(error => {
       error.message.should.match(/magic/);
 
-      const b3 = bottleReader();
+      const b3 = readBottle();
       return new Promise(resolve => {
         b3.on("error", error => resolve(error));
         sourceStream(new Buffer("f09f8dbcff000000", "hex")).pipe(b3);
@@ -107,7 +107,7 @@ describe("bottleReader", () => {
     }).then(error => {
       error.message.should.match(/version/);
 
-      const b4 = bottleReader();
+      const b4 = readBottle();
       return new Promise(resolve => {
         b4.on("error", error => resolve(error));
         sourceStream(new Buffer("f09f8dbc00ff0000", "hex")).pipe(b4);
@@ -118,13 +118,13 @@ describe("bottleReader", () => {
   }));
 
   it("reads the header", future(() => {
-    const b = bottleReader();
+    const b = readBottle();
     sourceStream(new Buffer("f09f8dbc0000c000", "hex")).pipe(b);
     return b.readPromise().then(data => {
       data.header.fields.length.should.eql(0);
       data.type.should.eql(12);
 
-      const b2 = bottleReader();
+      const b2 = readBottle();
       sourceStream(new Buffer("f09f8dbc0000e003800196", "hex")).pipe(b2);
       return b2.readPromise();
     }).then(data => {
@@ -135,7 +135,7 @@ describe("bottleReader", () => {
   }));
 
   it("reads a data block", future(() => {
-    const b = bottleReader();
+    const b = readBottle();
     sourceStream(new Buffer(`${BASIC_MAGIC}0568656c6c6f00ff`, "hex")).pipe(b);
     return b.readPromise().then(() => {
       return b.readPromise().then(dataStream => {
@@ -150,7 +150,7 @@ describe("bottleReader", () => {
   }));
 
   it("reads a continuing data block", future(() => {
-    const b = bottleReader();
+    const b = readBottle();
     sourceStream(new Buffer(`${BASIC_MAGIC}026865016c026c6f00ff`, "hex")).pipe(b);
     return b.readPromise().then(() => {
       return b.readPromise().then(dataStream => {
@@ -165,7 +165,7 @@ describe("bottleReader", () => {
   }));
 
   it("reads several datas", future(() => {
-    const b = bottleReader();
+    const b = readBottle();
     sourceStream(new Buffer(`${BASIC_MAGIC}03f0f0f00003e0e0e00003cccccc00ff`, "hex")).pipe(b);
     return b.readPromise().then(() => {
       return b.readPromise().then(dataStream => {
@@ -193,7 +193,7 @@ describe("bottleReader", () => {
     const source = sourceStream(new Buffer(`${BASIC_MAGIC}0363617400ff${BASIC_MAGIC}0368617400ff`, "hex"));
     const pull = new PullTransform({ transform: () => Promise.delay(10) });
 
-    const b1 = bottleReader();
+    const b1 = readBottle();
     source.pipe(pull).subpipe(b1);
     return b1.readPromise().then(() => {
       return b1.readPromise().then(dataStream => {
@@ -205,7 +205,7 @@ describe("bottleReader", () => {
         (dataStream == null).should.eql(true);
       });
     }).then(() => {
-      const b2 = bottleReader();
+      const b2 = readBottle();
       pull.subpipe(b2);
       return b2.readPromise().then(() => {
         return b2.readPromise().then(dataStream => {
@@ -218,7 +218,7 @@ describe("bottleReader", () => {
         });
       });
     }).then(() => {
-      const b3 = bottleReader();
+      const b3 = readBottle();
       pull.subpipe(b3);
       return b3.readPromise().then(() => {
         throw new Error("expected end of stream");

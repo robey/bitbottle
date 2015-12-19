@@ -2,9 +2,9 @@
 
 import { pipeToBuffer, sourceStream } from "stream-toolkit";
 import { future } from "mocha-sprinkles";
-import { bottleReader, TYPE_HASHED } from "../../lib/lib4bottle/bottle_stream";
+import { readBottle, TYPE_HASHED } from "../../lib/lib4bottle/bottle_stream";
 import { readFile, writeFile } from "./files";
-import { decodeHashHeader, hashBottleReader, hashBottleWriter, HASH_SHA512 } from "../../lib/lib4bottle/hash_bottle";
+import { decodeHashHeader, readHashBottle, writeHashBottle, HASH_SHA512 } from "../../lib/lib4bottle/hash_bottle";
 
 import "should";
 import "source-map-support/register";
@@ -22,18 +22,18 @@ function verifier(data, signedBy) {
 
 describe("hashBottleWriter", () => {
   it("hashes a small stream", future(() => {
-    return hashBottleWriter(HASH_SHA512).then(({ writer, bottle }) => {
+    return writeHashBottle(HASH_SHA512).then(({ writer, bottle }) => {
       sourceStream("i choose you!").pipe(writer);
       return pipeToBuffer(bottle).then(buffer => {
         // now decode it.
-        const reader = bottleReader();
+        const reader = readBottle();
         sourceStream(buffer).pipe(reader);
         return reader.readPromise().then(data => {
           data.type.should.eql(TYPE_HASHED);
           const header = decodeHashHeader(data.header);
           header.hashType.should.eql(HASH_SHA512);
 
-          return hashBottleReader(header, reader);
+          return readHashBottle(header, reader);
         }).then(({ stream, hexPromise }) => {
           return pipeToBuffer(stream).then(buffer => {
             buffer.toString().should.eql("i choose you!");
@@ -51,18 +51,18 @@ describe("hashBottleWriter", () => {
 
   it("writes and hashes a file stream", future(() => {
     return writeFile("file.txt").then(fileBuffer => {
-      return hashBottleWriter(HASH_SHA512).then(({ writer, bottle }) => {
+      return writeHashBottle(HASH_SHA512).then(({ writer, bottle }) => {
         sourceStream(fileBuffer).pipe(writer);
         return pipeToBuffer(bottle).then(buffer => {
           // now decode it.
-          const reader = bottleReader();
+          const reader = readBottle();
           sourceStream(buffer).pipe(reader);
           return reader.readPromise().then(data => {
             data.type.should.eql(TYPE_HASHED);
             const header = decodeHashHeader(data.header);
             header.hashType.should.eql(HASH_SHA512);
 
-            return hashBottleReader(header, reader);
+            return readHashBottle(header, reader);
           }).then(({ stream, hexPromise }) => {
             return readFile(stream, "file.txt").then(() => {
               return hexPromise;
@@ -80,11 +80,11 @@ describe("hashBottleWriter", () => {
 
   it("signs a bottle", future(() => {
     return writeFile("file.txt").then(fileBuffer => {
-      return hashBottleWriter(HASH_SHA512, { signedBy: "garfield", signer }).then(({ writer, bottle }) => {
+      return writeHashBottle(HASH_SHA512, { signedBy: "garfield", signer }).then(({ writer, bottle }) => {
         sourceStream(fileBuffer).pipe(writer);
         return pipeToBuffer(bottle).then(buffer => {
           // now decode it.
-          const reader = bottleReader();
+          const reader = readBottle();
           sourceStream(buffer).pipe(reader);
           return reader.readPromise().then(data => {
             data.type.should.eql(TYPE_HASHED);
@@ -92,7 +92,7 @@ describe("hashBottleWriter", () => {
             header.hashType.should.eql(HASH_SHA512);
             header.signedBy.should.eql("garfield");
 
-            return hashBottleReader(header, reader, { verifier });
+            return readHashBottle(header, reader, { verifier });
           }).then(({ stream, hexPromise }) => {
             return readFile(stream, "file.txt").then(() => {
               return hexPromise;
@@ -110,14 +110,14 @@ describe("hashBottleWriter", () => {
 
   it("rejects a badly signed hashed stream", future(() => {
     return writeFile("file.txt").then(fileBuffer => {
-      return hashBottleWriter(HASH_SHA512, { signedBy: "odie", signer }).then(({ writer, bottle }) => {
+      return writeHashBottle(HASH_SHA512, { signedBy: "odie", signer }).then(({ writer, bottle }) => {
         sourceStream(fileBuffer).pipe(writer);
         return pipeToBuffer(bottle).then(buffer => {
           // now decode it.
-          const reader = bottleReader();
+          const reader = readBottle();
           sourceStream(buffer).pipe(reader);
           return reader.readPromise().then(data => {
-            return hashBottleReader(decodeHashHeader(data.header), reader, { verifier });
+            return readHashBottle(decodeHashHeader(data.header), reader, { verifier });
           }).then(({ stream, hexPromise }) => {
             return readFile(stream, "file.txt").then(() => {
               return hexPromise;

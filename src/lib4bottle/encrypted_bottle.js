@@ -1,7 +1,7 @@
 "use strict";
 
 import { Header, TYPE_STRING, TYPE_ZINT } from "./bottle_header";
-import { bottleWriter, TYPE_ENCRYPTED } from "./bottle_stream";
+import { writeBottle, TYPE_ENCRYPTED } from "./bottle_stream";
 import crypto from "crypto";
 import Promise from "bluebird";
 import scrypt from "js-scrypt";
@@ -44,7 +44,7 @@ const SCRYPT_P = 1;
  *     function to generate an encrypted key for this recipient
  *   - `password`: `String` to use to generate a key
  */
-export function encryptedBottleWriter(encryptionType, options = {}) {
+export function writeEncryptedBottle(encryptionType, options = {}) {
   const header = new Header();
   header.addNumber(FIELDS.NUMBERS.ENCRYPTION_TYPE, encryptionType);
   if (options.recipients && options.recipients.length > 0) {
@@ -56,7 +56,7 @@ export function encryptedBottleWriter(encryptionType, options = {}) {
     header.addString(FIELDS.STRINGS.SCRYPT, `${SCRYPT_N}:${SCRYPT_R}:${SCRYPT_P}:${options.salt.toString("base64")}`);
   }
 
-  const bottle = bottleWriter(TYPE_ENCRYPTED, header);
+  const bottle = writeBottle(TYPE_ENCRYPTED, header);
   const key = makeKey(options);
   return encryptionTransformForType(encryptionType, key).then(({ key, writer }) => {
     return writeKeys(bottle, key, options).then(() => {
@@ -146,7 +146,7 @@ export function decodeEncryptionHeader(h) {
  *   - `getPassword`: `() => Promise(String)` requested when the key is
  *     encrypted with scrypt
  */
-export function encryptedBottleReader(header, bottleReader, options = {}) {
+export function readEncryptedBottle(header, bottleReader, options = {}) {
   const decrypter = options.decrypter || (() => Promise.reject(new Error("No decrypter given")));
   const getPassword = options.getPassword || (() => Promise.reject(new Error("No getPassword given")));
 

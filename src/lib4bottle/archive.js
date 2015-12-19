@@ -6,11 +6,11 @@ import path from "path";
 import Promise from "bluebird";
 import rx from "rx";
 import { countingStream, nullSinkStream } from "stream-toolkit";
-import { bottleReader, TYPE_COMPRESSED, TYPE_ENCRYPTED, TYPE_FILE, TYPE_HASHED } from "./bottle_stream";
+import { readBottle, TYPE_COMPRESSED, TYPE_ENCRYPTED, TYPE_FILE, TYPE_HASHED } from "./bottle_stream";
 import { decodeCompressionHeader, readCompressedBottle } from "./compressed_bottle";
-import { decodeEncryptionHeader, encryptedBottleReader } from "./encrypted_bottle";
+import { decodeEncryptionHeader, readEncryptedBottle } from "./encrypted_bottle";
 import { decodeFileHeader, writeFileBottle, fileHeaderFromStats, writeFolderBottle } from "./file_bottle";
-import { decodeHashHeader, hashBottleReader } from "./hash_bottle";
+import { decodeHashHeader, readHashBottle } from "./hash_bottle";
 
 const openPromise = Promise.promisify(fs.open);
 const readdirPromise = Promise.promisify(fs.readdir);
@@ -165,7 +165,7 @@ export function scanArchive(stream, options = {}) {
     });
 
     function scanStream(substream) {
-      const bottle = bottleReader(options);
+      const bottle = readBottle(options);
       substream.pipe(bottle);
       return bottle.readPromise(1).then(({ type, header }) => {
         return scanBottle(type, header, bottle);
@@ -196,7 +196,7 @@ export function scanArchive(stream, options = {}) {
         case TYPE_HASHED:
           header = decodeHashHeader(header);
           observer.onNext({ event: "enter-hash", header });
-          return hashBottleReader(header, bottle, options).then(({ stream, hexPromise }) => {
+          return readHashBottle(header, bottle, options).then(({ stream, hexPromise }) => {
             return scanStream(stream).then(() => drainBottle(bottle)).then(() => hexPromise).then(hex => {
               observer.onNext({ event: "valid-hash", header, hex });
             }, error => {
@@ -207,7 +207,7 @@ export function scanArchive(stream, options = {}) {
         case TYPE_ENCRYPTED:
           header = decodeEncryptionHeader(header);
           observer.onNext({ event: "enter-encrypt", header });
-          return encryptedBottleReader(header, bottle, options).then(nextStream => {
+          return readEncryptedBottle(header, bottle, options).then(nextStream => {
             return scanStream(nextStream).then(() => drainBottle(bottle));
           }).then(() => {
             observer.onNext({ event: "exit-encrypt", header });

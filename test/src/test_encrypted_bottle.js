@@ -1,10 +1,10 @@
 "use strict";
 
-import { bottleReader, TYPE_ENCRYPTED } from "../../lib/lib4bottle/bottle_stream";
+import { readBottle, TYPE_ENCRYPTED } from "../../lib/lib4bottle/bottle_stream";
 import {
   decodeEncryptionHeader,
-  encryptedBottleReader,
-  encryptedBottleWriter,
+  readEncryptedBottle,
+  writeEncryptedBottle,
   ENCRYPTION_AES_256_CTR
 } from "../../lib/lib4bottle/encrypted_bottle";
 import Promise from "bluebird";
@@ -30,14 +30,14 @@ describe("encryptedBottleWriter", () => {
         return Promise.resolve(savedKey);
       };
 
-      return encryptedBottleWriter(
+      return writeEncryptedBottle(
         ENCRYPTION_AES_256_CTR,
         { recipients: [ "garfield" ], encrypter }
       ).then(({ writer, bottle }) => {
         sourceStream(DATA1).pipe(writer);
         return pipeToBuffer(bottle).then(buffer => {
           // now decrypt
-          const reader = bottleReader();
+          const reader = readBottle();
           sourceStream(buffer).pipe(reader);
           return reader.readPromise().then(data => {
             data.type.should.eql(TYPE_ENCRYPTED);
@@ -46,7 +46,7 @@ describe("encryptedBottleWriter", () => {
             header.recipients.should.eql([ "garfield" ]);
             (header.scrypt == null).should.eql(true);
 
-            return encryptedBottleReader(header, reader, { decrypter });
+            return readEncryptedBottle(header, reader, { decrypter });
           }).then(stream => {
             return pipeToBuffer(stream);
           }).then(buffer => {
@@ -69,14 +69,14 @@ describe("encryptedBottleWriter", () => {
         return keymap.get("garfield").slice(8);
       };
 
-      return encryptedBottleWriter(
+      return writeEncryptedBottle(
         ENCRYPTION_AES_256_CTR,
         { recipients: [ "garfield", "odie" ], encrypter }
       ).then(({ writer, bottle }) => {
         sourceStream(DATA1).pipe(writer);
         return pipeToBuffer(bottle).then(buffer => {
           // now decrypt
-          const reader = bottleReader();
+          const reader = readBottle();
           sourceStream(buffer).pipe(reader);
           return reader.readPromise().then(data => {
             data.type.should.eql(TYPE_ENCRYPTED);
@@ -85,7 +85,7 @@ describe("encryptedBottleWriter", () => {
             header.recipients.should.eql([ "garfield", "odie" ]);
             (header.scrypt == null).should.eql(true);
 
-            return encryptedBottleReader(header, reader, { decrypter });
+            return readEncryptedBottle(header, reader, { decrypter });
           }).then(stream => {
             return pipeToBuffer(stream);
           }).then(buffer => {
@@ -98,14 +98,14 @@ describe("encryptedBottleWriter", () => {
     it("with a key", future(() => {
       const keyBuffer = new Buffer(48);
       keyBuffer.fill(0);
-      return encryptedBottleWriter(
+      return writeEncryptedBottle(
         ENCRYPTION_AES_256_CTR,
         { key: keyBuffer }
       ).then(({ writer, bottle }) => {
         sourceStream(DATA1).pipe(writer);
         return pipeToBuffer(bottle).then(buffer => {
           // now decrypt
-          const reader = bottleReader();
+          const reader = readBottle();
           sourceStream(buffer).pipe(reader);
           return reader.readPromise().then(data => {
             data.type.should.eql(TYPE_ENCRYPTED);
@@ -114,7 +114,7 @@ describe("encryptedBottleWriter", () => {
             (header.recipients == null).should.eql(true);
             (header.scrypt == null).should.eql(true);
 
-            return encryptedBottleReader(header, reader, { key: keyBuffer });
+            return readEncryptedBottle(header, reader, { key: keyBuffer });
           }).then(stream => {
             return pipeToBuffer(stream);
           }).then(buffer => {
@@ -125,14 +125,14 @@ describe("encryptedBottleWriter", () => {
     }));
 
     it("using scrypt", future(() => {
-      return encryptedBottleWriter(
+      return writeEncryptedBottle(
         ENCRYPTION_AES_256_CTR,
         { password: "kwyjibo" }
       ).then(({ writer, bottle }) => {
         sourceStream(DATA1).pipe(writer);
         return pipeToBuffer(bottle).then(buffer => {
           // now decrypt
-          const reader = bottleReader();
+          const reader = readBottle();
           sourceStream(buffer).pipe(reader);
           return reader.readPromise().then(data => {
             data.type.should.eql(TYPE_ENCRYPTED);
@@ -141,7 +141,7 @@ describe("encryptedBottleWriter", () => {
             (header.recipients == null).should.eql(true);
             header.scrypt.slice(0, 3).should.eql([ "14", "8", "1" ]);
 
-            return encryptedBottleReader(header, reader, { getPassword: () => Promise.resolve("kwyjibo") });
+            return readEncryptedBottle(header, reader, { getPassword: () => Promise.resolve("kwyjibo") });
           }).then(stream => {
             return pipeToBuffer(stream);
           }).then(buffer => {

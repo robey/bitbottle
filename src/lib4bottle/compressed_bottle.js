@@ -4,7 +4,7 @@ import snappy from "snappy";
 import { bufferStream, promisify, Transform, weld } from "stream-toolkit";
 import xz from "xz";
 import { Header, TYPE_ZINT } from "./bottle_header";
-import { bottleWriter, TYPE_COMPRESSED } from "./bottle_stream";
+import { writeBottle, TYPE_COMPRESSED } from "./bottle_stream";
 
 const FIELDS = {
   NUMBERS: {
@@ -28,7 +28,7 @@ export function writeCompressedBottle(compressionType) {
 
   const header = new Header();
   header.addNumber(FIELDS.NUMBERS.COMPRESSION_TYPE, compressionType);
-  const bottle = bottleWriter(TYPE_COMPRESSED, header);
+  const bottle = writeBottle(TYPE_COMPRESSED, header);
   bottle.write(compressor);
   bottle.end();
 

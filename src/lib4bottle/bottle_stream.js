@@ -30,7 +30,7 @@ const BOTTLE_END = 0xff;
  * Stream transform that accepts child streams and emits them as a single
  * bottle stream with a header.
  */
-export function bottleWriter(type, header, options = {}) {
+export function writeBottle(type, header, options = {}) {
   const streamOptions = {
     name: "bottleWriterGuts",
     writableObjectMode: true,
@@ -76,43 +76,11 @@ function writeHeader(type, header) {
   ]);
 }
 
-// /*
-//  * Converts a Readable stream into a framed data stream with a 4bottle
-//  * header/footer. Write buffers, read buffers. This is a convenience version
-//  * of BottleWriter for the case (like a compression stream) where there will
-//  * be exactly one nested bottle.
-//  */
-// export class LoneBottleWriter extends BottleWriter {
-//   constructor(type, header, options = {}) {
-//     if (options.objectModeRead == null) options.objectModeRead = false;
-//     if (options.objectModeWrite == null) options.objectModeWrite = false;
-//     super(type, header, options);
-//     // make a single framed stream that we channel
-//     this.framedStream = framed_stream.writableFramedStream();
-//     this.__log("writing (lone) stream into " + this.framedStream.__name);
-//     this.framedStream.on("data", data => this.push(data);
-//   }
-//
-//   _transform(data, _, callback) {
-//     this.framedStream.write(data, _, callback);
-//   }
-//
-//   _flush(callback) {
-//     this.framedStream.end();
-//     this.framedStream.on("end", () => {
-//       this.__log("end lone.");
-//       this._close();
-//       callback();
-//     });
-//   }
-// }
-
-
 /*
  * Stream transform that accepts a byte stream and emits a header, then one
  * or more child streams.
  */
-export function bottleReader(options = {}) {
+export function readBottle(options = {}) {
   const streamOptions = {
     readableObjectMode: true,
     transform: t => {
@@ -161,98 +129,3 @@ function readHeader(transform) {
     });
   });
 }
-
-// // read a bottle from a stream, returning a BottleReader object, which is
-// // a stream that provides sub-streams.
-// export function readBottleFromStream(stream) {
-//   // avoid import loops.
-//   const file_bottle = require("./file_bottle");
-//   const hash_bottle = require("./hash_bottle");
-//   const encrypted_bottle = require("./encrypted_bottle");
-//   const compressed_bottle = require("./compressed_bottle");
-//
-//   return readBottleHeader(stream).then(({ type, header }) => {
-//     switch (type) {
-//       case TYPE_FILE:
-//         return new BottleReader(type, file_bottle.decodeFileHeader(header), stream);
-//       case TYPE_HASHED:
-//         return new hash_bottle.HashBottleReader(hash_bottle.decodeHashHeader(header), stream);
-//       case TYPE_ENCRYPTED:
-//         return new encrypted_bottle.EncryptedBottleReader(encrypted_bottle.decodeEncryptionHeader(header), stream);
-//       case TYPE_COMPRESSED:
-//         return new compressed_bottle.CompressedBottleReader(compressed_bottle.decodeCompressedHeader(header), stream);
-//       default:
-//         return new BottleReader(type, header, stream);
-//     }
-//   });
-// }
-//
-
-//
-//
-// // stream that reads an underlying (buffer) stream, pulls out the header and
-// // type, and generates data streams.
-// export class BottleReader extends stream.Readable {
-//   constructor(type, header, stream) {
-//     super({ objectMode: true });
-//     this.type = type;
-//     this.header = header;
-//     this.stream = stream;
-//     this.lastPromise = Promise.resolve();
-//     toolkit.promisify(this, { name: "BottleReader(" + this.typeName() + ")" });
-//     this.__log(`${this.__name} reading from ${this.stream.__name || "???"}`);
-//   }
-//
-//   toString() {
-//     return this.__name;
-//   }
-//
-//   // usually subclasses will override this.
-//   typeName() {
-//     switch (this.type) {
-//       case TYPE_FILE:
-//         return this.header.folder ? "folder" : "file";
-//       default:
-//         return `unknown(${this.type})`;
-//     }
-//   }
-//
-//   _read(size) {
-//     this.__log("_read(" + size + ")");
-//     return this._nextStream();
-//   }
-//
-//   _nextStream() {
-//     // must finish reading the last thing we generated, if any:
-//     this.__log("wait for inner stream to end");
-//     return this.lastPromise.then(() => {
-//       this.__log("inner stream ended! reading next data stream");
-//       return this._readDataStream();
-//     }).then(stream => {
-//       if (!stream) {
-//         // just in case we're tripping that io.js bug, read 0 bytes, to trigger the 'end' signal.
-//         this.stream.read(0);
-//         this.__log("end of stream");
-//         this.push(null);
-//         return;
-//       }
-//       this.__log("pushing new stream: " + (stream.__name || "?"));
-//       this.lastPromise = stream.endPromise();
-//       this.push(stream);
-//     }).catch(error => {
-//       this.emit("error", error);
-//     });
-//   }
-//
-//   drain() {
-//     return this.readPromise(1).then(stream => {
-//       if (!stream) return;
-//       const sink = toolkit.nullSinkStream();
-//       stream.pipe(sink);
-//       return sink.endPromise().then(() => {
-//         return this.drain();
-//       });
-//     });
-//   }
-
-// }

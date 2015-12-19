@@ -1,7 +1,7 @@
 "use strict";
 
 import { pipeToBuffer, sourceStream } from "stream-toolkit";
-import { bottleReader, TYPE_FILE } from "../../lib/lib4bottle/bottle_stream";
+import { readBottle, TYPE_FILE } from "../../lib/lib4bottle/bottle_stream";
 import { decodeFileHeader, writeFileBottle } from "../../lib/lib4bottle/file_bottle";
 
 const KNOWN_FILES = {
@@ -29,7 +29,7 @@ export function writeFile(filename) {
 
 // read a file bottle out of another bottle.
 export function readFile(stream, filename) {
-  const bottle = bottleReader();
+  const bottle = readBottle();
   stream.pipe(bottle);
   return bottle.readPromise().then(data => {
     data.type.should.eql(TYPE_FILE);

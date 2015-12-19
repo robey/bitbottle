@@ -1,6 +1,6 @@
 "use strict";
 
-import { ArchiveWriter, ENCRYPTION_AES_256_CTR, encryptedBottleWriter, scanArchive } from "../../lib/lib4bottle";
+import { ArchiveWriter, ENCRYPTION_AES_256_CTR, writeEncryptedBottle, scanArchive } from "../../lib/lib4bottle";
 import fs from "fs";
 import { pipeToBuffer, sourceStream } from "stream-toolkit";
 import { future, withTempFolder } from "mocha-sprinkles";
@@ -8,7 +8,7 @@ import { future, withTempFolder } from "mocha-sprinkles";
 import "should";
 import "source-map-support/register";
 
-function archiveWriter() {
+function writeArchive() {
   const w = new ArchiveWriter();
   w.collectedEvents = [];
   w.on("filename", (filename, stats) => w.collectedEvents.push({ event: "filename", filename, stats }));
@@ -44,7 +44,7 @@ function scan(stream, options = {}) {
 describe("ArchiveWriter", () => {
   it("processes a file", future(withTempFolder(folder => {
     fs.writeFileSync(`${folder}/test.txt`, "hello");
-    const w = archiveWriter();
+    const w = writeArchive();
     return w.archiveFile(`${folder}/test.txt`).then(bottle => {
       return pipeToBuffer(bottle).then(data => {
         data.length.should.eql(77);
@@ -57,7 +57,7 @@ describe("ArchiveWriter", () => {
     fs.mkdirSync(`${folder}/stuff`);
     fs.writeFileSync(`${folder}/stuff/one.txt`, "one!");
     fs.writeFileSync(`${folder}/stuff/two.txt`, "two!");
-    const w = archiveWriter();
+    const w = writeArchive();
     return w.archiveFile(`${folder}/stuff`).then(bottle => {
       return pipeToBuffer(bottle).then(() => {
         w.collectedEvents.filter(e => e.event == "filename").map(e => e.filename).should.eql([
@@ -72,11 +72,11 @@ describe("ArchiveWriter", () => {
   it("creates and reads an encrypted archive", future(withTempFolder(folder => {
     fs.writeFileSync(`${folder}/hello.txt`, "hello, i must be going!");
 
-    return encryptedBottleWriter(
+    return writeEncryptedBottle(
       ENCRYPTION_AES_256_CTR,
       { password: "throwing muses" }
     ).then(({ writer, bottle }) => {
-      const w = archiveWriter();
+      const w = writeArchive();
       return w.archiveFile(`${folder}/hello.txt`).then(archiveBottle => {
         archiveBottle.pipe(writer);
         return pipeToBuffer(bottle);

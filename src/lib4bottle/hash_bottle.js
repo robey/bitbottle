@@ -3,7 +3,7 @@
 import crypto from "crypto";
 import Promise from "bluebird";
 import { Header, TYPE_STRING, TYPE_ZINT } from "./bottle_header";
-import { bottleWriter, TYPE_HASHED } from "./bottle_stream";
+import { writeBottle, TYPE_HASHED } from "./bottle_stream";
 import { pipeToBuffer, sourceStream, Transform } from "stream-toolkit";
 
 const FIELDS = {
@@ -30,7 +30,7 @@ const HASH_NAMES = {
  *   - signer: `Buffer => Promise(Buffer)`: perform the signing, and
  *     return a signed blob that contains the original buffer inside it
  */
-export function hashBottleWriter(hashType, options = {}) {
+export function writeHashBottle(hashType, options = {}) {
   const _babel_bug = hash => Promise.resolve(hash);
   const signer = options.signer || _babel_bug;
 
@@ -38,7 +38,7 @@ export function hashBottleWriter(hashType, options = {}) {
   header.addNumber(FIELDS.NUMBERS.HASH_TYPE, hashType);
   if (options.signedBy) header.addString(FIELDS.STRINGS.SIGNED_BY, options.signedBy);
 
-  const bottle = bottleWriter(TYPE_HASHED, header);
+  const bottle = writeBottle(TYPE_HASHED, header);
   const writer = hashStreamForType(hashType);
   bottle.write(writer);
   writer.on("end", () => {
@@ -116,7 +116,7 @@ export function decodeHashHeader(h) {
  *     hash was signed, unpack the signature, verify that it was signed by
  *     `signedBy`, and return either the signed data or an exception
  */
-export function hashBottleReader(header, bottleReader, options = {}) {
+export function readHashBottle(header, bottleReader, options = {}) {
   const hashStream = hashStreamForType(header.hashType);
   if (header.signedBy && !options.verifier) throw new Error("No verifier given");
   const _babel_bug = buffer => Promise.resolve(buffer);

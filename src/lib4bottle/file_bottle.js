@@ -1,7 +1,7 @@
 "use strict";
 
 import { Header, TYPE_BOOL, TYPE_STRING, TYPE_ZINT } from "./bottle_header";
-import { bottleWriter, TYPE_FILE } from "./bottle_stream";
+import { writeBottle, TYPE_FILE } from "./bottle_stream";
 import posix from "posix";
 
 const FIELDS = {
@@ -26,11 +26,11 @@ const FIELDS = {
 
 // wrap a single file stream (with its metadata) into a FileBottle.
 export function writeFileBottle(stats) {
-  return bottleWriter(TYPE_FILE, encodeFileHeader(stats, { folder: false }));
+  return writeBottle(TYPE_FILE, encodeFileHeader(stats, { folder: false }));
 }
 
 export function writeFolderBottle(stats) {
-  return bottleWriter(TYPE_FILE, encodeFileHeader(stats, { folder: true }));
+  return writeBottle(TYPE_FILE, encodeFileHeader(stats, { folder: true }));
 }
 
 export function encodeFileHeader(stats, overrides) {
