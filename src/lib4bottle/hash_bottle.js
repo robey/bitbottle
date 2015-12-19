@@ -107,9 +107,9 @@ export function decodeHashHeader(h) {
 
 /*
  * Returns a promise containing:
- *   - reader: inner stream
- *   - hex: promise for a hex of the hash, resolved if it matched or was
- *     signed correctly (rejected if not)
+ *   - stream: inner stream
+ *   - hexPromise: promise for a hex of the hash, resolved if it matched or
+ *     was signed correctly (rejected if not)
  *
  * Options:
  *   - verifier: `(Buffer, signedBy: String) => Promise(Buffer)`: if the
@@ -125,7 +125,7 @@ export function hashBottleReader(header, bottleReader, options = {}) {
   return bottleReader.readPromise().then(stream => {
     stream.pipe(hashStream);
 
-    const hex = new Promise((resolve, reject) => {
+    const hexPromise = new Promise((resolve, reject) => {
       hashStream.endPromise().then(() => {
         return bottleReader.readPromise().then(digestStream => {
           return pipeToBuffer(digestStream).then(signedBuffer => {
@@ -143,6 +143,6 @@ export function hashBottleReader(header, bottleReader, options = {}) {
       }).catch(error => reject(error));
     });
 
-    return { reader: hashStream, hex };
+    return { stream: hashStream, hexPromise };
   });
 }

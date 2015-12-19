@@ -34,10 +34,10 @@ describe("hashBottleWriter", () => {
           header.hashType.should.eql(HASH_SHA512);
 
           return hashBottleReader(header, reader);
-        }).then(({ reader, hex }) => {
-          return pipeToBuffer(reader).then(buffer => {
+        }).then(({ stream, hexPromise }) => {
+          return pipeToBuffer(stream).then(buffer => {
             buffer.toString().should.eql("i choose you!");
-            return hex;
+            return hexPromise;
           });
         }).then(hex => {
           hex.should.eql(
@@ -63,9 +63,9 @@ describe("hashBottleWriter", () => {
             header.hashType.should.eql(HASH_SHA512);
 
             return hashBottleReader(header, reader);
-          }).then(({ reader, hex }) => {
-            return readFile(reader, "file.txt").then(() => {
-              return hex;
+          }).then(({ stream, hexPromise }) => {
+            return readFile(stream, "file.txt").then(() => {
+              return hexPromise;
             });
           }).then(hex => {
             hex.should.eql(
@@ -93,9 +93,9 @@ describe("hashBottleWriter", () => {
             header.signedBy.should.eql("garfield");
 
             return hashBottleReader(header, reader, { verifier });
-          }).then(({ reader, hex }) => {
-            return readFile(reader, "file.txt").then(() => {
-              return hex;
+          }).then(({ stream, hexPromise }) => {
+            return readFile(stream, "file.txt").then(() => {
+              return hexPromise;
             });
           }).then(hex => {
             hex.should.eql(
@@ -118,9 +118,9 @@ describe("hashBottleWriter", () => {
           sourceStream(buffer).pipe(reader);
           return reader.readPromise().then(data => {
             return hashBottleReader(decodeHashHeader(data.header), reader, { verifier });
-          }).then(({ reader, hex }) => {
-            return readFile(reader, "file.txt").then(() => {
-              return hex;
+          }).then(({ stream, hexPromise }) => {
+            return readFile(stream, "file.txt").then(() => {
+              return hexPromise;
             });
           }).then(hex => {
             hex.should.eql("nothing good can be here");
