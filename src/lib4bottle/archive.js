@@ -115,146 +115,46 @@ export class ArchiveWriter extends events.EventEmitter {
 
 
 /*
- * Read an archive from a stream.
+ * Read an archive from a stream and generate an rx 'Observable'. The
+ * Observable generates events for each file, and when it enters and exits
+ * sections for folders, compression, encryption, or hash validation.
  *
  * Options:
- *   - `processFile: ({ fileHeader, stream }) => Promise()`
- *     - process the data stream of a file, and return a Promise that
- *       indicates that the stream has been completely read (default behavior
- *       is to read the stream into a bit bucket and move on)
- *   - `key`: `Buffer`
- *     - the key to use for decryption, if you have one already
+ *   - `key`: `Buffer` the key to use for decryption, if you have one already
  *   - `decrypter`: `(keymap: Map(String, Buffer)) => Promise(Buffer)`
- *     - function to generate an decrypted key, given a map of recipients to
- *       encrypted keys
- *   - `getPassword`: `() => Promise(String)`
- *     - requested when the key is encrypted with scrypt
-
- *   - `verify: (Buffer, signedBy: String) => Promise(Buffer)`
- *     - unpack a signature buffer and verify that it was signed by the name
- *       given, returning the original signed data (or an exception)
+ *     function to generate an decrypted key, given a map of recipients to
+ *     encrypted keys
+ *   - `getPassword`: `() => Promise(String)` requested when the key is
+ *     encrypted with scrypt
+ *   - `verifier`: `(Buffer, signedBy: String) => Promise(Buffer)`: if the
+ *     hash was signed, unpack the signature, verify that it was signed by
+ *     `signedBy`, and return either the signed data or an exception
  *
- * Events are emitted for:
- *   - `start-bottle`
- *     - `({ type, header })` - beginning processing of a bottle
- *   - `end-bottle`
- *     - `({ type, header })` - done processing a bottle
- *   - `error`
- *     - `Error` - caught an error during processing
- *   - `skip`
- *     - `({ type, header })` - unknown bottle type, skipping
- *   - `hash`
- *     - `(bottle: BottleReader, isValid, hex)` - after validating a hashed
- *       bottle
- *   - `encrypt`
- *     - `({ type, header })` - before attempting to decrypt an encrypted
- *       bottle
- *   - `compress`
- *     - `(bottle: BottleReader)` - before uncompressing a compressed bottle
+ * Events are emitted with at least these fields:
+ *   - `event`: name of the event (listed below)
+ *   - `header`: bottle-dependent header (filename, encryption type, and so
+ *     on)
  *
- * callbacks:
- *   - processFile(dataStream) -> handle contents of a file, return a promise for completion
- *   - decryptKey(keyMap) -> decrypt one of these buffers if possible
+ * Events:
+ *   - `enter-folder`: subsequent files will be located within this named
+ *     folder, until the corresponding `exit-folder`
+ *   - `exit-folder`: leaving the named folder
+ *   - `file`: event contains a `stream` field with the file's contents
+ *   - `enter-hash`: entering a hash-validated or signed section (will use
+ *     `options` to validate any signature)
+ *   - `valid-hash`: exiting a hash-validated or signed section successfully;
+ *     the `hex` field contains the section's valid hash
+ *   - `invalid-hash`: exiting a hash-validated or signed section
+ *     unsuccessfully; the `error` field contains the error
+ *   - `enter-encrypt`: entering an encrypted section (will use `options` to
+ *     decrypt)
+ *   - `exit-encrypt`: leaving an encrypted section
+ *   - `enter-compress`: entering a compressed section
+ *   - `exit-compress`: leaving a compressed section
+ *
+ * Because the archive is read as a stream, each `file` event must have its
+ * stream object drained before the next event can be emitted.
  */
-// export class ArchiveReader extends events.EventEmitter {
-//   constructor(options = {}) {
-//     super();
-//     this.options = {
-//       processFile: dataStream => {
-//         // default: just skip this stream.
-//         const sink = nullSinkStream();
-//         dataStream.pipe(sink);
-//         return sink.finishPromise();
-//       },
-//       verify: () => {
-//         // FIXME: maybe this isn't an error, but a warning?
-//         return Promise.reject(new Error("Can't verify signed bottle"));
-//       }
-//     };
-//     for (const k in options) this.options[k] = options[k];
-//   }
-//
-//   scanStream(inStream, options = {}) {
-//     const bottle = bottleReader(options);
-//     inStream.pipe(bottle);
-//     return bottle.readPromise(1).then(({ type, header }) => {
-//       this.emit("start-bottle", { type, header });
-//       return this._scan(type, header, bottle).then(() => {
-//         this.emit("end-bottle", { type, header });
-//       }, error => {
-//         this.emit("error", error);
-//       });
-//     });
-//   }
-//
-//   _scan(type, header, bottle) {
-//     switch (type) {
-//       case TYPE_FILE:
-//         return header.folder ? this._scanFolder(type, header, bottle) : this._scanFile(type, header, bottle);
-//       case TYPE_ENCRYPTED:
-//         return this._scanEncrypted(type, header, bottle);
-//       default:
-//         this.emit("skip", { type, header });
-//         return this._skipBottle(bottle);
-//     }
-//   }
-
-  // scan(bottle) {
-  //   switch (bottle.type) {
-  //     case TYPE_HASHED:
-  //       promise = this._scanHashed(bottle);
-  //       break;
-  //     case TYPE_ENCRYPTED:
-  //       promise = this._scanEncrypted(bottle);
-  //       break;
-  //     case TYPE_COMPRESSED:
-  //       promise = this._scanCompressed(bottle);
-  //       break;
-  //   }
-  // }
-
-  // // scan each internal stream recursively.
-  // _scanFolder(type, header, bottle) {
-  //   return bottle.readPromise(1).then(nextStream => {
-  //     if (nextStream == null) return bottle.endPromise();
-  //     return this.scanStream(nextStream).then(() => this._scanFolder(type, header, bottle));
-  //   });
-  // }
-  //
-  // _scanFile(type, header, bottle) {
-  //   return bottle.readPromise(1).then(nextStream => {
-  //     if (nextStream == null) return bottle.endPromise();
-  //     const fileHeader = decodeFileHeader(header);
-  //     return this.options.processFile({ fileHeader, stream: nextStream }).then(() => {
-  //       return this._scanFile(type, header, bottle);
-  //     });
-  //   });
-  // }
-
-
-
-//   _scanEncrypted(type, header, bottle) {
-//     const decodedHeader = decodeEncryptionHeader(header);
-//     this.emit("encrypt", { type, header: decodedHeader });
-//     return encryptedBottleReader(decodedHeader, bottle, this.options).then(stream => {
-//       return this.scanStream(stream).then(() => this._skipBottle(bottle));
-//     });
-//   }
-//
-//
-//   _skipBottle(bottle) {
-//     return bottle.readPromise(1).then(s => {
-//       if (s == null) return bottle.endPromise();
-//       const sink = nullSinkStream();
-//       s.pipe(sink);
-//       return sink.endPromise().then(() => this._skipBottle(bottle));
-//     });
-//   }
-// }
-
-
-
-
 export function scanArchive(stream, options = {}) {
   return rx.Observable.create(observer => {
     return scanStream(stream).then(() => {

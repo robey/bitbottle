@@ -112,7 +112,7 @@ export function decodeHashHeader(h) {
  *     was signed correctly (rejected if not)
  *
  * Options:
- *   - verifier: `(Buffer, signedBy: String) => Promise(Buffer)`: if the
+ *   - `verifier`: `(Buffer, signedBy: String) => Promise(Buffer)`: if the
  *     hash was signed, unpack the signature, verify that it was signed by
  *     `signedBy`, and return either the signed data or an exception
  */
