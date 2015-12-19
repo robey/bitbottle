@@ -23,7 +23,7 @@ const COMPRESSION_NAMES = {
 const LZMA_PRESET = 9;
 
 
-export function compressedBottleWriter(compressionType) {
+export function writeCompressedBottle(compressionType) {
   const compressor = compressionTransformForType(compressionType);
 
   const header = new Header();
@@ -35,9 +35,9 @@ export function compressedBottleWriter(compressionType) {
   return Promise.resolve({ writer: compressor, bottle });
 }
 
-export function compressedBottleReader(header, bottleReader) {
-  const compressionHeader = decodeCompressionHeader(header);
-  const zstream = decompressionTransformForType(compressionHeader.compressionType);
+export function readCompressedBottle(header, bottleReader) {
+  // const compressionHeader = decodeCompressionHeader(header);
+  const zstream = decompressionTransformForType(header.compressionType);
   return bottleReader.readPromise().then(stream => {
     stream.pipe(zstream);
     return zstream;

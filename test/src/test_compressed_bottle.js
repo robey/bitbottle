@@ -4,8 +4,8 @@ import { pipeToBuffer, sourceStream } from "stream-toolkit";
 import { future } from "mocha-sprinkles";
 import { bottleReader, TYPE_COMPRESSED } from "../../lib/lib4bottle/bottle_stream";
 import {
-  compressedBottleReader,
-  compressedBottleWriter,
+  readCompressedBottle,
+  writeCompressedBottle,
   COMPRESSION_LZMA2,
   COMPRESSION_SNAPPY,
   decodeCompressionHeader
@@ -18,7 +18,7 @@ const TestString = "My cat's breath smells like cat food.";
 
 describe("compressedBottleWriter", () => {
   it("compresses a stream with lzma2", future(() => {
-    return compressedBottleWriter(COMPRESSION_LZMA2).then(({ writer, bottle }) => {
+    return writeCompressedBottle(COMPRESSION_LZMA2).then(({ writer, bottle }) => {
       sourceStream(TestString).pipe(writer);
       return pipeToBuffer(bottle).then(data => {
         // now decode it.
@@ -30,7 +30,7 @@ describe("compressedBottleWriter", () => {
           header.compressionType.should.eql(COMPRESSION_LZMA2);
           header.compressionName.should.eql("LZMA2");
 
-          return compressedBottleReader(data.header, reader).then(decompressor => {
+          return readCompressedBottle(decodeCompressionHeader(data.header), reader).then(decompressor => {
             return decompressor.readPromise().then(content => {
               content.toString().should.eql(TestString);
             });
@@ -41,7 +41,7 @@ describe("compressedBottleWriter", () => {
   }));
 
   it("compresses a stream with snappy", future(() => {
-    return compressedBottleWriter(COMPRESSION_SNAPPY).then(({ writer, bottle}) => {
+    return writeCompressedBottle(COMPRESSION_SNAPPY).then(({ writer, bottle}) => {
       writer.write(TestString.slice(0, 20));
       writer.write(TestString.slice(20));
       writer.end();
@@ -55,7 +55,7 @@ describe("compressedBottleWriter", () => {
           header.compressionType.should.eql(COMPRESSION_SNAPPY);
           header.compressionName.should.eql("Snappy");
 
-          return compressedBottleReader(data.header, reader).then(decompressor => {
+          return readCompressedBottle(decodeCompressionHeader(data.header), reader).then(decompressor => {
             return decompressor.readPromise().then(content => {
               content.toString().should.eql(TestString);
             });
