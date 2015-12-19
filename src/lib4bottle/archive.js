@@ -6,9 +6,11 @@ import path from "path";
 import Promise from "bluebird";
 import rx from "rx";
 import { countingStream, nullSinkStream } from "stream-toolkit";
-import { bottleReader, TYPE_ENCRYPTED, TYPE_FILE } from "./bottle_stream";
+import { bottleReader, TYPE_COMPRESSED, TYPE_ENCRYPTED, TYPE_FILE, TYPE_HASHED } from "./bottle_stream";
+import { decodeCompressionHeader, readCompressedBottle } from "./compressed_bottle";
 import { decodeEncryptionHeader, encryptedBottleReader } from "./encrypted_bottle";
 import { decodeFileHeader, fileBottleWriter, fileHeaderFromStats, folderBottleWriter } from "./file_bottle";
+import { decodeHashHeader, hashBottleReader } from "./hash_bottle";
 
 const openPromise = Promise.promisify(fs.open);
 const readdirPromise = Promise.promisify(fs.readdir);
@@ -154,48 +156,48 @@ export class ArchiveWriter extends events.EventEmitter {
  *   - processFile(dataStream) -> handle contents of a file, return a promise for completion
  *   - decryptKey(keyMap) -> decrypt one of these buffers if possible
  */
-export class ArchiveReader extends events.EventEmitter {
-  constructor(options = {}) {
-    super();
-    this.options = {
-      processFile: dataStream => {
-        // default: just skip this stream.
-        const sink = nullSinkStream();
-        dataStream.pipe(sink);
-        return sink.finishPromise();
-      },
-      verify: () => {
-        // FIXME: maybe this isn't an error, but a warning?
-        return Promise.reject(new Error("Can't verify signed bottle"));
-      }
-    };
-    for (const k in options) this.options[k] = options[k];
-  }
-
-  scanStream(inStream, options = {}) {
-    const bottle = bottleReader(options);
-    inStream.pipe(bottle);
-    return bottle.readPromise(1).then(({ type, header }) => {
-      this.emit("start-bottle", { type, header });
-      return this._scan(type, header, bottle).then(() => {
-        this.emit("end-bottle", { type, header });
-      }, error => {
-        this.emit("error", error);
-      });
-    });
-  }
-
-  _scan(type, header, bottle) {
-    switch (type) {
-      case TYPE_FILE:
-        return header.folder ? this._scanFolder(type, header, bottle) : this._scanFile(type, header, bottle);
-      case TYPE_ENCRYPTED:
-        return this._scanEncrypted(type, header, bottle);
-      default:
-        this.emit("skip", { type, header });
-        return this._skipBottle(bottle);
-    }
-  }
+// export class ArchiveReader extends events.EventEmitter {
+//   constructor(options = {}) {
+//     super();
+//     this.options = {
+//       processFile: dataStream => {
+//         // default: just skip this stream.
+//         const sink = nullSinkStream();
+//         dataStream.pipe(sink);
+//         return sink.finishPromise();
+//       },
+//       verify: () => {
+//         // FIXME: maybe this isn't an error, but a warning?
+//         return Promise.reject(new Error("Can't verify signed bottle"));
+//       }
+//     };
+//     for (const k in options) this.options[k] = options[k];
+//   }
+//
+//   scanStream(inStream, options = {}) {
+//     const bottle = bottleReader(options);
+//     inStream.pipe(bottle);
+//     return bottle.readPromise(1).then(({ type, header }) => {
+//       this.emit("start-bottle", { type, header });
+//       return this._scan(type, header, bottle).then(() => {
+//         this.emit("end-bottle", { type, header });
+//       }, error => {
+//         this.emit("error", error);
+//       });
+//     });
+//   }
+//
+//   _scan(type, header, bottle) {
+//     switch (type) {
+//       case TYPE_FILE:
+//         return header.folder ? this._scanFolder(type, header, bottle) : this._scanFile(type, header, bottle);
+//       case TYPE_ENCRYPTED:
+//         return this._scanEncrypted(type, header, bottle);
+//       default:
+//         this.emit("skip", { type, header });
+//         return this._skipBottle(bottle);
+//     }
+//   }
 
   // scan(bottle) {
   //   switch (bottle.type) {
@@ -211,60 +213,44 @@ export class ArchiveReader extends events.EventEmitter {
   //   }
   // }
 
-  // scan each internal stream recursively.
-  _scanFolder(type, header, bottle) {
-    return bottle.readPromise(1).then(nextStream => {
-      if (nextStream == null) return bottle.endPromise();
-      return this.scanStream(nextStream).then(() => this._scanFolder(type, header, bottle));
-    });
-  }
-
-  _scanFile(type, header, bottle) {
-    return bottle.readPromise(1).then(nextStream => {
-      if (nextStream == null) return bottle.endPromise();
-      const fileHeader = decodeFileHeader(header);
-      return this.options.processFile({ fileHeader, stream: nextStream }).then(() => {
-        return this._scanFile(type, header, bottle);
-      });
-    });
-  }
-
-  // _scanHashed(bottle) {
-  //   return bottle.validate(this.verify).then(({ bottle: innerBottle, valid: validPromise, hex: hexPromise }) => {
-  //     return this.scan(innerBottle).then(() => {
-  //       return validPromise.then(isValid => {
-  //         return hexPromise.then(hex => {
-  //           this.emit("hash", bottle, isValid, hex);
-  //         });
-  //       });
+  // // scan each internal stream recursively.
+  // _scanFolder(type, header, bottle) {
+  //   return bottle.readPromise(1).then(nextStream => {
+  //     if (nextStream == null) return bottle.endPromise();
+  //     return this.scanStream(nextStream).then(() => this._scanFolder(type, header, bottle));
+  //   });
+  // }
+  //
+  // _scanFile(type, header, bottle) {
+  //   return bottle.readPromise(1).then(nextStream => {
+  //     if (nextStream == null) return bottle.endPromise();
+  //     const fileHeader = decodeFileHeader(header);
+  //     return this.options.processFile({ fileHeader, stream: nextStream }).then(() => {
+  //       return this._scanFile(type, header, bottle);
   //     });
-  //   }).then(() => bottle.drain());
+  //   });
   // }
 
-  _scanEncrypted(type, header, bottle) {
-    const decodedHeader = decodeEncryptionHeader(header);
-    this.emit("encrypt", { type, header: decodedHeader });
-    return encryptedBottleReader(decodedHeader, bottle, this.options).then(stream => {
-      return this.scanStream(stream).then(() => this._skipBottle(bottle));
-    });
-  }
 
-  _scanCompressed(bottle) {
-    this.emit("compress", bottle);
-    return bottle.decompress().then(nextBottle => {
-      return this.scan(nextBottle);
-    }).then(() => bottle.drain());
-  }
 
-  _skipBottle(bottle) {
-    return bottle.readPromise(1).then(s => {
-      if (s == null) return bottle.endPromise();
-      const sink = nullSinkStream();
-      s.pipe(sink);
-      return sink.endPromise().then(() => this._skipBottle(bottle));
-    });
-  }
-}
+//   _scanEncrypted(type, header, bottle) {
+//     const decodedHeader = decodeEncryptionHeader(header);
+//     this.emit("encrypt", { type, header: decodedHeader });
+//     return encryptedBottleReader(decodedHeader, bottle, this.options).then(stream => {
+//       return this.scanStream(stream).then(() => this._skipBottle(bottle));
+//     });
+//   }
+//
+//
+//   _skipBottle(bottle) {
+//     return bottle.readPromise(1).then(s => {
+//       if (s == null) return bottle.endPromise();
+//       const sink = nullSinkStream();
+//       s.pipe(sink);
+//       return sink.endPromise().then(() => this._skipBottle(bottle));
+//     });
+//   }
+// }
 
 
 
@@ -282,13 +268,10 @@ export function scanArchive(stream, options = {}) {
       const bottle = bottleReader(options);
       substream.pipe(bottle);
       return bottle.readPromise(1).then(({ type, header }) => {
-        observer.onNext({ event: "start", type, header });
-        return scanBottle(type, header, bottle).then(() => {
-          observer.onNext({ event: "end", type, header });
-        }, error => {
-          observer.onError(error);
-          throw error;
-        });
+        return scanBottle(type, header, bottle);
+      }).catch(error => {
+        observer.onError(error);
+        throw error;
       });
     }
 
@@ -302,32 +285,54 @@ export function scanArchive(stream, options = {}) {
               observer.onNext({ event: "exit-folder", header });
             });
           } else {
-            return bottle.readPromise(1).then(nextStream => {
-              if (nextStream == null) return bottle.endPromise();
-              observer.onNext({ event: "file", header, stream: nextStream });
-              return nextStream.endPromise().then(() => drainBottle(bottle));
+            return bottle.readPromise(1).then(stream => {
+              if (stream == null) return bottle.endPromise();
+              observer.onNext({ event: "file", header, stream });
+              return stream.endPromise().then(() => drainBottle(bottle));
             });
           }
           break;
 
+        case TYPE_HASHED:
+          header = decodeHashHeader(header);
+          observer.onNext({ event: "enter-hash", header });
+          return hashBottleReader(header, bottle, options).then(({ stream, hexPromise }) => {
+            return scanStream(stream).then(() => drainBottle(bottle)).then(() => hexPromise).then(hex => {
+              observer.onNext({ event: "valid-hash", header, hex });
+            }, error => {
+              observer.onNext({ event: "invalid-hash", header, error });
+            });
+          });
+
         case TYPE_ENCRYPTED:
           header = decodeEncryptionHeader(header);
-          observer.onNext({ event: "encrypt", header });
+          observer.onNext({ event: "enter-encrypt", header });
           return encryptedBottleReader(header, bottle, options).then(nextStream => {
             return scanStream(nextStream).then(() => drainBottle(bottle));
+          }).then(() => {
+            observer.onNext({ event: "exit-encrypt", header });
+          });
+
+        case TYPE_COMPRESSED:
+          header = decodeCompressionHeader(header);
+          observer.onNext({ event: "enter-compress", header });
+          return readCompressedBottle(header, bottle).then(stream => {
+            return scanStream(stream).then(() => drainBottle(bottle));
+          }).then(() => {
+            observer.onNext({ event: "exit-compress", header });
           });
 
         default:
           observer.onNext({ event: "unknown", type, header });
-          return drainBottle(observer, bottle);
+          return drainBottle(bottle);
       }
     }
 
     // recurse through every nested bottle.
     function scanFolder(bottle) {
-      return bottle.readPromise(1).then(nextStream => {
-        if (nextStream == null) return bottle.endPromise();
-        return scanStream(nextStream).then(() => scanFolder(bottle));
+      return bottle.readPromise(1).then(stream => {
+        if (stream == null) return bottle.endPromise();
+        return scanStream(stream).then(() => scanFolder(bottle));
       });
     }
   });
@@ -335,9 +340,7 @@ export function scanArchive(stream, options = {}) {
 
 // skip any remaining streams in this bottle.
 function drainBottle(bottle) {
-  console.log("drain");
   return bottle.readPromise(1).then(s => {
-    console.log("got:", s);
     if (s == null) return bottle.endPromise();
     const sink = nullSinkStream();
     s.pipe(sink);
