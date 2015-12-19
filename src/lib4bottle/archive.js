@@ -9,7 +9,7 @@ import { countingStream, nullSinkStream } from "stream-toolkit";
 import { bottleReader, TYPE_COMPRESSED, TYPE_ENCRYPTED, TYPE_FILE, TYPE_HASHED } from "./bottle_stream";
 import { decodeCompressionHeader, readCompressedBottle } from "./compressed_bottle";
 import { decodeEncryptionHeader, encryptedBottleReader } from "./encrypted_bottle";
-import { decodeFileHeader, fileBottleWriter, fileHeaderFromStats, folderBottleWriter } from "./file_bottle";
+import { decodeFileHeader, writeFileBottle, fileHeaderFromStats, writeFolderBottle } from "./file_bottle";
 import { decodeHashHeader, hashBottleReader } from "./hash_bottle";
 
 const openPromise = Promise.promisify(fs.open);
@@ -72,7 +72,7 @@ export class ArchiveWriter extends events.EventEmitter {
         countingFileStream.on("count", n => {
           this.emit("status", displayName, n);
         });
-        const fileBottle = fileBottleWriter(header);
+        const fileBottle = writeFileBottle(header);
         fs.createReadStream(filename, { fd, highWaterMark: BUFFER_SIZE }).pipe(countingFileStream);
         fileBottle.write(countingFileStream);
         fileBottle.end();
@@ -83,7 +83,7 @@ export class ArchiveWriter extends events.EventEmitter {
 
   _processFolder(folderName, prefix, header, files = null) {
     return (files ? Promise.resolve(files) : readdirPromise(folderName)).then(files => {
-      const folderBottle = folderBottleWriter(header);
+      const folderBottle = writeFolderBottle(header);
       // fill the bottle in the background, closing it when done.
       Promise.map(files, filename => {
         const fullPath = folderName ? path.join(folderName, filename) : filename;

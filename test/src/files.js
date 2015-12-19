@@ -2,7 +2,7 @@
 
 import { pipeToBuffer, sourceStream } from "stream-toolkit";
 import { bottleReader, TYPE_FILE } from "../../lib/lib4bottle/bottle_stream";
-import { decodeFileHeader, fileBottleWriter } from "../../lib/lib4bottle/file_bottle";
+import { decodeFileHeader, writeFileBottle } from "../../lib/lib4bottle/file_bottle";
 
 const KNOWN_FILES = {
   "file.txt": {
@@ -17,7 +17,7 @@ const KNOWN_FILES = {
 // write a file bottle into a buffer.
 export function writeFile(filename) {
   const data = KNOWN_FILES[filename].data;
-  const bottleWriter = fileBottleWriter({ filename: filename, size: data.length });
+  const bottleWriter = writeFileBottle({ filename: filename, size: data.length });
   bottleWriter.write(sourceStream(data));
   bottleWriter.end();
   return pipeToBuffer(bottleWriter).then(fileBuffer => {
@@ -26,20 +26,6 @@ export function writeFile(filename) {
     return fileBuffer;
   });
 }
-
-// // given a decoded file bottle, validate that it contains the right data.
-// export function validateFile(fileBottle, filename) {
-//   const data = KNOWN_FILES[filename].data;
-//   fileBottle.type.should.eql(TYPE_FILE);
-//   fileBottle.header.filename.should.eql(filename);
-//   return fileBottle.readPromise().then((dataStream) => {
-//     return toolkit.pipeToBuffer(dataStream).then((buffer) => {
-//       buffer.toString().should.eql(data.toString());
-//         return { header: fileBottle.header, data: buffer };
-//       });
-//     });
-//   });
-// }
 
 // read a file bottle out of another bottle.
 export function readFile(stream, filename) {
@@ -54,12 +40,6 @@ export function readFile(stream, filename) {
       return pipeToBuffer(dataStream);
     }).then(data => {
       data.toString("hex").should.eql(KNOWN_FILES[filename].data.toString("hex"));
-      //       // new in io.js: need to exhaustively read to the end of the stream,
-      //       // or we won't get the "end" event.
-      //       return fileBottle.readPromise().then((nextStream) => {
-      //         (nextStream == null).should.eql(true);
-      //         return fileBottle.endPromise();
-      //       }).then(() => {
       return { header, data };
     });
   });

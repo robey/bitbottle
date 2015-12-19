@@ -15,9 +15,11 @@ export {
 } from "./lib4bottle/bottle_stream";
 
 export {
-  FileBottleWriter,
+  decodeFileHeader,
+  encodeFileHeader,
+  writeFileBottle,
+  writeFolderBottle,
   fileHeaderFromStats,
-  FolderBottleWriter
 } from "./lib4bottle/file_bottle";
 
 export {

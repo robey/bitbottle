@@ -2,14 +2,14 @@
 
 import fs from "fs";
 import { bottleReader, TYPE_FILE } from "../../lib/lib4bottle/bottle_stream";
-import { decodeFileHeader, fileBottleWriter, folderBottleWriter } from "../../lib/lib4bottle/file_bottle";
+import { decodeFileHeader, writeFileBottle, writeFolderBottle } from "../../lib/lib4bottle/file_bottle";
 import { pipeToBuffer, sourceStream } from "stream-toolkit";
 import { future, withTempFolder } from "mocha-sprinkles";
 
 import "should";
 import "source-map-support/register";
 
-describe("fileBottleWriter", () => {
+describe("writeFileBottle", () => {
   it("writes and decodes from data", future(() => {
     const stats = {
       filename: "bogus.txt",
@@ -18,7 +18,7 @@ describe("fileBottleWriter", () => {
       createdNanos: 1234567890,
       username: "tyrion"
     };
-    const bottle = fileBottleWriter(stats);
+    const bottle = writeFileBottle(stats);
     bottle.write(sourceStream("television"));
     bottle.end();
     return pipeToBuffer(bottle).then(data => {
@@ -48,7 +48,7 @@ describe("fileBottleWriter", () => {
     fs.writeFileSync(filename, "hello!\n");
     const stats = fs.statSync(filename);
     stats.filename = filename;
-    const bottle = fileBottleWriter(stats);
+    const bottle = writeFileBottle(stats);
     bottle.write(fs.createReadStream(filename));
     bottle.end();
     return pipeToBuffer(bottle).then(data => {
@@ -72,9 +72,9 @@ describe("fileBottleWriter", () => {
   })));
 
   it("writes a nested folder correctly", future(() => {
-    const bottle1 = folderBottleWriter({ filename: "outer" });
-    const bottle2 = folderBottleWriter({ filename: "inner" });
-    const bottle3 = fileBottleWriter({ filename: "test.txt", size: 3 });
+    const bottle1 = writeFolderBottle({ filename: "outer" });
+    const bottle2 = writeFolderBottle({ filename: "inner" });
+    const bottle3 = writeFileBottle({ filename: "test.txt", size: 3 });
     bottle3.write(sourceStream("abc"));
     bottle3.end();
     // wire it up!
