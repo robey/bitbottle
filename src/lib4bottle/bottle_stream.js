@@ -45,7 +45,7 @@ export function writeBottle(type, header, options = {}) {
       return framedStream;
     },
     flush: () => {
-      transform.__log("end of bottle");
+      transform.__log("flush: end of bottle");
       return sourceStream(new Buffer([ BOTTLE_END ]));
     }
   };
@@ -55,7 +55,7 @@ export function writeBottle(type, header, options = {}) {
   transform.push(sourceStream(writeHeader(type, header)));
   const outStream = compoundStream();
   return weld(transform, outStream, {
-    name: `BottleWriter(${bottleTypeName(type)})`,
+    name: `BottleWriter(${bottleTypeName(type)}, ${options.tag || ""})`,
     writableObjectMode: true
   });
 }

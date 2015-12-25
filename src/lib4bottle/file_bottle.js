@@ -26,11 +26,11 @@ const FIELDS = {
 
 // wrap a single file stream (with its metadata) into a FileBottle.
 export function writeFileBottle(stats) {
-  return writeBottle(TYPE_FILE, encodeFileHeader(stats, { folder: false }));
+  return writeBottle(TYPE_FILE, encodeFileHeader(stats, { folder: false }), { tag: stats.filename });
 }
 
 export function writeFolderBottle(stats) {
-  return writeBottle(TYPE_FILE, encodeFileHeader(stats, { folder: true }));
+  return writeBottle(TYPE_FILE, encodeFileHeader(stats, { folder: true }), { tag: stats.filename });
 }
 
 export function encodeFileHeader(stats, overrides) {

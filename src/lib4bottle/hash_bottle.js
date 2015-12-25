@@ -129,8 +129,9 @@ export function readHashBottle(header, bottleReader, options = {}) {
       hashStream.endPromise().then(() => {
         return bottleReader.readPromise().then(digestStream => {
           return pipeToBuffer(digestStream).then(signedBuffer => {
-            return verifier(signedBuffer, header.signedBy);
+            return header.signedBy ? verifier(signedBuffer, header.signedBy) : signedBuffer;
           }).then(digestBuffer => {
+            if (!digestBuffer) digestBuffer = new Buffer(0);
             const realHex = hashStream.digest.toString("hex");
             const gotHex = digestBuffer.toString("hex");
             if (realHex == gotHex) {
@@ -140,7 +141,9 @@ export function readHashBottle(header, bottleReader, options = {}) {
             }
           });
         });
-      }).catch(error => reject(error));
+      }).catch(error => {
+        reject(error);
+      });
     });
 
     return { stream: hashStream, hexPromise };
