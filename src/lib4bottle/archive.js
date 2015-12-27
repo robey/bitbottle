@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 import Promise from "bluebird";
 import rx from "rx";
-import { countingStream, nullSinkStream } from "stream-toolkit";
+import { countingStream, nullSinkStream, promisify } from "stream-toolkit";
 import { readBottle, TYPE_COMPRESSED, TYPE_ENCRYPTED, TYPE_FILE, TYPE_HASHED } from "./bottle_stream";
 import { decodeCompressionHeader, readCompressedBottle } from "./compressed_bottle";
 import { decodeEncryptionHeader, readEncryptedBottle } from "./encrypted_bottle";
@@ -68,6 +68,7 @@ export class ArchiveWriter extends events.EventEmitter {
       this.emit("filename", displayName, header);
       if (header.folder) return this._processFolder(filename, displayName, header);
       return openPromise(filename, "r").then(fd => {
+        // file -> countingStream --write-into--> fileBottle
         const countingFileStream = countingStream();
         countingFileStream.on("count", n => {
           this.emit("status", displayName, n);
@@ -87,11 +88,12 @@ export class ArchiveWriter extends events.EventEmitter {
       // fill the bottle in the background, closing it when done.
       Promise.map(files, filename => {
         const fullPath = folderName ? path.join(folderName, filename) : filename;
-        return this._processFile(fullPath, prefix).then(fileStream => {
-          return folderBottle.writePromise(fileStream);
+        return this._processFile(fullPath, prefix).then(fileBottle => {
+          folderBottle.__log("write file: " + fullPath);
+          return folderBottle.writePromise(fileBottle);
         });
       }, { concurrency: 1 }).then(() => {
-        return folderBottle.end();
+        folderBottle.end();
       }).catch(error => {
         this.emit("error", error);
       });
@@ -156,20 +158,31 @@ export class ArchiveWriter extends events.EventEmitter {
  * stream object drained before the next event can be emitted.
  */
 export function scanArchive(stream, options = {}) {
+  promisify(stream);
+
   return rx.Observable.create(observer => {
+    stream.__log("archive scan");
     return scanStream(stream).then(() => {
+      stream.__log("archive scan complete");
       observer.onCompleted();
     }, () => {
       // error.
+      stream.__log("archive scan error!");
       observer.onCompleted();
     });
 
     function scanStream(substream) {
+      promisify(substream);
+
+      substream.__log("archive scan: enter substream");
       const bottle = readBottle(options);
       substream.pipe(bottle);
       return bottle.readPromise(1).then(({ type, header }) => {
-        return scanBottle(type, header, bottle);
+        return scanBottle(type, header, bottle).then(() => {
+          substream.__log("archive scan: exit substream");
+        });
       }).catch(error => {
+        substream.__log("archive scan: error!");
         observer.onError(error);
         throw error;
       });
@@ -187,7 +200,7 @@ export function scanArchive(stream, options = {}) {
           } else {
             return bottle.readPromise(1).then(stream => {
               if (stream == null) return bottle.endPromise();
-              observer.onNext({ event: "file", header, stream });
+              observer.onNext({ event: "file", header, stream, drain: () => stream.pipe(nullSinkStream()) });
               return stream.endPromise().then(() => drainBottle(bottle));
             });
           }
@@ -197,7 +210,11 @@ export function scanArchive(stream, options = {}) {
           header = decodeHashHeader(header);
           observer.onNext({ event: "enter-hash", header });
           return readHashBottle(header, bottle, options).then(({ stream, hexPromise }) => {
-            return scanStream(stream).then(() => drainBottle(bottle)).then(() => hexPromise).then(hex => {
+            return scanStream(stream).then(() => {
+              return drainBottle(bottle);
+            }).then(() => {
+              return hexPromise;
+            }).then(hex => {
               observer.onNext({ event: "valid-hash", header, hex });
             }, error => {
               observer.onNext({ event: "invalid-hash", header, error });
@@ -207,8 +224,8 @@ export function scanArchive(stream, options = {}) {
         case TYPE_ENCRYPTED:
           header = decodeEncryptionHeader(header);
           observer.onNext({ event: "enter-encrypt", header });
-          return readEncryptedBottle(header, bottle, options).then(nextStream => {
-            return scanStream(nextStream).then(() => drainBottle(bottle));
+          return readEncryptedBottle(header, bottle, options).then(stream => {
+            return scanStream(stream).then(() => drainBottle(bottle));
           }).then(() => {
             observer.onNext({ event: "exit-encrypt", header });
           });

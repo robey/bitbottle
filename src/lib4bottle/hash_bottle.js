@@ -123,11 +123,13 @@ export function readHashBottle(header, bottleReader, options = {}) {
   const verifier = options.verifier || _babel_bug;
 
   return bottleReader.readPromise().then(stream => {
+    if (!stream) throw new Error("Premature end of stream");
     stream.pipe(hashStream);
 
     const hexPromise = new Promise((resolve, reject) => {
       hashStream.endPromise().then(() => {
         return bottleReader.readPromise().then(digestStream => {
+          if (!digestStream) throw new Error("Premature end of stream");
           return pipeToBuffer(digestStream).then(signedBuffer => {
             return header.signedBy ? verifier(signedBuffer, header.signedBy) : signedBuffer;
           }).then(digestBuffer => {
