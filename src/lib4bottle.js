@@ -20,7 +20,7 @@ export {
   encodeFileHeader,
   writeFileBottle,
   writeFolderBottle,
-  fileHeaderFromStats,
+  fileHeaderFromStats
 } from "./lib4bottle/file_bottle";
 
 export {

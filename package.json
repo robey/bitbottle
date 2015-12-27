@@ -1,6 +1,6 @@
 {
   "name": "lib4bottle",
-  "version": "1.0.0",
+  "version": "0.9.0",
   "description": "read and write the 4bottle archive format",
   "main": "./lib/lib4bottle.js",
   "keywords": [
@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "bluebird": "latest",
-    "posix": "^2.0.0",
+    "posix": "^4.0.0",
     "js-scrypt": "latest",
     "rx": "latest",
     "snappy": "*",
@@ -37,6 +37,7 @@
   "devDependencies": {
     "babel-cli": "^6.0.0",
     "babel-preset-es2015-node4": "^1.0.0",
+    "eslint": "*",
     "mocha": "*",
     "mocha-sprinkles": "*",
     "should": "latest",
