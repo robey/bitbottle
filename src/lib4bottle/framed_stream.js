@@ -15,14 +15,12 @@ export function framingStream() {
   const transform = new stream.Transform({ name: "framingStream" });
 
   transform._transform = (data, _, callback) => {
-    transform.__log("frame bytes=" + data.length);
     transform.push(encodeLength(data.length));
     transform.push(data);
     callback();
   };
 
   transform._flush = (callback) => {
-    transform.__log("frame end of stream");
     transform.push(END_OF_STREAM);
     callback();
   };
