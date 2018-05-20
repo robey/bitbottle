@@ -2,7 +2,7 @@
   "name": "lib4bottle",
   "version": "0.9.0",
   "description": "read and write the 4bottle archive format",
-  "main": "./lib/lib4bottle.js",
+  "main": "./lib/index.js",
   "keywords": [
     "archive"
   ],
@@ -14,36 +14,30 @@
   },
   "license": "Apache-2.0",
   "scripts": {
-    "build": "./package.js && eslint src test/src && babel --source-maps --out-dir lib src",
-    "build-test": "babel --source-maps --out-dir test/lib test/src",
-    "clean": "rm -rf lib test/lib",
-    "distclean": "npm run clean && rm -rf node_modules",
-    "prepublish": "npm run build",
-    "test": "npm run build && npm run build-test && mocha -R spec --colors test/lib"
-  },
-  "directories": {
-    "doc": "docs"
+    "build": "tsc",
+    "clean": "rm -rf lib",
+    "distclean": "npm run clean && rm -rf node_modules npm-debug.log",
+    "prepare": "tsc",
+    "test": "npm run build && mocha -R spec --colors lib/test"
   },
   "dependencies": {
-    "bluebird": "latest",
     "posix": "^4.0.0",
-    "js-scrypt": "latest",
-    "rx": "latest",
+    "js-scrypt": "*",
     "snappy": "*",
-    "sprintf": "*",
-    "stream-toolkit": "^2.0.0",
     "xz": "^1.1.1"
   },
   "devDependencies": {
-    "babel-cli": "^6.0.0",
-    "babel-preset-es2015-node4": "^1.0.0",
-    "eslint": "*",
-    "mocha": "*",
-    "mocha-sprinkles": "*",
-    "should": "latest",
-    "source-map-support": "*",
-    "json5": "*"
+    "@types/mocha": "^2.2.48",
+    "@types/node": "^8.9.5",
+    "mocha": "^5.0.4",
+    "should": "^13.2.1",
+    "source-map-support": "^0.5.3",
+    "typescript": "^2.7.2"
   },
+  "engines": {
+    "node": ">=8.5.0"
+  },
+  "types": "./lib/index.d.ts",
   "files": [
     "docs",
     "lib",
