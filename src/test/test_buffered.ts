@@ -4,7 +4,7 @@ import { buffered } from "../buffered";
 import "should";
 import "source-map-support/register";
 
-describe("bufferStream", () => {
+describe("buffered", () => {
   it("combines small buffers", async () => {
     const stream = asyncIter([ "hell", "ok", "it", "ty!" ].map(s => Buffer.from(s)));
     (await asyncIter(buffered(stream)).collect()).map(b => b.toString()).should.eql([ "hellokitty!" ]);
