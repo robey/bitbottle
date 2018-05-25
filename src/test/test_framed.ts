@@ -62,4 +62,34 @@ describe("unframed", () => {
     const stream = asyncIter([ Buffer.from("0468656c6c056f20736169036c6f7200", "hex") ]);
     Buffer.concat(await asyncIter(unframed(stream)).collect()).toString().should.eql("hello sailor");
   });
+
+  it("reads a power-of-two frame", async () => {
+    for (const blockSize of [ 512, 1024, Math.pow(2, 18), Math.pow(2, 21) ]) {
+      const b = Buffer.alloc(blockSize + 2);
+      b[0] = 0xe0 + (Math.log(blockSize) / Math.log(2)) - 9;
+      const stream = asyncIter([ b ]);
+      Buffer.concat(await asyncIter(unframed(stream)).collect()).length.should.eql(blockSize);
+    }
+  });
+
+  it("reads a medium (< 16K) frame", async () => {
+    for (const blockSize of [ 129, 1234, 8191, 15000 ]) {
+      const b = Buffer.alloc(blockSize + 3);
+      b[0] = 0x80 + (blockSize & 0x3f);
+      b[1] = blockSize >> 6;
+      const stream = asyncIter([ b ]);
+      Buffer.concat(await asyncIter(unframed(stream)).collect()).length.should.eql(blockSize);
+    }
+  });
+
+  it("reads a large (< 2M) frame", async () => {
+    for (const blockSize of [ 16385, 123456, 1456123 ]) {
+      const b = Buffer.alloc(blockSize + 4);
+      b[0] = 0xc0 + (blockSize & 0x1f);
+      b[1] = (blockSize >> 5) & 0xff;
+      b[2] = blockSize >> 13;
+      const stream = asyncIter([ b ]);
+      Buffer.concat(await asyncIter(unframed(stream)).collect()).length.should.eql(blockSize);
+    }
+  });
 });
