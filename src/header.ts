@@ -39,8 +39,6 @@ export class Field {
     rv.list = list;
     return rv;
   }
-
-  // unpack()
 }
 
 export class Header {
