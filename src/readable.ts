@@ -1,20 +1,23 @@
+import { Stream } from "./streams";
+
 /*
- * wrap an `AsyncIterator<Buffer>` so discrete `read(N)` calls will work.
+ * wrap a `Stream` so discrete `read(N)` calls will work.
  */
 export class Readable {
   saved: Buffer[] = [];
   size = 0;
   ended = false;
+  iter: AsyncIterator<Buffer>;
 
-  constructor(public stream: AsyncIterator<Buffer>) {
-    // pass
+  constructor(stream: Stream) {
+    this.iter = stream[Symbol.asyncIterator]();
   }
 
   private async fillTo(size: number): Promise<void> {
     if (this.ended) return;
 
     while (this.size < size) {
-      const item = await this.stream.next();
+      const item = await this.iter.next();
       if (item.done) {
         this.ended = true;
         return;

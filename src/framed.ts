@@ -1,4 +1,6 @@
+import { debug, nameOf } from "./debug";
 import { Readable } from "./readable";
+import { Stream } from "./streams";
 import { decodeLength, encodeLength, lengthLength } from "./zint";
 
 const END_OF_STREAM = Buffer.from([ 0 ]);
@@ -7,19 +9,22 @@ const END_OF_STREAM = Buffer.from([ 0 ]);
  * Prefix each buffer with a length header so it can be streamed. If you want
  * to create large frames, pipe through `buffered` first.
  */
-export async function* framed(stream: AsyncIterable<Buffer>): AsyncIterable<Buffer> {
+export async function* framed(stream: Stream): Stream {
+  debug(`framed(${nameOf(stream)}) begin`);
   for await (const data of stream) {
+    debug(`framed(${nameOf(stream)}): ${data.length}`);
     yield encodeLength(data.length);
     yield data;
   }
   yield END_OF_STREAM;
+  debug(`framed(${nameOf(stream)}) end`);
 }
 
 /*
  * Unpack frames back into data blocks.
  */
-export async function* unframed(stream: AsyncIterable<Buffer>): AsyncIterable<Buffer> {
-  const s = new Readable(stream[Symbol.asyncIterator]());
+export async function* unframed(stream: Stream): Stream {
+  const s = new Readable(stream);
 
   const readLength = async (): Promise<number | undefined> => {
     const byte = await s.read(1);

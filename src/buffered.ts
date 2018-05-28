@@ -1,3 +1,5 @@
+import { Stream } from "./streams";
+
 const DEFAULT_BLOCK_SIZE = Math.pow(2, 20);  // 1MB
 
 /*
@@ -6,10 +8,10 @@ const DEFAULT_BLOCK_SIZE = Math.pow(2, 20);  // 1MB
  * preserving incoming block boundaries.
  */
 export async function* buffered(
-  stream: AsyncIterable<Buffer>,
+  stream: Stream,
   blockSize: number = DEFAULT_BLOCK_SIZE,
   exact: boolean = false
-): AsyncIterable<Buffer> {
+): Stream {
   let queue: Buffer[] = [];
   let size = 0;
 

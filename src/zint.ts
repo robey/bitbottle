@@ -1,4 +1,3 @@
-
 /*
  * methods for encoding ints as:
  * - packed: LSB, with buffer length passed out-of-band
@@ -27,10 +26,6 @@ export function decodePackedInt(data: Buffer): number {
  * - `110xxxxx xxxxxxxx xxxxxxxx` - 21 bits, 0 - 2MB
  * - `1110xxxx` (e0 - ec) - 2**(9 + x) = 512 - 2MB
  */
-
-export const STREAM_DATA = 0xed;
-export const STREAM_BOTTLE = 0xee;
-export const STREAM_STOP = 0xef;
 
 export function encodeLength(n: number) {
   if (n <= Math.pow(2, 21) && n >= 512) {

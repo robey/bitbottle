@@ -21,7 +21,7 @@
     "test": "npm run build && mocha -R spec --colors lib/test"
   },
   "dependencies": {
-    "ballvalve": "^2.0.2",
+    "ballvalve": "^2.0.3",
     "js-scrypt": "*",
     "posix": "^4.0.0",
     "snappy": "*",
