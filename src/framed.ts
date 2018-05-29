@@ -23,16 +23,14 @@ export async function* framed(stream: Stream): Stream {
 /*
  * Unpack frames back into data blocks.
  */
-export async function* unframed(stream: Stream): Stream {
-  const s = new Readable(stream);
-
+export async function* unframed(stream: Readable): Stream {
   const readLength = async (): Promise<number | undefined> => {
-    const byte = await s.read(1);
+    const byte = await stream.read(1);
     if (byte === undefined || byte.length < 1) return undefined;
     const needed = lengthLength(byte[0]) - 1;
     if (needed == 0) return decodeLength(byte);
 
-    const rest = await s.read(needed);
+    const rest = await stream.read(needed);
     if (rest === undefined || rest.length < needed) return undefined;
     return decodeLength(Buffer.concat([ byte, rest ]));
   };
@@ -41,7 +39,7 @@ export async function* unframed(stream: Stream): Stream {
     const length = await readLength();
     if (length === undefined) throw new Error("Truncated stream");
     if (length == 0) return;
-    const data = await s.read(length);
+    const data = await stream.read(length);
     if (data === undefined || data.length < length) throw new Error("Truncated stream");
     yield data;
   }

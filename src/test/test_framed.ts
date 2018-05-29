@@ -1,6 +1,7 @@
 import { asyncIter } from "ballvalve";
 import { buffered } from "../buffered";
 import { framed, unframed } from "../framed";
+import { Readable } from "../readable";
 
 import "should";
 import "source-map-support/register";
@@ -55,12 +56,12 @@ describe("framed", () => {
 describe("unframed", () => {
   it("reads a simple frame", async () => {
     const stream = asyncIter([ Buffer.from("0301020300", "hex") ]);
-    Buffer.concat(await asyncIter(unframed(stream)).collect()).toString("hex").should.eql("010203");
+    Buffer.concat(await asyncIter(unframed(new Readable(stream))).collect()).toString("hex").should.eql("010203");
   });
 
   it("reads a block of many frames", async () => {
     const stream = asyncIter([ Buffer.from("0468656c6c056f20736169036c6f7200", "hex") ]);
-    Buffer.concat(await asyncIter(unframed(stream)).collect()).toString().should.eql("hello sailor");
+    Buffer.concat(await asyncIter(unframed(new Readable(stream))).collect()).toString().should.eql("hello sailor");
   });
 
   it("reads a power-of-two frame", async () => {
@@ -68,7 +69,7 @@ describe("unframed", () => {
       const b = Buffer.alloc(blockSize + 2);
       b[0] = 0xe0 + (Math.log(blockSize) / Math.log(2)) - 9;
       const stream = asyncIter([ b ]);
-      Buffer.concat(await asyncIter(unframed(stream)).collect()).length.should.eql(blockSize);
+      Buffer.concat(await asyncIter(unframed(new Readable(stream))).collect()).length.should.eql(blockSize);
     }
   });
 
@@ -78,7 +79,7 @@ describe("unframed", () => {
       b[0] = 0x80 + (blockSize & 0x3f);
       b[1] = blockSize >> 6;
       const stream = asyncIter([ b ]);
-      Buffer.concat(await asyncIter(unframed(stream)).collect()).length.should.eql(blockSize);
+      Buffer.concat(await asyncIter(unframed(new Readable(stream))).collect()).length.should.eql(blockSize);
     }
   });
 
@@ -89,7 +90,7 @@ describe("unframed", () => {
       b[1] = (blockSize >> 5) & 0xff;
       b[2] = blockSize >> 13;
       const stream = asyncIter([ b ]);
-      Buffer.concat(await asyncIter(unframed(stream)).collect()).length.should.eql(blockSize);
+      Buffer.concat(await asyncIter(unframed(new Readable(stream))).collect()).length.should.eql(blockSize);
     }
   });
 });

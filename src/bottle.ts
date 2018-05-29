@@ -1,27 +1,12 @@
-import * as stream from "stream";
 import { asyncIter, PushAsyncIterator } from "ballvalve";
 import { debug, named } from "./debug";
-import { framed } from "./framed";
+import { framed, unframed } from "./framed";
 import { Header } from "./header";
+import { Readable } from "./readable";
 import { AsyncIterableSequence, Stream, TerminationSignal } from "./streams";
 
 
-export function writable(): [ stream.Writable, AsyncIterable<Buffer> ] {
-  const pusher = new PushAsyncIterator<Buffer>();
-  const transform = new stream.Transform({
-    transform(chunk, _encoding, callback) {
-      pusher.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
-      callback();
-    },
-
-    flush(callback) {
-      pusher.end();
-      callback();
-    }
-  });
-  return [ transform, pusher ];
-}
-
+let counter = 0;
 
 export const MAGIC = new Buffer([ 0xf0, 0x9f, 0x8d, 0xbc ]);
 export const VERSION = 0x00;
@@ -30,6 +15,7 @@ const STREAM_DATA = 0xed;
 const STREAM_BOTTLE = 0xee;
 const STREAM_STOP = 0xef;
 
+
 export enum BottleType {
   File = 0,
   Hashed = 1,
@@ -37,7 +23,13 @@ export enum BottleType {
   Compressed = 4,
 }
 
-let counter = 0;
+
+export class Bottle {
+  constructor(public type: BottleType, public header: Header) {
+    // pass
+  }
+}
+
 
 export class BottleWriter {
   private sequence = new AsyncIterableSequence<Buffer>();
@@ -45,7 +37,13 @@ export class BottleWriter {
   // output stream:
   stream: Stream;
 
-  constructor(type: BottleType, header: Header) {
+  constructor(bottle: Bottle) {
+    counter++;
+    this.stream = named(this.sequence.stream, `BottleWriter(${counter})`);
+    this.writeHeader(bottle.type, bottle.header);
+  }
+
+  writeHeader(type: BottleType, header: Header) {
     if (type < 0 || type > 15) throw new Error(`Bottle type out of range: ${type}`);
     const buffer = header.pack();
     if (buffer.length > 4095) throw new Error(`Header too long: ${buffer.length} > 4095`);
@@ -62,9 +60,6 @@ export class BottleWriter {
       buffer
     ]);
     this.sequence.add(headers);
-
-    counter++;
-    this.stream = named(this.sequence.stream, `BottleWriter(${counter})`);
   }
 
   addStream(s: Stream): Promise<void> {
@@ -81,4 +76,57 @@ export class BottleWriter {
     this.sequence.add(asyncIter([ Buffer.from([ STREAM_STOP ]) ]));
     this.sequence.end();
   }
+}
+
+
+export class BottleReader {
+  private constructor(public bottle: Bottle, public nested: AsyncIterable<BottleReader | Stream>) {
+    // pass
+  }
+
+  static async read(r: Readable): Promise<BottleReader> {
+    return new BottleReader(await readBottleHeader(r), readBottleStreams(r));
+  }
+}
+
+
+async function* readBottleStreams(stream: Readable): AsyncIterable<BottleReader | Stream> {
+  while (true) {
+    const b = await stream.read(1);
+    if (b === undefined || b.length < 1) throw new Error("Truncated stream data");
+    switch (b[0]) {
+      case STREAM_DATA:
+        yield unframed(stream);
+        break;
+      case STREAM_BOTTLE:
+        yield await BottleReader.read(stream);
+        break;
+      case STREAM_STOP:
+        return;
+      default:
+        throw new Error(`Unknown stream tag ${b[0]}`);
+    }
+  }
+}
+
+async function readBottleHeader(stream: Readable): Promise<Bottle> {
+  const b = await stream.read(8);
+  if (b === undefined || b.length < 8) throw new Error("End of stream");
+  if (!b.slice(0, 4).equals(MAGIC)) throw new Error("Incorrect magic (not a bitbottle)");
+
+  const version = b[4];
+  const flags = b[5];
+  const headerLength = b[6] + (b[7] & 0xf) * 256;
+  const type = b[7] >> 4;
+  if ((version >> 4) > 0) throw new Error(`Incompatible version: ${version >> 4}.${version & 0xf}`);
+  if (flags != 0) throw new Error(`Garbage flags`);
+
+  let header = new Header();
+  if (headerLength > 0) {
+    const b2 = await stream.read(headerLength);
+    if (b2 === undefined || b2.length < headerLength) throw new Error("Truncated header");
+    header = Header.unpack(b2);
+  }
+
+  return new Bottle(type, header);
 }
