@@ -3,7 +3,7 @@ import { debug, named } from "./debug";
 import { framed, unframed } from "./framed";
 import { Header } from "./header";
 import { Readable } from "./readable";
-import { AsyncIterableSequence, Stream, TerminationSignal } from "./streams";
+import { AlertingAsyncIterator, AsyncIterableSequence, Stream, TerminationSignal } from "./streams";
 
 
 let counter = 0;
@@ -80,31 +80,37 @@ export class BottleWriter {
 
 
 export class BottleReader {
-  private constructor(public bottle: Bottle, public nested: AsyncIterable<BottleReader | Stream>) {
+  private constructor(public bottle: Bottle, public nested: AlertingAsyncIterator<BottleReader | Stream>) {
     // pass
   }
 
   static async read(r: Readable): Promise<BottleReader> {
-    return new BottleReader(await readBottleHeader(r), readBottleStreams(r));
+    return new BottleReader(await readBottleHeader(r), new AlertingAsyncIterator(readBottleStreams(r)));
   }
 }
 
 
 async function* readBottleStreams(stream: Readable): AsyncIterable<BottleReader | Stream> {
   while (true) {
-    const b = await stream.read(1);
-    if (b === undefined || b.length < 1) throw new Error("Truncated stream data");
-    switch (b[0]) {
-      case STREAM_DATA:
-        yield unframed(stream);
+    const byte = await stream.read(1);
+    if (byte === undefined || byte.length < 1) throw new Error("Truncated stream data");
+    switch (byte[0]) {
+      case STREAM_DATA: {
+        const s = new AlertingAsyncIterator(unframed(stream));
+        yield asyncIter(s);
+        await s.done;
         break;
-      case STREAM_BOTTLE:
-        yield await BottleReader.read(stream);
+      }
+      case STREAM_BOTTLE: {
+        const b = await BottleReader.read(stream);
+        yield b;
+        await b.nested.done;
         break;
+      }
       case STREAM_STOP:
         return;
       default:
-        throw new Error(`Unknown stream tag ${b[0]}`);
+        throw new Error(`Unknown stream tag ${byte[0]}`);
     }
   }
 }

@@ -109,49 +109,46 @@ describe("bottleReader", () => {
 
   it("reads a data block", async () => {
     const b = await read(`${BASIC_MAGIC}ed0568656c6c6f00ef`);
-    const iter = b.nested[Symbol.asyncIterator]();
-    const stream1 = (await iter.next()).value;
+    const stream1 = (await b.nested.next()).value;
     (stream1 instanceof BottleReader).should.eql(false);
     if (!(stream1 instanceof BottleReader)) {
       Buffer.concat(await asyncIter(stream1).collect()).toString().should.eql("hello");
     }
-    (await iter.next()).done.should.eql(true);
+    (await b.nested.next()).done.should.eql(true);
   });
 
   it("reads a continuing data block", async () => {
     const b = await read(`${BASIC_MAGIC}ed026865016c026c6f00ef`);
-    const iter = b.nested[Symbol.asyncIterator]();
-    const stream1 = (await iter.next()).value;
+    const stream1 = (await b.nested.next()).value;
     (stream1 instanceof BottleReader).should.eql(false);
     if (!(stream1 instanceof BottleReader)) {
       Buffer.concat(await asyncIter(stream1).collect()).toString().should.eql("hello");
     }
-    (await iter.next()).done.should.eql(true);
+    (await b.nested.next()).done.should.eql(true);
   });
 
   it("reads several datas", async () => {
     const b = await read(`${BASIC_MAGIC}ed03f0f0f000ed03e0e0e000ed03cccccc00ef`);
-    const iter = b.nested[Symbol.asyncIterator]();
 
-    const stream1 = (await iter.next()).value;
+    const stream1 = (await b.nested.next()).value;
     (stream1 instanceof BottleReader).should.eql(false);
     if (!(stream1 instanceof BottleReader)) {
       Buffer.concat(await asyncIter(stream1).collect()).toString("hex").should.eql("f0f0f0");
     }
 
-    const stream2 = (await iter.next()).value;
+    const stream2 = (await b.nested.next()).value;
     (stream2 instanceof BottleReader).should.eql(false);
     if (!(stream2 instanceof BottleReader)) {
       Buffer.concat(await asyncIter(stream2).collect()).toString("hex").should.eql("e0e0e0");
     }
 
-    const stream3 = (await iter.next()).value;
+    const stream3 = (await b.nested.next()).value;
     (stream3 instanceof BottleReader).should.eql(false);
     if (!(stream3 instanceof BottleReader)) {
       Buffer.concat(await asyncIter(stream3).collect()).toString("hex").should.eql("cccccc");
     }
 
-    (await iter.next()).done.should.eql(true);
+    (await b.nested.next()).done.should.eql(true);
   });
 
   it("reads several bottles from the same stream", async () => {
@@ -160,51 +157,44 @@ describe("bottleReader", () => {
     ]));
 
     const b1 = (await BottleReader.read(r));
-    const iter1 = b1.nested[Symbol.asyncIterator]();
-    const stream1 = (await iter1.next()).value;
+    const stream1 = (await b1.nested.next()).value;
     (stream1 instanceof BottleReader).should.eql(false);
     if (!(stream1 instanceof BottleReader)) {
       Buffer.concat(await asyncIter(stream1).collect()).toString().should.eql("cat");
     }
-    (await iter1.next()).done.should.eql(true);
+    (await b1.nested.next()).done.should.eql(true);
 
     const b2 = (await BottleReader.read(r));
-    const iter2 = b2.nested[Symbol.asyncIterator]();
-    const stream2 = (await iter2.next()).value;
+    const stream2 = (await b2.nested.next()).value;
     (stream2 instanceof BottleReader).should.eql(false);
     if (!(stream2 instanceof BottleReader)) {
       Buffer.concat(await asyncIter(stream2).collect()).toString().should.eql("hat");
     }
-    (await iter2.next()).done.should.eql(true);
+    (await b2.nested.next()).done.should.eql(true);
   });
 
   it("reads nested bottles", async () => {
     const b = await read(`${MAGIC_STRING}00a0ee${MAGIC_STRING}00b0ed0363617400efed0363617400ef`);
     b.bottle.type.should.eql(10);
-    const iter = b.nested[Symbol.asyncIterator]();
 
-    const stream1 = (await iter.next()).value;
+    const stream1 = (await b.nested.next()).value;
     (stream1 instanceof BottleReader).should.eql(true);
     if (stream1 instanceof BottleReader) {
       stream1.bottle.type.should.eql(11);
-      const iter2 = stream1.nested[Symbol.asyncIterator]();
 
-      const stream2 = (await iter.next()).value;
+      const stream2 = (await stream1.nested.next()).value;
       (stream2 instanceof BottleReader).should.eql(false);
       if (!(stream2 instanceof BottleReader)) {
         Buffer.concat(await asyncIter(stream2).collect()).toString().should.eql("cat");
       }
-      (await iter2.next()).done.should.eql(true);
+      (await stream1.nested.next()).done.should.eql(true);
     }
 
-    const stream2 = (await iter.next()).value;
+    const stream2 = (await b.nested.next()).value;
     (stream2 instanceof BottleReader).should.eql(false);
     if (!(stream2 instanceof BottleReader)) {
       Buffer.concat(await asyncIter(stream2).collect()).toString().should.eql("cat");
     }
-    (await iter.next()).done.should.eql(true);
+    (await b.nested.next()).done.should.eql(true);
   });
 });
-
-
-// FIXME: enforce that one stream must end before the next is read.
