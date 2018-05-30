@@ -7,35 +7,6 @@ let counter = 0;
 // a node.js stream, in async form
 export type Stream = AsyncIterable<Buffer>;
 
-// an AsyncIterator that resolves a `done` promise when the iterator is complete
-export class AlertingAsyncIterator<A> implements AsyncIterator<A> {
-  done: Promise<void>;
-
-  private wrapped: AsyncIterator<A>;
-  private resolve?: () => void;
-  private reject?: (e: Error) => void;
-
-  constructor(s: AsyncIterator<A> | AsyncIterable<A>) {
-    this.wrapped = (s as any)[Symbol.asyncIterator] ? (s as any)[Symbol.asyncIterator]() : s;
-    this.done = new Promise((resolve, reject) => {
-      this.resolve = resolve;
-      this.reject = reject;
-    });
-  }
-
-  async next(): Promise<IteratorResult<A>> {
-    try {
-      const rv = await this.wrapped.next();
-      if (rv.done && this.resolve) this.resolve();
-      return rv;
-    } catch (error) {
-      if (this.reject) this.reject(error);
-      throw error;
-    }
-  }
-}
-
-
 
 
 export class TerminationSignal<A> {
