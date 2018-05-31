@@ -5,7 +5,7 @@ const EMPTY = Buffer.from([]);
 export enum Type {
   STRING = 0,
   INT = 2,
-  BOOL = 3,
+  BOOLEAN = 3,
 }
 
 export class Field {
@@ -20,12 +20,12 @@ export class Field {
     switch (this.type) {
       case Type.STRING: return `S${this.id}=${(this.list || []).join(",")}`;
       case Type.INT: return `I${this.id}=${this.int || 0}`;
-      case Type.BOOL: return `B${this.id}`;
+      case Type.BOOLEAN: return `B${this.id}`;
     }
   }
 
   static fromBool(id: number): Field {
-    return new Field(Type.BOOL, id);
+    return new Field(Type.BOOLEAN, id);
   }
 
   static fromInt(id: number, n: number): Field {
@@ -44,12 +44,12 @@ export class Field {
 export class Header {
   fields: Field[] = [];
 
-  addBool(id: number) {
+  addBoolean(id: number) {
     this.fields.push(Field.fromBool(id));
     return this;
   }
 
-  addNumber(id: number, int: number) {
+  addInt(id: number, int: number) {
     this.fields.push(Field.fromInt(id, int));
     return this;
   }
@@ -62,6 +62,23 @@ export class Header {
   addStringList(id: number, list: string[]) {
     this.fields.push(Field.fromStrings(id, list));
     return this;
+  }
+
+  getBoolean(id: number): boolean {
+    return this.fields.filter(f => f.type == Type.BOOLEAN && f.id == id).length > 0;
+  }
+
+  getInt(id: number): number | undefined {
+    return this.fields.filter(f => f.type == Type.INT && f.id == id).map(f => f.int)[0];
+  }
+
+  getStringList(id: number): string[] | undefined {
+    return this.fields.filter(f => f.type == Type.STRING && f.id == id).map(f => f.list)[0];
+  }
+
+  getString(id: number): string | undefined {
+    const list = this.getStringList(id);
+    return list === undefined ? undefined : list[0];
   }
 
   toString(): string {
@@ -81,7 +98,7 @@ export class Header {
         case Type.INT:
           content = zint.encodePackedInt(f.int || 0);
           break;
-        case Type.BOOL:
+        case Type.BOOLEAN:
           break;
       }
       if (content.length > 1023) throw new Error(`Header ${f.id} too large (${content.length} > 1023)`);

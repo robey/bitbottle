@@ -13,7 +13,7 @@ const BASIC_MAGIC = MAGIC_STRING + "00e0";
 
 describe("BottleWriter", () => {
   it("writes a bottle header", async () => {
-    const b = new Bottle(10, new Header().addNumber(0, 150)).write();
+    const b = new Bottle(10, new Header().addInt(0, 150)).write();
     b.end();
     Buffer.concat(await asyncIter(b).collect()).toString("hex").should.eql(`${MAGIC_STRING}03a0018096ef`);
   });
