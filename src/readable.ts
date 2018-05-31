@@ -1,4 +1,4 @@
-import { Stream } from "./streams";
+import { Stream } from "ballvalve";
 
 /*
  * wrap a `Stream` so discrete `read(N)` calls will work.

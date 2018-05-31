@@ -1,6 +1,6 @@
+import { Stream } from "ballvalve";
 import { debug, nameOf } from "./debug";
 import { Readable } from "./readable";
-import { Stream } from "./streams";
 import { decodeLength, encodeLength, lengthLength } from "./zint";
 
 const END_OF_STREAM = Buffer.from([ 0 ]);

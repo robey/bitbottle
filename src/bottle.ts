@@ -1,9 +1,8 @@
-import { AlertingAsyncIterator, asyncIter, PushAsyncIterator } from "ballvalve";
+import { AlertingAsyncIterator, asyncIter, PushAsyncIterator, Stream } from "ballvalve";
 import { debug, named } from "./debug";
 import { framed, unframed } from "./framed";
 import { Header } from "./header";
 import { Readable } from "./readable";
-import { AsyncIterableSequence, Stream, TerminationSignal } from "./streams";
 
 export const MAGIC = new Buffer([ 0xf0, 0x9f, 0x8d, 0xbc ]);
 export const VERSION = 0x00;
@@ -44,7 +43,7 @@ export class Bottle {
     ]);
 
     const writer = new BottleWriter();
-    writer.sequence.add(headers);
+    writer.pusher.push(headers);
     return writer;
   }
 
@@ -78,29 +77,39 @@ export class Bottle {
 
 
 export class BottleWriter implements Stream {
-  sequence = new AsyncIterableSequence<Buffer>();
+  pusher = new PushAsyncIterator<Stream>();
 
   constructor() {
     // pass
   }
 
+  // flatten
   [Symbol.asyncIterator]() {
-    return this.sequence.stream[Symbol.asyncIterator]();
+    const pusher = this.pusher;
+    return async function* () {
+      for await (const stream of pusher) {
+        for await (const item of stream) yield item;
+      }
+    }();
   }
 
   addStream(s: Stream): Promise<void> {
-    this.sequence.add(asyncIter([ Buffer.from([ STREAM_DATA ]) ]));
-    return this.sequence.add(framed(s));
+    this.pusher.push(asyncIter([ Buffer.from([ STREAM_DATA ]) ]));
+    const stream = asyncIter(framed(s)).alerting();
+    this.pusher.push(stream);
+    return stream.done;
   }
 
   addBottle(b: BottleWriter): Promise<void> {
-    this.sequence.add(asyncIter([ Buffer.from([ STREAM_BOTTLE ]) ]));
-    return this.sequence.add(b);
+    this.pusher.push(asyncIter([ Buffer.from([ STREAM_BOTTLE ]) ]));
+    const stream = asyncIter(b).alerting();
+    this.pusher.push(stream);
+    return stream.done;
   }
 
   end() {
-    this.sequence.add(asyncIter([ Buffer.from([ STREAM_STOP ]) ]));
-    this.sequence.end();
+    this.pusher.push(asyncIter([ Buffer.from([ STREAM_STOP ]) ]));
+    this.pusher.end();
   }
 }
 

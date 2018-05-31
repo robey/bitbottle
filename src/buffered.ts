@@ -1,4 +1,4 @@
-import { Stream } from "./streams";
+import { Stream } from "ballvalve";
 
 const DEFAULT_BLOCK_SIZE = Math.pow(2, 20);  // 1MB
 

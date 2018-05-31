@@ -1,9 +1,8 @@
-import { asyncIter, PushAsyncIterator } from "ballvalve";
+import { asyncIter, PushAsyncIterator, Stream } from "ballvalve";
 import { Bottle, BottleWriter, BottleReader } from "../bottle";
 import { setLogger } from "../debug";
 import { Header } from "../header";
 import { Readable } from "../readable";
-import { Stream } from "../streams";
 
 import "should";
 import "source-map-support/register";
