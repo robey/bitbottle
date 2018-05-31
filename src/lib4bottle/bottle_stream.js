@@ -13,6 +13,7 @@ export const TYPE_ENCRYPTED = 3;
 export const TYPE_COMPRESSED = 4;
 
 const MIN_BUFFER = 1024;
+const STREAM_BUFFER_SIZE = 256 * 1024;
 
 export function bottleTypeName(n) {
   switch (n) {
@@ -35,6 +36,7 @@ export function writeBottle(type, header, options = {}) {
     name: "bottleWriterGuts",
     writableObjectMode: true,
     readableObjectMode: true,
+    highWaterMark: STREAM_BUFFER_SIZE,
     transform: inStream => {
       // prevent tiny packets by requiring it to buffer at least 1KB
       const buffered = bufferStream(MIN_BUFFER);
@@ -83,6 +85,7 @@ function writeHeader(type, header) {
 export function readBottle(options = {}) {
   const streamOptions = {
     readableObjectMode: true,
+    highWaterMark: STREAM_BUFFER_SIZE,
     transform: t => {
       return readHeader(t).then(header => {
         t.push(header);
