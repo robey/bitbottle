@@ -20,11 +20,11 @@ describe("framed", () => {
   });
 
   it("writes a power-of-two frame", async () => {
-    for (const blockSize of [ 512, 1024, Math.pow(2, 18), Math.pow(2, 21) ]) {
+    for (const blockSize of [ 128, 1024, Math.pow(2, 18), Math.pow(2, 21) ]) {
       const stream = asyncIter([ Buffer.alloc(blockSize) ]);
       const data = Buffer.concat(await asyncIter(framed(stream)).collect());
       data.length.should.eql(blockSize + 2);
-      data[0].should.eql((Math.log(blockSize) / Math.log(2)) + 0xe0 - 9);
+      data[0].should.eql((Math.log(blockSize) / Math.log(2)) + 0xe0 - 7);
       data[data.length - 1].should.eql(0);
     }
   });
@@ -65,9 +65,9 @@ describe("unframed", () => {
   });
 
   it("reads a power-of-two frame", async () => {
-    for (const blockSize of [ 512, 1024, Math.pow(2, 18), Math.pow(2, 21) ]) {
+    for (const blockSize of [ 128, 1024, Math.pow(2, 18), Math.pow(2, 21) ]) {
       const b = Buffer.alloc(blockSize + 2);
-      b[0] = 0xe0 + (Math.log(blockSize) / Math.log(2)) - 9;
+      b[0] = 0xe0 + (Math.log(blockSize) / Math.log(2)) - 7;
       const stream = asyncIter([ b ]);
       Buffer.concat(await asyncIter(unframed(new Readable(stream))).collect()).length.should.eql(blockSize);
     }

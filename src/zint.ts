@@ -24,13 +24,13 @@ export function decodePackedInt(data: Buffer): number {
  * - `0xxxxxxx` - 7 bits, 0 - 128
  * - `10xxxxxx xxxxxxxx` - 14 bits, 0 - 16KB
  * - `110xxxxx xxxxxxxx xxxxxxxx` - 21 bits, 0 - 2MB
- * - `1110xxxx` (e0 - ec) - 2**(9 + x) = 512 - 2MB
+ * - `1110xxxx` (e0 - ee) - 2**(7 + x) = 128 - 2MB
  */
 
 export function encodeLength(n: number) {
-  if (n <= Math.pow(2, 21) && n >= 512) {
+  if (n <= Math.pow(2, 21) && n >= 128) {
     const log = logBase2(n);
-    if (log !== undefined) return Buffer.from([ 0xe0 + log - 9 ]);
+    if (log !== undefined) return Buffer.from([ 0xe0 + log - 7 ]);
   }
   if (n < 128) return Buffer.from([ n ]);
   if (n < 16384) return new Buffer([ 0x80 + (n & 0x3f), (n >> 6) & 0xff ]);
@@ -53,7 +53,7 @@ export function lengthLength(byte: number): number {
  */
 export function decodeLength(data: Buffer) {
   if ((data[0] & 0x80) == 0) return data[0];
-  if ((data[0] & 0xf0) == 0xe0) return Math.pow(2, 9 + (data[0] & 0xf));
+  if ((data[0] & 0xf0) == 0xe0) return Math.pow(2, 7 + (data[0] & 0xf));
 
   if ((data[0] & 0xc0) == 0x80) {
     return (data[0] & 0x3f) + (data[1] << 6);

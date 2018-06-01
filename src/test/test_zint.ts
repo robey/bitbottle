@@ -24,16 +24,17 @@ describe("zint", () => {
   });
 
   it("encode length", () => {
+    zint.encodeLength(0).toString("hex").should.eql("00");
     zint.encodeLength(1).toString("hex").should.eql("01");
     zint.encodeLength(100).toString("hex").should.eql("64");
-    zint.encodeLength(129).toString("hex").should.eql("8102");
     zint.encodeLength(127).toString("hex").should.eql("7f");
-    zint.encodeLength(256).toString("hex").should.eql("8004");
-    zint.encodeLength(512).toString("hex").should.eql("e0");
-    zint.encodeLength(1024).toString("hex").should.eql("e1");
+    zint.encodeLength(128).toString("hex").should.eql("e0");
+    zint.encodeLength(129).toString("hex").should.eql("8102");
+    zint.encodeLength(512).toString("hex").should.eql("e2");
+    zint.encodeLength(1024).toString("hex").should.eql("e3");
     zint.encodeLength(12345).toString("hex").should.eql("b9c0");
     zint.encodeLength(1901626).toString("hex").should.eql("da21e8");
-    zint.encodeLength(Math.pow(2, 21)).toString("hex").should.eql("ec");
+    zint.encodeLength(Math.pow(2, 21)).toString("hex").should.eql("ee");
   });
 
   it("determine length of length", () => {
@@ -53,13 +54,13 @@ describe("zint", () => {
     zint.decodeLength(new Buffer("00", "hex")).should.eql(0);
     zint.decodeLength(new Buffer("01", "hex")).should.eql(1);
     zint.decodeLength(new Buffer("64", "hex")).should.eql(100);
-    zint.decodeLength(new Buffer("8102", "hex")).should.eql(129);
     zint.decodeLength(new Buffer("7f", "hex")).should.eql(127);
-    zint.decodeLength(new Buffer("8004", "hex")).should.eql(256);
-    zint.decodeLength(new Buffer("e0", "hex")).should.eql(512);
-    zint.decodeLength(new Buffer("e1", "hex")).should.eql(1024);
+    zint.decodeLength(new Buffer("e0", "hex")).should.eql(128);
+    zint.decodeLength(new Buffer("8102", "hex")).should.eql(129);
+    zint.decodeLength(new Buffer("e2", "hex")).should.eql(512);
+    zint.decodeLength(new Buffer("e3", "hex")).should.eql(1024);
     zint.decodeLength(new Buffer("b9c0", "hex")).should.eql(12345);
     zint.decodeLength(new Buffer("da21e8", "hex")).should.eql(1901626);
-    zint.decodeLength(new Buffer("ec", "hex")).should.eql(Math.pow(2, 21));
+    zint.decodeLength(new Buffer("ee", "hex")).should.eql(Math.pow(2, 21));
   });
 });
