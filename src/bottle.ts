@@ -1,4 +1,4 @@
-import { AlertingAsyncIterator, asyncIter, PushAsyncIterator, Stream } from "ballvalve";
+import { asyncIter, ExtendedAsyncIterator, PushAsyncIterator, Stream } from "ballvalve";
 import { debug, named } from "./debug";
 import { framed, unframed } from "./framed";
 import { Header } from "./header";
@@ -6,10 +6,6 @@ import { Readable } from "./readable";
 
 export const MAGIC = new Buffer([ 0xf0, 0x9f, 0x8d, 0xbc ]);
 export const VERSION = 0x00;
-
-const STREAM_DATA = 0xed;
-const STREAM_BOTTLE = 0xee;
-const STREAM_STOP = 0xef;
 
 
 export enum BottleType {
@@ -32,14 +28,16 @@ export class Bottle {
 
     // make and push the bottle header
     const headers = asyncIter([
-      MAGIC,
-      new Buffer([
-        VERSION,
-        0,
-        (buffer.length & 0xff),
-        (this.type << 4) | ((buffer.length >> 8) & 0xf),
-      ]),
-      buffer
+      Buffer.concat([
+        MAGIC,
+        new Buffer([
+          VERSION,
+          0,
+          (buffer.length & 0xff),
+          (this.type << 4) | ((buffer.length >> 8) & 0xf),
+        ]),
+        buffer
+      ])
     ]);
 
     const writer = new BottleWriter();
@@ -73,6 +71,10 @@ export class Bottle {
 
     return new Bottle(type, header);
   }
+
+  toString(): string {
+    return `Bottle(${this.type}, ${this.header})`;
+  }
 }
 
 
@@ -93,57 +95,38 @@ export class BottleWriter implements Stream {
     }();
   }
 
-  addStream(s: Stream): Promise<void> {
-    this.pusher.push(asyncIter([ Buffer.from([ STREAM_DATA ]) ]));
-    const stream = asyncIter(framed(s)).alerting();
-    this.pusher.push(stream);
-    return stream.done;
-  }
-
-  addBottle(b: BottleWriter): Promise<void> {
-    this.pusher.push(asyncIter([ Buffer.from([ STREAM_BOTTLE ]) ]));
-    const stream = asyncIter(b).alerting();
+  push(s: Stream): Promise<void> {
+    const stream = asyncIter(framed(s));
     this.pusher.push(stream);
     return stream.done;
   }
 
   end() {
-    this.pusher.push(asyncIter([ Buffer.from([ STREAM_STOP ]) ]));
     this.pusher.end();
   }
 }
 
 
-export class BottleReader implements AsyncIterator<BottleReader | Stream>, AsyncIterable<BottleReader | Stream> {
+export class BottleReader implements AsyncIterator<Readable>, AsyncIterable<Readable> {
   done: Promise<void>;
-  private iter: AlertingAsyncIterator<BottleReader | Stream>;
+  private iter: ExtendedAsyncIterator<Readable>;
 
   constructor(public bottle: Bottle, public stream: Readable) {
+    const self = this;
     this.iter = asyncIter(async function* () {
       while (true) {
         const byte = await stream.read(1);
-        if (byte === undefined || byte.length < 1) throw new Error("Truncated stream data");
-
-        switch (byte[0]) {
-          case STREAM_DATA: {
-            const s = asyncIter(unframed(stream)).alerting();
-            yield s;
-            await s.done;
-            break;
-          }
-          case STREAM_BOTTLE: {
-            const b = await Bottle.read(stream);
-            yield b;
-            await b.done;
-            break;
-          }
-          case STREAM_STOP:
-            return;
-          default:
-            throw new Error(`Unknown stream tag ${byte[0]}`);
+        if (byte === undefined || byte.length < 1) {
+          // we hit the end.
+          return;
         }
+
+        stream.unread(byte);
+        const r = unframed(stream);
+        yield r;
+        await r.done;
       }
-    }()).alerting();
+    }());
     this.done = this.iter.done;
   }
 
@@ -151,7 +134,11 @@ export class BottleReader implements AsyncIterator<BottleReader | Stream>, Async
     return this;
   }
 
-  next(): Promise<IteratorResult<BottleReader | Stream>> {
+  next(): Promise<IteratorResult<Readable>> {
     return this.iter.next();
+  }
+
+  toString(): string {
+    return `BottleReader(${this.bottle}, ${this.stream})`;
   }
 }
