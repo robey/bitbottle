@@ -21,7 +21,7 @@
     "test": "npm run build && mocha -R spec --colors lib/test"
   },
   "dependencies": {
-    "argon2": "^0.19.2",
+    "argon2": "^0.19.3",
     "ballvalve": "^2.1.1",
     "js-scrypt": "^0.2.0",
     "posix": "^4.1.2",
