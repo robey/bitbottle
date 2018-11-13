@@ -1,4 +1,4 @@
-import { Stream } from "ballvalve";
+import { Decorate, Stream } from "ballvalve";
 
 const DEFAULT_BLOCK_SIZE = Math.pow(2, 20);  // 1MB
 
@@ -15,7 +15,7 @@ export async function* buffered(
   let queue: Buffer[] = [];
   let size = 0;
 
-  for await (const data of stream) {
+  for await (const data of Decorate.asyncIterator(stream)) {
     queue.push(data);
     size += data.length;
 

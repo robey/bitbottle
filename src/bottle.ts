@@ -1,12 +1,14 @@
-import { asyncIter, ExtendedAsyncIterator, PushAsyncIterator, Stream } from "ballvalve";
+import { Decorate, PushAsyncIterator, Stream } from "ballvalve";
 import { Crc32 } from "./crc32";
 import { debug, named } from "./debug";
 import { framed, unframed } from "./framed";
 import { Header } from "./header";
 import { Readable } from "./readable";
 
-export const MAGIC = new Buffer([ 0xf0, 0x9f, 0x8d, 0xbc ]);
+export const MAGIC = Buffer.from([ 0xf0, 0x9f, 0x8d, 0xbc ]);
 export const VERSION = 0x00;
+
+let counter = 0;
 
 
 export enum BottleType {
@@ -24,7 +26,7 @@ export class Bottle {
 
   write(): BottleWriter {
     const writer = new BottleWriter();
-    writer.pusher.push(asyncIter([ writeBottleCap(this) ]));
+    writer.pusher.push(Decorate.iterator([ writeBottleCap(this) ]));
     return writer;
   }
 
@@ -40,67 +42,66 @@ export class Bottle {
 
 
 export class BottleWriter implements Stream {
+  private id = ++counter;
   pusher = new PushAsyncIterator<Stream>();
+  output: Stream;
 
   constructor() {
-    // pass
-  }
-
-  // flatten
-  [Symbol.asyncIterator]() {
     const pusher = this.pusher;
-    return async function* () {
-      for await (const stream of pusher) {
-        for await (const item of stream) yield item;
+    this.output = async function* () {
+      for await (const stream of Decorate.asyncIterator(pusher)) {
+        for await (const item of Decorate.asyncIterator(stream)) yield item;
       }
     }();
   }
 
+  next(): Promise<IteratorResult<Buffer>> {
+    return this.output.next();
+  }
+
   push(s: Stream): Promise<void> {
-    const stream = asyncIter(framed(s));
+    const stream = Decorate.asyncIterator(framed(s));
     this.pusher.push(stream);
-    return stream.done;
+    return stream.onEnd();
   }
 
   end() {
     this.pusher.end();
   }
+
+  toString() {
+    return `BottleWriter[${this.id}]`;
+  }
 }
 
 
-export class BottleReader implements AsyncIterator<Readable>, AsyncIterable<Readable> {
-  done: Promise<void>;
-  private iter: ExtendedAsyncIterator<Readable>;
+export class BottleReader implements AsyncIterator<Stream> {
+  private iter: AsyncIterator<Stream>;
+  private id = ++counter;
 
-  constructor(public bottle: Bottle, public stream: Readable) {
-    const self = this;
-    this.iter = asyncIter(async function* () {
+  constructor(public bottle: Bottle, public readable: Readable) {
+    this.iter = async function* () {
       while (true) {
-        const byte = await stream.read(1);
+        const byte = await readable.read(1);
         if (byte === undefined || byte.length < 1) {
           // we hit the end.
           return;
         }
 
-        stream.unread(byte);
-        const r = unframed(stream);
-        yield r;
-        await r.done;
+        readable.unread(byte);
+        const outStream = Decorate.asyncIterator(unframed(readable));
+        yield outStream;
+        await outStream.onEnd();
       }
-    }());
-    this.done = this.iter.done;
+    }();
   }
 
-  [Symbol.asyncIterator]() {
-    return this;
-  }
-
-  next(): Promise<IteratorResult<Readable>> {
+  next(): Promise<IteratorResult<Stream>> {
     return this.iter.next();
   }
 
   toString(): string {
-    return `BottleReader(${this.bottle}, ${this.stream})`;
+    return `BottleReader[${this.id}](${this.bottle}, ${this.readable})`;
   }
 }
 
@@ -112,7 +113,7 @@ function writeBottleCap(b: Bottle): Buffer {
 
   const cap = Buffer.concat([
     MAGIC,
-    new Buffer([
+    Buffer.from([
       VERSION,
       0,
       (buffer.length & 0xff),

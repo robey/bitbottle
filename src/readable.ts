@@ -1,18 +1,16 @@
-import { ExtendedAsyncIterator, Stream } from "ballvalve";
+import { AsyncIterableOnce, Decorate, Stream } from "ballvalve";
 
 /*
  * wrap a `Stream` so discrete `read(N)` calls will work.
  */
-export class Readable implements Stream, AsyncIterator<Buffer> {
+export class Readable {
   saved: Buffer[] = [];
   size = 0;
   ended = false;
-  iter: AsyncIterator<Buffer>;
-  done: Promise<void>;
+  iter: AsyncIterableOnce<Buffer>;
 
-  constructor(public stream: ExtendedAsyncIterator<Buffer>) {
-    this.iter = stream[Symbol.asyncIterator]();
-    this.done = stream.done;
+  constructor(public stream: Stream) {
+    this.iter = Decorate.asyncIterator(stream);
   }
 
   private async fillTo(size: number): Promise<void> {
@@ -51,21 +49,6 @@ export class Readable implements Stream, AsyncIterator<Buffer> {
     this.size += b.length;
   }
 
-  [Symbol.asyncIterator]() {
-    return this;
-  }
-
-  async next(): Promise<IteratorResult<Buffer>> {
-    const b = this.saved.shift();
-    if (b !== undefined) {
-      this.size -= b.length;
-      return { done: false, value: b };
-    }
-    const rv = await this.iter.next();
-    if (rv.done) this.ended = true;
-    return rv;
-  }
-
   remainder(): Buffer | undefined {
     if (this.size == 0) return undefined;
     const rv = Buffer.concat(this.saved);
@@ -75,6 +58,7 @@ export class Readable implements Stream, AsyncIterator<Buffer> {
   }
 
   toString(): string {
-    return `Readable(${this.stream})`;
+    const unread = (Buffer.concat(this.saved) as any).inspect();
+    return `Readable(${this.stream}, buffered=${unread})`;
   }
 }

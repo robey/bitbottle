@@ -18,22 +18,22 @@ describe("header", () => {
   });
 
   it("unpack", () => {
-    Header.unpack(new Buffer("00c4", "hex")).toString().should.eql("Header(B1)");
-    Header.unpack(new Buffer("00c402a8e803", "hex")).toString().should.eql(
+    Header.unpack(Buffer.from("00c4", "hex")).toString().should.eql("Header(B1)");
+    Header.unpack(Buffer.from("00c402a8e803", "hex")).toString().should.eql(
       "Header(B1, I10=1000)"
     );
-    Header.unpack(new Buffer("00c402a8e803040c69726f6e", "hex")).toString().should.eql(
+    Header.unpack(Buffer.from("00c402a8e803040c69726f6e", "hex")).toString().should.eql(
       "Header(B1, I10=1000, S3=iron)"
     );
-    Header.unpack(new Buffer("0d3c6f6e650074776f007468726565", "hex")).toString().should.eql(
+    Header.unpack(Buffer.from("0d3c6f6e650074776f007468726565", "hex")).toString().should.eql(
       "Header(S15=one,two,three)"
     );
   });
 
   it("unpack truncated", () => {
-    (() => Header.unpack(new Buffer("c4", "hex"))).should.throw(/truncated/i);
-    (() => Header.unpack(new Buffer("c401", "hex"))).should.throw(/truncated/i);
-    (() => Header.unpack(new Buffer("c403ffff", "hex"))).should.throw(/truncated/i);
+    (() => Header.unpack(Buffer.from("c4", "hex"))).should.throw(/truncated/i);
+    (() => Header.unpack(Buffer.from("c401", "hex"))).should.throw(/truncated/i);
+    (() => Header.unpack(Buffer.from("c403ffff", "hex"))).should.throw(/truncated/i);
   });
 
   it("get", () => {

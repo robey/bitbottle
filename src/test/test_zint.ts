@@ -14,13 +14,13 @@ describe("zint", () => {
   });
 
   it("decode packed", () => {
-    zint.decodePackedInt(new Buffer("00", "hex")).should.eql(0);
-    zint.decodePackedInt(new Buffer("ff", "hex")).should.eql(255);
-    zint.decodePackedInt(new Buffer("64", "hex")).should.eql(100);
-    zint.decodePackedInt(new Buffer("81", "hex")).should.eql(129);
-    zint.decodePackedInt(new Buffer("7f", "hex")).should.eql(127);
-    zint.decodePackedInt(new Buffer("0001", "hex")).should.eql(256);
-    zint.decodePackedInt(new Buffer("b168de3a", "hex")).should.eql(987654321);
+    zint.decodePackedInt(Buffer.from("00", "hex")).should.eql(0);
+    zint.decodePackedInt(Buffer.from("ff", "hex")).should.eql(255);
+    zint.decodePackedInt(Buffer.from("64", "hex")).should.eql(100);
+    zint.decodePackedInt(Buffer.from("81", "hex")).should.eql(129);
+    zint.decodePackedInt(Buffer.from("7f", "hex")).should.eql(127);
+    zint.decodePackedInt(Buffer.from("0001", "hex")).should.eql(256);
+    zint.decodePackedInt(Buffer.from("b168de3a", "hex")).should.eql(987654321);
   });
 
   it("encode length", () => {
@@ -51,16 +51,16 @@ describe("zint", () => {
   });
 
   it("read length", () => {
-    zint.decodeLength(new Buffer("00", "hex")).should.eql(0);
-    zint.decodeLength(new Buffer("01", "hex")).should.eql(1);
-    zint.decodeLength(new Buffer("64", "hex")).should.eql(100);
-    zint.decodeLength(new Buffer("7f", "hex")).should.eql(127);
-    zint.decodeLength(new Buffer("e0", "hex")).should.eql(128);
-    zint.decodeLength(new Buffer("8102", "hex")).should.eql(129);
-    zint.decodeLength(new Buffer("e2", "hex")).should.eql(512);
-    zint.decodeLength(new Buffer("e3", "hex")).should.eql(1024);
-    zint.decodeLength(new Buffer("b9c0", "hex")).should.eql(12345);
-    zint.decodeLength(new Buffer("da21e8", "hex")).should.eql(1901626);
-    zint.decodeLength(new Buffer("ee", "hex")).should.eql(Math.pow(2, 21));
+    zint.decodeLength(Buffer.from("00", "hex")).should.eql(0);
+    zint.decodeLength(Buffer.from("01", "hex")).should.eql(1);
+    zint.decodeLength(Buffer.from("64", "hex")).should.eql(100);
+    zint.decodeLength(Buffer.from("7f", "hex")).should.eql(127);
+    zint.decodeLength(Buffer.from("e0", "hex")).should.eql(128);
+    zint.decodeLength(Buffer.from("8102", "hex")).should.eql(129);
+    zint.decodeLength(Buffer.from("e2", "hex")).should.eql(512);
+    zint.decodeLength(Buffer.from("e3", "hex")).should.eql(1024);
+    zint.decodeLength(Buffer.from("b9c0", "hex")).should.eql(12345);
+    zint.decodeLength(Buffer.from("da21e8", "hex")).should.eql(1901626);
+    zint.decodeLength(Buffer.from("ee", "hex")).should.eql(Math.pow(2, 21));
   });
 });

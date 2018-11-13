@@ -1,4 +1,4 @@
-import { asyncIter, PushAsyncIterator, Stream } from "ballvalve";
+import { Decorate, PushAsyncIterator, Stream } from "ballvalve";
 import { Bottle, BottleWriter, BottleReader } from "../bottle";
 import { setLogger } from "../debug";
 import { Header } from "../header";
@@ -11,7 +11,7 @@ const MAGIC_STRING = "f09f8dbc0000";
 const BASIC_MAGIC = MAGIC_STRING + "00e09dcdda54";
 
 
-const hex = async (b: BottleWriter): Promise<string> => Buffer.concat(await asyncIter(b).collect()).toString("hex");
+const hex = async (b: BottleWriter): Promise<string> => Buffer.concat(await Decorate.asyncIterator(b).collect()).toString("hex");
 
 describe("BottleWriter", () => {
   it("writes a bottle header", async () => {
@@ -21,7 +21,7 @@ describe("BottleWriter", () => {
   });
 
   it("writes data", async () => {
-    const data = asyncIter([ Buffer.from("ff00ff00", "hex") ]);
+    const data = Decorate.iterator([ Buffer.from("ff00ff00", "hex") ]);
     const b = new Bottle(10, new Header()).write();
     b.push(data);
     b.end();
@@ -41,7 +41,7 @@ describe("BottleWriter", () => {
     const b = new Bottle(10, new Header()).write();
     const b2 = new Bottle(14, new Header()).write();
     b.push(b2);
-    b2.push(asyncIter([ Buffer.from("cat") ]));
+    b2.push(Decorate.iterator([ Buffer.from("cat") ]));
     b2.end();
     b.end();
 
@@ -70,9 +70,9 @@ describe("BottleWriter", () => {
   });
 
   it("writes several datas", async () => {
-    const data1 = asyncIter([ Buffer.from("f0f0f0", "hex") ]);
-    const data2 = asyncIter([ Buffer.from("e0e0e0", "hex") ]);
-    const data3 = asyncIter([ Buffer.from("cccccc", "hex") ]);
+    const data1 = Decorate.iterator([ Buffer.from("f0f0f0", "hex") ]);
+    const data2 = Decorate.iterator([ Buffer.from("e0e0e0", "hex") ]);
+    const data3 = Decorate.iterator([ Buffer.from("cccccc", "hex") ]);
     const b = new Bottle(14, new Header()).write();
 
     await Promise.all([
@@ -92,7 +92,7 @@ describe("BottleWriter", () => {
 
 describe("bottleReader", () => {
   function read(hex: string): Promise<BottleReader> {
-    return Bottle.read(new Readable(asyncIter([ Buffer.from(hex, "hex") ])));
+    return Bottle.read(new Readable(Decorate.iterator([ Buffer.from(hex, "hex") ])));
   }
 
   it("validates the header", async () => {
@@ -116,14 +116,14 @@ describe("bottleReader", () => {
   it("reads a data block", async () => {
     const b = await read(`${BASIC_MAGIC}0568656c6c6f00`);
     const stream1 = (await b.next()).value;
-    Buffer.concat(await asyncIter(stream1).collect()).toString().should.eql("hello");
+    Buffer.concat(await Decorate.asyncIterator(stream1).collect()).toString().should.eql("hello");
     (await b.next()).done.should.eql(true);
   });
 
   it("reads a continuing data block", async () => {
     const b = await read(`${BASIC_MAGIC}026865016c026c6f00`);
     const stream1 = (await b.next()).value;
-    Buffer.concat(await asyncIter(stream1).collect()).toString().should.eql("hello");
+    Buffer.concat(await Decorate.asyncIterator(stream1).collect()).toString().should.eql("hello");
     (await b.next()).done.should.eql(true);
   });
 
@@ -131,13 +131,13 @@ describe("bottleReader", () => {
     const b = await read(`${BASIC_MAGIC}03f0f0f00003e0e0e00003cccccc00`);
 
     const stream1 = (await b.next()).value;
-    Buffer.concat(await asyncIter(stream1).collect()).toString("hex").should.eql("f0f0f0");
+    Buffer.concat(await Decorate.asyncIterator(stream1).collect()).toString("hex").should.eql("f0f0f0");
 
     const stream2 = (await b.next()).value;
-    Buffer.concat(await asyncIter(stream2).collect()).toString("hex").should.eql("e0e0e0");
+    Buffer.concat(await Decorate.asyncIterator(stream2).collect()).toString("hex").should.eql("e0e0e0");
 
     const stream3 = (await b.next()).value;
-    Buffer.concat(await asyncIter(stream3).collect()).toString("hex").should.eql("cccccc");
+    Buffer.concat(await Decorate.asyncIterator(stream3).collect()).toString("hex").should.eql("cccccc");
 
     (await b.next()).done.should.eql(true);
   });
@@ -148,16 +148,16 @@ describe("bottleReader", () => {
     b.bottle.type.should.eql(10);
 
     const stream1 = (await b.next()).value;
-    const b2 = await Bottle.read(stream1);
+    const b2 = await Bottle.read(new Readable(stream1));
     b2.bottle.type.should.eql(11);
 
     const innerStream = (await b2.next()).value;
-    Buffer.concat(await asyncIter(innerStream).collect()).toString().should.eql("cat");
+    Buffer.concat(await Decorate.asyncIterator(innerStream).collect()).toString().should.eql("cat");
 
     (await b2.next()).done.should.eql(true);
 
     const stream2 = (await b.next()).value;
-    Buffer.concat(await asyncIter(stream2).collect()).toString().should.eql("bat");
+    Buffer.concat(await Decorate.asyncIterator(stream2).collect()).toString().should.eql("bat");
     (await b.next()).done.should.eql(true);
   });
 });
