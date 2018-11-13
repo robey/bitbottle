@@ -20,47 +20,23 @@ export enum BottleType {
 
 
 export class Bottle {
-  static write(type: BottleType, header: Header): BottleWriter {
-    return new BottleWriter(new BottleCap(type, header));
+  static write(type: BottleType, header: Header, streams: AsyncIterator<Stream>): Stream {
+    const id = ++counter;
+    const cap = new BottleCap(type, header);
+
+    return Decorate.asyncIterator(
+      async function* (): Stream {
+        yield cap.write();
+        for await (const s of Decorate.asyncIterator(streams)) {
+          for await (const buffer of Decorate.asyncIterator(framed(s))) yield buffer;
+        }
+      }(),
+      () => `BottleWriter[${id}](${cap.toString()})`
+    );
   }
 
   static async read(stream: Readable): Promise<BottleReader> {
     return new BottleReader(await BottleCap.read(stream), stream);
-  }
-}
-
-
-export class BottleWriter implements Stream {
-  private id = ++counter;
-  pusher = new PushAsyncIterator<Stream>();
-  output: Stream;
-
-  constructor(public cap: BottleCap) {
-    const pusher = this.pusher;
-    this.output = async function* () {
-      for await (const stream of Decorate.asyncIterator(pusher)) {
-        for await (const item of Decorate.asyncIterator(stream)) yield item;
-      }
-    }();
-    this.pusher.push(Decorate.iterator([ cap.write() ]));
-  }
-
-  next(): Promise<IteratorResult<Buffer>> {
-    return this.output.next();
-  }
-
-  push(s: Stream): Promise<void> {
-    const stream = Decorate.asyncIterator(framed(s));
-    this.pusher.push(stream);
-    return stream.onEnd();
-  }
-
-  end() {
-    this.pusher.end();
-  }
-
-  toString() {
-    return `BottleWriter[${this.id}](${this.cap.toString()})`;
   }
 }
 

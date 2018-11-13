@@ -1,5 +1,5 @@
-import { Decorate, PushAsyncIterator } from "ballvalve";
-import { Bottle, BottleWriter, BottleReader } from "../bottle";
+import { Decorate, Stream } from "ballvalve";
+import { Bottle, BottleReader } from "../bottle";
 import { setLogger } from "../debug";
 import { Header } from "../header";
 import { Readable } from "../readable";
@@ -10,43 +10,35 @@ import "source-map-support/register";
 const MAGIC_STRING = "f09f8dbc0000";
 const BASIC_MAGIC = MAGIC_STRING + "00e09dcdda54";
 
+const delay = (msec: number) => new Promise<void>(resolve => setTimeout(resolve, msec));
 
-async function hex(b: BottleWriter): Promise<string> {
-  return Buffer.concat(await Decorate.asyncIterator(b).collect()).toString("hex");
-};
+async function hex(s: Stream): Promise<string> {
+  return Buffer.concat(await Decorate.asyncIterator(s).collect()).toString("hex");
+}
 
 
-describe("BottleWriter", () => {
+describe("Bottle.write", () => {
   it("writes a bottle header", async () => {
-    const b = Bottle.write(10, new Header().addInt(0, 150));
-    b.end();
+    const b = Bottle.write(10, new Header().addInt(0, 150), Decorate.iterator([]));
     (await hex(b)).should.eql(`${MAGIC_STRING}03a0018096cc8641ed`);
   });
 
   it("writes data", async () => {
     const data = Decorate.iterator([ Buffer.from("ff00ff00", "hex") ]);
-    const b = Bottle.write(10, new Header());
-    b.push(data);
-    b.end();
+    const b = Bottle.write(10, new Header(), Decorate.iterator([ data ]));
     (await hex(b)).should.eql(`${MAGIC_STRING}00a00d8c062204ff00ff0000`);
   });
 
   it("writes a nested bottle", async () => {
-    const b = Bottle.write(10, new Header());
-    const b2 = Bottle.write(14, new Header());
-    b.push(b2);
-    b.end();
-    b2.end();
+    const b2 = Bottle.write(14, new Header(), Decorate.iterator([]));
+    const b = Bottle.write(10, new Header(), Decorate.iterator([ b2 ]));
     (await hex(b)).should.eql(`${MAGIC_STRING}00a00d8c06220c${MAGIC_STRING}00e09dcdda5400`);
   });
 
   it("writes a nested bottle of data", async () => {
-    const b = Bottle.write(10, new Header());
-    const b2 = Bottle.write(14, new Header());
-    b.push(b2);
-    b2.push(Decorate.iterator([ Buffer.from("cat") ]));
-    b2.end();
-    b.end();
+    const data = Decorate.iterator([ Buffer.from("cat") ]);
+    const b2 = Bottle.write(14, new Header(), Decorate.iterator([ data ]));
+    const b = Bottle.write(10, new Header(), Decorate.iterator([ b2 ]));
 
     const nested = `0c${MAGIC_STRING}00e09dcdda54010303636174010000`;
     (await hex(b)).should.eql(`${MAGIC_STRING}00a00d8c0622${nested}`);
@@ -54,20 +46,16 @@ describe("BottleWriter", () => {
 
   it("streams data", async () => {
     // just to verify that the data is written as it comes in, and the event isn't triggered until completion.
-    const stream = new PushAsyncIterator<Buffer>();
-    const b = Bottle.write(14, new Header());
-    const future = b.push(stream);
-
     let done = false;
-    setTimeout(async () => {
-      stream.push(Buffer.from("c44c", "hex"));
-      stream.end();
-
-      await future;
-      b.end();
+    async function* data(): Stream {
+      await delay(10);
+      yield Buffer.from("c44c", "hex");
+      await delay(10);
       done = true;
-    }, 10);
+    }
 
+    const b = Bottle.write(14, new Header(), Decorate.iterator([ data() ]));
+    done.should.eql(false);
     (await hex(b)).should.eql(`${MAGIC_STRING}00e09dcdda5402c44c00`);
     done.should.eql(true);
   });
@@ -76,19 +64,18 @@ describe("BottleWriter", () => {
     const data1 = Decorate.iterator([ Buffer.from("f0f0f0", "hex") ]);
     const data2 = Decorate.iterator([ Buffer.from("e0e0e0", "hex") ]);
     const data3 = Decorate.iterator([ Buffer.from("cccccc", "hex") ]);
-    const b = Bottle.write(14, new Header());
 
-    await Promise.all([
-      (async () => {
-        await b.push(data1);
-        await b.push(data2);
-        await b.push(data3);
-        b.end();
-      })(),
-      (async () => {
-        (await hex(b)).should.eql(`${MAGIC_STRING}00e09dcdda5403f0f0f00003e0e0e00003cccccc00`);
-      })()
-    ]);
+    async function* streams(): AsyncIterator<Stream> {
+      await delay(10);
+      yield data1;
+      await delay(10);
+      yield data2;
+      await delay(10);
+      yield data3;
+    }
+
+    const b = Bottle.write(14, new Header(), streams());
+    (await hex(b)).should.eql(`${MAGIC_STRING}00e09dcdda5403f0f0f00003e0e0e00003cccccc00`);
   });
 });
 
