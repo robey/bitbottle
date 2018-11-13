@@ -1,4 +1,4 @@
-import { Decorate, PushAsyncIterator, Stream } from "ballvalve";
+import { Decorate, PushAsyncIterator } from "ballvalve";
 import { Bottle, BottleWriter, BottleReader } from "../bottle";
 import { setLogger } from "../debug";
 import { Header } from "../header";
@@ -11,26 +11,29 @@ const MAGIC_STRING = "f09f8dbc0000";
 const BASIC_MAGIC = MAGIC_STRING + "00e09dcdda54";
 
 
-const hex = async (b: BottleWriter): Promise<string> => Buffer.concat(await Decorate.asyncIterator(b).collect()).toString("hex");
+async function hex(b: BottleWriter): Promise<string> {
+  return Buffer.concat(await Decorate.asyncIterator(b).collect()).toString("hex");
+};
+
 
 describe("BottleWriter", () => {
   it("writes a bottle header", async () => {
-    const b = new Bottle(10, new Header().addInt(0, 150)).write();
+    const b = Bottle.write(10, new Header().addInt(0, 150));
     b.end();
     (await hex(b)).should.eql(`${MAGIC_STRING}03a0018096cc8641ed`);
   });
 
   it("writes data", async () => {
     const data = Decorate.iterator([ Buffer.from("ff00ff00", "hex") ]);
-    const b = new Bottle(10, new Header()).write();
+    const b = Bottle.write(10, new Header());
     b.push(data);
     b.end();
     (await hex(b)).should.eql(`${MAGIC_STRING}00a00d8c062204ff00ff0000`);
   });
 
   it("writes a nested bottle", async () => {
-    const b = new Bottle(10, new Header()).write();
-    const b2 = new Bottle(14, new Header()).write();
+    const b = Bottle.write(10, new Header());
+    const b2 = Bottle.write(14, new Header());
     b.push(b2);
     b.end();
     b2.end();
@@ -38,8 +41,8 @@ describe("BottleWriter", () => {
   });
 
   it("writes a nested bottle of data", async () => {
-    const b = new Bottle(10, new Header()).write();
-    const b2 = new Bottle(14, new Header()).write();
+    const b = Bottle.write(10, new Header());
+    const b2 = Bottle.write(14, new Header());
     b.push(b2);
     b2.push(Decorate.iterator([ Buffer.from("cat") ]));
     b2.end();
@@ -52,7 +55,7 @@ describe("BottleWriter", () => {
   it("streams data", async () => {
     // just to verify that the data is written as it comes in, and the event isn't triggered until completion.
     const stream = new PushAsyncIterator<Buffer>();
-    const b = new Bottle(14, new Header()).write();
+    const b = Bottle.write(14, new Header());
     const future = b.push(stream);
 
     let done = false;
@@ -73,7 +76,7 @@ describe("BottleWriter", () => {
     const data1 = Decorate.iterator([ Buffer.from("f0f0f0", "hex") ]);
     const data2 = Decorate.iterator([ Buffer.from("e0e0e0", "hex") ]);
     const data3 = Decorate.iterator([ Buffer.from("cccccc", "hex") ]);
-    const b = new Bottle(14, new Header()).write();
+    const b = Bottle.write(14, new Header());
 
     await Promise.all([
       (async () => {
@@ -105,12 +108,12 @@ describe("bottleReader", () => {
 
   it("reads the header", async () => {
     const b = await read("f09f8dbc000000c055edb46f");
-    b.bottle.type.should.eql(12);
-    b.bottle.header.toString().should.eql("Header()");
+    b.cap.type.should.eql(12);
+    b.cap.header.toString().should.eql("Header()");
 
     const b2 = await read("f09f8dbc000003e0018096f1de5576");
-    b2.bottle.type.should.eql(14);
-    b2.bottle.header.toString().should.eql("Header(I0=150)");
+    b2.cap.type.should.eql(14);
+    b2.cap.header.toString().should.eql("Header(I0=150)");
   });
 
   it("reads a data block", async () => {
@@ -145,11 +148,11 @@ describe("bottleReader", () => {
   it("reads nested bottles", async () => {
     const nested = `0c${MAGIC_STRING}00b0699cb13f05036361740000`;
     const b = await read(`${MAGIC_STRING}00a00d8c0622${nested}0362617400`);
-    b.bottle.type.should.eql(10);
+    b.cap.type.should.eql(10);
 
     const stream1 = (await b.next()).value;
     const b2 = await Bottle.read(new Readable(stream1));
-    b2.bottle.type.should.eql(11);
+    b2.cap.type.should.eql(11);
 
     const innerStream = (await b2.next()).value;
     Buffer.concat(await Decorate.asyncIterator(innerStream).collect()).toString().should.eql("cat");

@@ -33,7 +33,7 @@ export function encodeLength(n: number) {
     if (log !== undefined) return Buffer.from([ 0xe0 + log - 7 ]);
   }
   if (n < 128) return Buffer.from([ n ]);
-  if (n < 16384) return new Buffer([ 0x80 + (n & 0x3f), (n >> 6) & 0xff ]);
+  if (n < 16384) return Buffer.from([ 0x80 + (n & 0x3f), (n >> 6) & 0xff ]);
   return Buffer.from([ 0xc0 + (n & 0x1f), (n >> 5) & 0xff, (n >> 13) & 0xff ]);
 }
 

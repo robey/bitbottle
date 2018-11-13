@@ -20,23 +20,12 @@ export enum BottleType {
 
 
 export class Bottle {
-  constructor(public type: BottleType, public header: Header) {
-    // pass
-  }
-
-  write(): BottleWriter {
-    const writer = new BottleWriter();
-    writer.pusher.push(Decorate.iterator([ writeBottleCap(this) ]));
-    return writer;
+  static write(type: BottleType, header: Header): BottleWriter {
+    return new BottleWriter(new BottleCap(type, header));
   }
 
   static async read(stream: Readable): Promise<BottleReader> {
-    const b = await readBottleCap(stream);
-    return new BottleReader(b, stream);
-  }
-
-  toString(): string {
-    return `Bottle(${this.type}, ${this.header})`;
+    return new BottleReader(await BottleCap.read(stream), stream);
   }
 }
 
@@ -46,13 +35,14 @@ export class BottleWriter implements Stream {
   pusher = new PushAsyncIterator<Stream>();
   output: Stream;
 
-  constructor() {
+  constructor(public cap: BottleCap) {
     const pusher = this.pusher;
     this.output = async function* () {
       for await (const stream of Decorate.asyncIterator(pusher)) {
         for await (const item of Decorate.asyncIterator(stream)) yield item;
       }
     }();
+    this.pusher.push(Decorate.iterator([ cap.write() ]));
   }
 
   next(): Promise<IteratorResult<Buffer>> {
@@ -70,7 +60,7 @@ export class BottleWriter implements Stream {
   }
 
   toString() {
-    return `BottleWriter[${this.id}]`;
+    return `BottleWriter[${this.id}](${this.cap.toString()})`;
   }
 }
 
@@ -79,7 +69,7 @@ export class BottleReader implements AsyncIterator<Stream> {
   private iter: AsyncIterator<Stream>;
   private id = ++counter;
 
-  constructor(public bottle: Bottle, public readable: Readable) {
+  constructor(public cap: BottleCap, public readable: Readable) {
     this.iter = async function* () {
       while (true) {
         const byte = await readable.read(1);
@@ -101,55 +91,65 @@ export class BottleReader implements AsyncIterator<Stream> {
   }
 
   toString(): string {
-    return `BottleReader[${this.id}](${this.bottle}, ${this.readable})`;
+    return `BottleReader[${this.id}](${this.cap}, ${this.readable})`;
   }
 }
 
 
-function writeBottleCap(b: Bottle): Buffer {
-  if (b.type < 0 || b.type > 15) throw new Error(`Bottle type out of range: ${b.type}`);
-  const buffer = b.header.pack();
-  if (buffer.length > 4095) throw new Error(`Header too long: ${buffer.length} > 4095`);
-
-  const cap = Buffer.concat([
-    MAGIC,
-    Buffer.from([
-      VERSION,
-      0,
-      (buffer.length & 0xff),
-      (b.type << 4) | ((buffer.length >> 8) & 0xf),
-    ]),
-    buffer
-  ]);
-
-  return Buffer.concat([ cap, Crc32.lsbFrom(cap) ]);
-}
-
-async function readBottleCap(stream: Readable): Promise<Bottle> {
-  const crc = new Crc32();
-
-  const b = await stream.read(8);
-  if (b === undefined || b.length < 8) throw new Error("End of stream");
-  if (!b.slice(0, 4).equals(MAGIC)) throw new Error("Incorrect magic (not a bitbottle)");
-  crc.update(b);
-
-  const version = b[4];
-  const flags = b[5];
-  const headerLength = b[6] + (b[7] & 0xf) * 256;
-  const type = b[7] >> 4;
-  if ((version >> 4) > 0) throw new Error(`Incompatible version: ${version >> 4}.${version & 0xf}`);
-  if (flags != 0) throw new Error(`Garbage flags`);
-
-  let header = new Header();
-  if (headerLength > 0) {
-    const b2 = await stream.read(headerLength);
-    if (b2 === undefined || b2.length < headerLength) throw new Error("Truncated header");
-    header = Header.unpack(b2);
-    crc.update(b2);
+export class BottleCap {
+  constructor(public type: BottleType, public header: Header) {
+    // pass
   }
 
-  const encodedCrc = await stream.read(4);
-  if (encodedCrc === undefined || encodedCrc.length < 4) throw new Error("Truncated header");
-  if (encodedCrc.readUInt32LE(0) != crc.finish()) throw new Error("CRC-32 mismatch in header");
-  return new Bottle(type, header);
+  toString(): string {
+    return `Bottle(${this.type}, ${this.header})`;
+  }
+
+  write(): Buffer {
+    if (this.type < 0 || this.type > 15) throw new Error(`Bottle type out of range: ${this.type}`);
+    const buffer = this.header.pack();
+    if (buffer.length > 4095) throw new Error(`Header too long: ${buffer.length} > 4095`);
+
+    const cap = Buffer.concat([
+      MAGIC,
+      Buffer.from([
+        VERSION,
+        0,
+        (buffer.length & 0xff),
+        (this.type << 4) | ((buffer.length >> 8) & 0xf),
+      ]),
+      buffer
+    ]);
+
+    return Buffer.concat([ cap, Crc32.lsbFrom(cap) ]);
+  }
+
+  static async read(stream: Readable): Promise<BottleCap> {
+    const crc = new Crc32();
+
+    const b = await stream.read(8);
+    if (b === undefined || b.length < 8) throw new Error("End of stream");
+    if (!b.slice(0, 4).equals(MAGIC)) throw new Error("Incorrect magic (not a bitbottle)");
+    crc.update(b);
+
+    const version = b[4];
+    const flags = b[5];
+    const headerLength = b[6] + (b[7] & 0xf) * 256;
+    const type = b[7] >> 4;
+    if ((version >> 4) > 0) throw new Error(`Incompatible version: ${version >> 4}.${version & 0xf}`);
+    if (flags != 0) throw new Error(`Garbage flags`);
+
+    let header = new Header();
+    if (headerLength > 0) {
+      const b2 = await stream.read(headerLength);
+      if (b2 === undefined || b2.length < headerLength) throw new Error("Truncated header");
+      header = Header.unpack(b2);
+      crc.update(b2);
+    }
+
+    const encodedCrc = await stream.read(4);
+    if (encodedCrc === undefined || encodedCrc.length < 4) throw new Error("Truncated header");
+    if (encodedCrc.readUInt32LE(0) != crc.finish()) throw new Error("CRC-32 mismatch in header");
+    return new BottleCap(type, header);
+  }
 }
