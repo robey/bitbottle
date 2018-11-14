@@ -1,13 +1,8 @@
 import { Decorate, Stream } from "ballvalve";
 import { Bottle, BottleType } from "../bottle";
+import { FileBottle } from "../file_bottle";
 import { Hash, HashBottle, HashOptions } from "../hash_bottle";
 import { Readable } from "../readable";
-
-// import { pipeToBuffer, sourceStream } from "stream-toolkit";
-// import { future } from "mocha-sprinkles";
-// import { readBottle, TYPE_HASHED } from "../../lib/lib4bottle/bottle_stream";
-// import { readFile, writeFile } from "./files";
-// import { decodeHashHeader, readHashBottle, writeHashBottle, HASH_SHA512 } from "../../lib/lib4bottle/hash_bottle";
 
 import "should";
 import "source-map-support/register";
@@ -55,32 +50,32 @@ describe("hashBottleWriter", () => {
   });
 
   it("writes and hashes a file stream", async () => {
-//     return writeFile("file.txt").then(fileBuffer => {
-//       return writeHashBottle(HASH_SHA512).then(({ writer, bottle }) => {
-//         sourceStream(fileBuffer).pipe(writer);
-//         return pipeToBuffer(bottle).then(buffer => {
-//           // now decode it.
-//           const reader = readBottle();
-//           sourceStream(buffer).pipe(reader);
-//           return reader.readPromise().then(data => {
-//             data.type.should.eql(TYPE_HASHED);
-//             const header = decodeHashHeader(data.header);
-//             header.hashType.should.eql(HASH_SHA512);
+    const bottleStream = FileBottle.write(
+      { filename: "file.txt", folder: false, size: 21 },
+      Decorate.iterator([ Buffer.from("the new pornographers") ])
+    );
+    const hashed = HashBottle.write(Hash.SHA512, bottleStream);
 
-//             return readHashBottle(header, reader);
-//           }).then(({ stream, hexPromise }) => {
-//             return readFile(stream, "file.txt").then(() => {
-//               return hexPromise;
-//             });
-//           }).then(hex => {
-//             hex.should.eql(
-//               "872613ed7e437f332b77ae992925ea33a4565e3f26c9d623da6c78aea9522d90" +
-//               "261c4f52824b64f5ad4fdd020a4678c47bf862f53f02a62183749a1e0616b940"
-//             );
-//           });
-//         });
-//       });
-//     });
+    // now decode it.
+    const bottle = await Bottle.read(new Readable(hashed));
+    bottle.cap.type.should.eql(BottleType.Hashed);
+    bottle.cap.header.toString().should.eql("Header(I0=0)");
+
+    // first stream is a nested FileBottle
+    const s1 = await bottle.nextStream();
+    const fb = await Bottle.read(new Readable(s1));
+    fb.cap.type.should.eql(BottleType.File);
+    const file = await FileBottle.read(fb);
+    file.meta.should.eql({ filename: "file.txt", folder: false, size: 21 });
+    (await drain(file.stream)).toString().should.eql("the new pornographers");
+
+    // second stream is the hash
+    const s2 = await bottle.nextStream();
+    (await drain(s2)).toString("hex").should.eql(
+      "365a4cc0ef4b830ba70c242ca73f61341caf9cf83b114e273dd0a8668d4cdf46" +
+      "dce475da8bed5e22a629d828323ebb679e167720aee0f93efe07f6ab3ad906be"
+    );
+    await bottle.assertEndOfStreams();
   });
 
   it("signs a bottle", async () => {
