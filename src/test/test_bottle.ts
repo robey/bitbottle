@@ -1,5 +1,5 @@
 import { Decorate, Stream } from "ballvalve";
-import { Bottle, BottleReader } from "../bottle";
+import { Bottle } from "../bottle";
 import { setLogger } from "../debug";
 import { Header } from "../header";
 import { Readable } from "../readable";
@@ -81,7 +81,7 @@ describe("Bottle.write", () => {
 
 
 describe("bottleReader", () => {
-  function read(hex: string): Promise<BottleReader> {
+  function read(hex: string): Promise<Bottle> {
     return Bottle.read(new Readable(Decorate.iterator([ Buffer.from(hex, "hex") ])));
   }
 
@@ -105,31 +105,31 @@ describe("bottleReader", () => {
 
   it("reads a data block", async () => {
     const b = await read(`${BASIC_MAGIC}0568656c6c6f00`);
-    const stream1 = (await b.next()).value;
+    const stream1 = (await b.streams.next()).value;
     Buffer.concat(await Decorate.asyncIterator(stream1).collect()).toString().should.eql("hello");
-    (await b.next()).done.should.eql(true);
+    (await b.streams.next()).done.should.eql(true);
   });
 
   it("reads a continuing data block", async () => {
     const b = await read(`${BASIC_MAGIC}026865016c026c6f00`);
-    const stream1 = (await b.next()).value;
+    const stream1 = (await b.streams.next()).value;
     Buffer.concat(await Decorate.asyncIterator(stream1).collect()).toString().should.eql("hello");
-    (await b.next()).done.should.eql(true);
+    (await b.streams.next()).done.should.eql(true);
   });
 
   it("reads several datas", async () => {
     const b = await read(`${BASIC_MAGIC}03f0f0f00003e0e0e00003cccccc00`);
 
-    const stream1 = (await b.next()).value;
+    const stream1 = (await b.streams.next()).value;
     Buffer.concat(await Decorate.asyncIterator(stream1).collect()).toString("hex").should.eql("f0f0f0");
 
-    const stream2 = (await b.next()).value;
+    const stream2 = (await b.streams.next()).value;
     Buffer.concat(await Decorate.asyncIterator(stream2).collect()).toString("hex").should.eql("e0e0e0");
 
-    const stream3 = (await b.next()).value;
+    const stream3 = (await b.streams.next()).value;
     Buffer.concat(await Decorate.asyncIterator(stream3).collect()).toString("hex").should.eql("cccccc");
 
-    (await b.next()).done.should.eql(true);
+    (await b.streams.next()).done.should.eql(true);
   });
 
   it("reads nested bottles", async () => {
@@ -137,17 +137,17 @@ describe("bottleReader", () => {
     const b = await read(`${MAGIC_STRING}00a00d8c0622${nested}0362617400`);
     b.cap.type.should.eql(10);
 
-    const stream1 = (await b.next()).value;
+    const stream1 = (await b.streams.next()).value;
     const b2 = await Bottle.read(new Readable(stream1));
     b2.cap.type.should.eql(11);
 
-    const innerStream = (await b2.next()).value;
+    const innerStream = (await b2.streams.next()).value;
     Buffer.concat(await Decorate.asyncIterator(innerStream).collect()).toString().should.eql("cat");
 
-    (await b2.next()).done.should.eql(true);
+    (await b2.streams.next()).done.should.eql(true);
 
-    const stream2 = (await b.next()).value;
+    const stream2 = (await b.streams.next()).value;
     Buffer.concat(await Decorate.asyncIterator(stream2).collect()).toString().should.eql("bat");
-    (await b.next()).done.should.eql(true);
+    (await b.streams.next()).done.should.eql(true);
   });
 });

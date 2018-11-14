@@ -1,5 +1,5 @@
 import { Decorate, Stream } from "ballvalve";
-import { Bottle, BottleReader, BottleType } from "../bottle";
+import { Bottle, BottleType } from "../bottle";
 import { Hash, HashBottle, HashOptions } from "../hash_bottle";
 import { Readable } from "../readable";
 
@@ -31,7 +31,7 @@ function writeBottle(data: Buffer, options: HashOptions = {}): Promise<Buffer> {
   return drain(HashBottle.write(Hash.SHA512, Decorate.iterator([ data ]), options));
 }
 
-function readBottle(data: Buffer): Promise<BottleReader> {
+function readBottle(data: Buffer): Promise<Bottle> {
   return Bottle.read(new Readable(Decorate.iterator([ data ])));
 }
 
@@ -44,19 +44,17 @@ describe("hashBottleWriter", () => {
     b.cap.type.should.eql(BottleType.Hashed);
     b.cap.header.toString().should.eql("Header(I0=0)");
 
-    const item = await b.next();
-    item.done.should.eql(false);
-    (await drain(item.value)).toString().should.eql("i choose you!");
-    const item2 = await b.next();
-    item2.done.should.eql(false);
-    (await drain(item2.value)).toString("hex").should.eql(
+    const s1 = await b.nextStream();
+    (await drain(s1)).toString().should.eql("i choose you!");
+    const s2 = await b.nextStream();
+    (await drain(s2)).toString("hex").should.eql(
       "d134df6f6314fca50918f8c2dea596a49bb723eb9ec156c21abe2c9d9803c614" +
       "86d07f8006c7428c780846209e9ffa6ed60dbf2a0408a109509c802545ee65b9"
     );
-    (await b.next()).done.should.eql(true);
+    await b.assertEndOfStreams();
   });
 
-  // it("writes and hashes a file stream", future(() => {
+  it("writes and hashes a file stream", async () => {
 //     return writeFile("file.txt").then(fileBuffer => {
 //       return writeHashBottle(HASH_SHA512).then(({ writer, bottle }) => {
 //         sourceStream(fileBuffer).pipe(writer);
@@ -83,7 +81,7 @@ describe("hashBottleWriter", () => {
 //         });
 //       });
 //     });
-//   }));
+  });
 
   it("signs a bottle", async () => {
     // const buffer = await writeHexBottle(Buffer.from("lasagna"), { signedBy: "garfield", signer });

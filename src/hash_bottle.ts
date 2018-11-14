@@ -1,8 +1,8 @@
 import * as crypto from "crypto";
-import { Decorate, Stream, AsyncIterableOnce } from "ballvalve";
+import { Decorate, Stream } from "ballvalve";
 import { debug } from "./debug";
 import { Header } from "./header";
-import { Bottle, BottleReader, BottleType } from "./bottle";
+import { Bottle, BottleType } from "./bottle";
 
 export enum Hash {
   SHA512 = 0
@@ -46,20 +46,6 @@ export class HashBottle {
     return Bottle.write(BottleType.Hashed, header, streams());
   }
 }
-
-// export function writeHashBottle(type: Hash, stream: Stream, options: HashOptions = {}): Stream {
-
-//   const task = new BackgroundTask<Buffer, void>(bottle);
-
-//   // FIXME: filler func
-//   task.run(async () => {
-//     await bottle.push(hasher);
-//     const digest = options.signer ? await options.signer(hasher.digest) : hasher.digest;
-//     await bottle.push(asyncIterable([ digest ]));
-//     bottle.end();
-//   });
-//   return task;
-// }
 
 // export async function readHashBottle(reader: BottleReader): Promise<BackgroundTask<Buffer, Buffer>> {
 //   const item1 = await reader.next();
@@ -227,42 +213,3 @@ class HashingStream implements Stream {
 //     return { stream: hashStream, hexPromise };
 //   });
 // }
-
-
-// wrap a stream with a background task that will resolve `done` when complete.
-class BackgroundTask<A, B> implements AsyncIterable<A>, AsyncIterator<A> {
-  result: Promise<B>;
-
-  private wrapped: AsyncIterator<A>;
-  private resolve?: (value: B) => void;
-  private reject?: (e: Error) => void;
-
-  constructor(s: AsyncIterable<A>) {
-    this.wrapped = s[Symbol.asyncIterator]();
-    this.result = new Promise<B>((resolve, reject) => {
-      this.resolve = resolve;
-      this.reject = reject;
-    });
-  }
-
-  [Symbol.asyncIterator]() {
-    return this;
-  }
-
-  async next(): Promise<IteratorResult<A>> {
-    return await this.wrapped.next();
-  }
-
-  run(f: () => Promise<B>) {
-    (async () => {
-      try {
-        const rv = await f();
-        if (this.resolve) this.resolve(rv);
-      } catch (error) {
-        debug(`Error in background task:`);
-        (error.stack as string).split("\n").forEach(line => debug(line));
-        if (this.reject) this.reject(error);
-      }
-    })();
-  }
-}

@@ -20,6 +20,36 @@ export enum BottleType {
 
 
 export class Bottle {
+  private constructor(public cap: BottleCap, public streams: AsyncIterator<Stream>) {
+    // pass
+  }
+
+  async nextStream(): Promise<Stream> {
+    const item = await this.streams.next();
+    if (item.done) throw new Error(`Missing stream in ${this.cap}`);
+    return item.value;
+  }
+
+  async assertEndOfStreams(): Promise<void> {
+    const item = await this.streams.next();
+    if (!item.done) throw new Error(`Extra stream in ${this.cap}`);
+  }
+
+  // extract the first stream, and throw an error if there were any more
+  // after. has the nice side effect of not closing the new stream until the
+  // underlying readable is exhausted.
+  onlyOneStream(): Stream {
+    const self = this;
+
+    return Decorate.asyncIterator(
+      async function* (): Stream {
+        for await (const buffer of Decorate.asyncIterator(await self.nextStream())) yield buffer;
+        self.assertEndOfStreams();
+      }(),
+      () => self.cap.toString()
+    );
+  }
+
   static write(type: BottleType, header: Header, streams: AsyncIterator<Stream>): Stream {
     const id = ++counter;
     const cap = new BottleCap(type, header);
@@ -35,39 +65,29 @@ export class Bottle {
     );
   }
 
-  static async read(stream: Readable): Promise<BottleReader> {
-    return new BottleReader(await BottleCap.read(stream), stream);
-  }
-}
+  static async read(readable: Readable): Promise<Bottle> {
+    const id = ++counter;
+    const cap = await BottleCap.read(readable);
+    return new Bottle(
+      cap,
+      Decorate.asyncIterator(
+        async function* () {
+          while (true) {
+            const byte = await readable.read(1);
+            if (byte === undefined || byte.length < 1) {
+              // we hit the end.
+              return;
+            }
+            readable.unread(byte);
 
-
-export class BottleReader implements AsyncIterator<Stream> {
-  private iter: AsyncIterator<Stream>;
-  private id = ++counter;
-
-  constructor(public cap: BottleCap, public readable: Readable) {
-    this.iter = async function* () {
-      while (true) {
-        const byte = await readable.read(1);
-        if (byte === undefined || byte.length < 1) {
-          // we hit the end.
-          return;
-        }
-
-        readable.unread(byte);
-        const outStream = Decorate.asyncIterator(unframed(readable));
-        yield outStream;
-        await outStream.onEnd();
-      }
-    }();
-  }
-
-  next(): Promise<IteratorResult<Stream>> {
-    return this.iter.next();
-  }
-
-  toString(): string {
-    return `BottleReader[${this.id}](${this.cap}, ${this.readable})`;
+            const outStream = Decorate.asyncIterator(unframed(readable));
+            yield outStream;
+            await outStream.onEnd();
+          }
+        }(),
+        () => `BottleReader[${id}](${cap}, ${readable})`
+      )
+    );
   }
 }
 
