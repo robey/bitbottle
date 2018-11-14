@@ -1,11 +1,14 @@
-import * as crypto from "crypto";
 import { Decorate, Stream } from "ballvalve";
+import * as crypto from "crypto";
 import { debug } from "./debug";
 import { Header } from "./header";
 import { Bottle, BottleType } from "./bottle";
 
 export enum Hash {
-  SHA512 = 0
+  SHA512 = 0,
+  // for decoding:
+  MIN = 0,
+  MAX = 0,
 }
 
 const NAME = {
@@ -30,6 +33,29 @@ export interface HashOptions {
 }
 
 export class HashBottle {
+  private constructor(public bottle: Bottle, public stream: HashingStream) {
+    // pass
+  }
+
+  // call after draining the main stream.
+  // if the stream was signed, a verifier must be supplied to verify the
+  // signature and return the original buffer (or throw an exception).
+  // returns the hash if it was valid; throws an exception otherwise.
+  async check(verifier?: (hash: Buffer, signedBy: string) => Promise<Buffer>): Promise<Buffer> {
+    const hash = this.stream.digest();
+    const signedBy = this.bottle.cap.header.getString(Field.StringSignedBy);
+    if (signedBy && !verifier) throw new Error("No verifier given for signed HashBottle");
+
+    const signedBuffer = Buffer.concat(await Decorate.asyncIterator(await this.bottle.nextStream()).collect());
+    const digestBuffer = signedBy && verifier ? (await verifier(signedBuffer, signedBy)) : signedBuffer;
+    if (!digestBuffer.equals(hash)) {
+      throw new Error(`Incorrect hash: expected ${hash.toString("hex")}, got ${digestBuffer.toString("hex")}`);
+    }
+
+    await this.bottle.assertEndOfStreams();
+    return hash;
+  }
+
   static write(type: Hash, stream: Stream, options: HashOptions = {}): Stream {
     const header = new Header();
     header.addInt(Field.IntHashType, type);
@@ -45,79 +71,19 @@ export class HashBottle {
 
     return Bottle.write(BottleType.Hashed, header, streams());
   }
+
+  static async read(bottle: Bottle): Promise<HashBottle> {
+    const hashType: Hash = bottle.cap.header.getInt(Field.IntHashType) || 0;
+    if (hashType < Hash.MIN || hashType > Hash.MAX) throw new Error(`Unknown hash type ${hashType}`);
+
+    const innerStream = await bottle.nextStream();
+    const hasher = new HashingStream(innerStream, HASH[hashType] || HASH[Hash.SHA512]);
+    return new HashBottle(bottle, hasher);
+  }
 }
 
-// export async function readHashBottle(reader: BottleReader): Promise<BackgroundTask<Buffer, Buffer>> {
-//   const item1 = await reader.next();
-//   if (item1.done || item1.value === undefined) throw new Error("Truncated hash stream");
-//   const stream = new HashingStream(item1.value, HASH[reader.bottle.header.getInt(Field.IntHashType) || Hash.SHA512]);
-// }
 
-// class HashBottleReader implements Stream, AsyncIterator<Buffer> {
-//   iter: AsyncIterator<Stream | BottleReader>;
-
-//   constructor(public reader: BottleReader) {
-//     this.iter = reader[Symbol.asyncIterator]();
-//   }
-
-//   async start() {
-//     const item = await this.next();
-//     if (item.done || item.)
-//     const hasher = new HashingStream(iter.next())
-//   }
-
-//   [Symbol.asyncIterator]() {
-//     return this;
-//   }
-
-//   next(): Promise<IteratorResult<Buffer>> {
-
-//   }
-// }
-
-
-
-
-//   const hashStream = hashStreamForType(header.hashType);
-//   if (header.signedBy && !options.verifier) throw new Error("No verifier given");
-//   const _babel_bug = buffer => Promise.resolve(buffer);
-//   const verifier = options.verifier || _babel_bug;
-
-//   return bottleReader.readPromise().then(stream => {
-//     if (!stream) throw new Error("Premature end of stream");
-//     stream.pipe(hashStream);
-
-
-// /*
-//  * Produle a bottle that hashes (and optionally signs) a stream.
-//  *
-//  * Options:
-//  *   - signedBy: `String` if the hash should be signed, who was it signed by
-//  *   - signer: `Buffer => Promise(Buffer)`: perform the signing, and
-//  *     return a signed blob that contains the original buffer inside it
-//  *
-// export function writeHashBottle(hashType, options = {}) {
-//   const _babel_bug = hash => Promise.resolve(hash);
-//   const signer = options.signer || _babel_bug;
-
-//   const header = new Header();
-//   header.addNumber(FIELDS.NUMBERS.HASH_TYPE, hashType);
-//   if (options.signedBy) header.addString(FIELDS.STRINGS.SIGNED_BY, options.signedBy);
-
-//   const bottle = writeBottle(TYPE_HASHED, header);
-//   const writer = hashStreamForType(hashType);
-//   bottle.write(writer);
-//   writer.on("end", () => {
-//     return Promise.try(() => signer(writer.digest)).then(hashData => {
-//       bottle.write(sourceStream(hashData));
-//       bottle.end();
-//     }, error => bottle.emit("error", error));
-//   });
-//   return Promise.resolve({ writer, bottle });
-// }
-
-
-class HashingStream implements Stream {
+export class HashingStream implements Stream {
   hasher: crypto.Hash;
 
   constructor(public wrapped: Stream, public hashName: string) {
@@ -138,78 +104,3 @@ class HashingStream implements Stream {
     return this.hasher.digest();
   }
 }
-
-
-// // -----
-
-// export function decodeHashHeader(h) {
-//   const rv = {};
-//   h.fields.forEach(field => {
-//     switch (field.type) {
-//       case TYPE_ZINT:
-//         switch (field.id) {
-//           case FIELDS.NUMBERS.HASH_TYPE:
-//             rv.hashType = field.number;
-//             break;
-//         }
-//         break;
-//       case TYPE_STRING:
-//         switch (field.id) {
-//           case FIELDS.STRINGS.SIGNED_BY:
-//             rv.signedBy = field.string;
-//             break;
-//         }
-//         break;
-//     }
-//   });
-//   if (rv.hashType == null) rv.hashType = HASH_SHA512;
-//   rv.hashName = HASH_NAMES[rv.hashType];
-//   return rv;
-// }
-
-// /*
-//  * Returns a promise containing:
-//  *   - stream: inner stream
-//  *   - hexPromise: promise for a hex of the hash, resolved if it matched or
-//  *     was signed correctly (rejected if not)
-//  *
-//  * Options:
-//  *   - `verifier`: `(Buffer, signedBy: String) => Promise(Buffer)`: if the
-//  *     hash was signed, unpack the signature, verify that it was signed by
-//  *     `signedBy`, and return either the signed data or an exception
-//  *
-// export function readHashBottle(header, bottleReader, options = {}) {
-//   const hashStream = hashStreamForType(header.hashType);
-//   if (header.signedBy && !options.verifier) throw new Error("No verifier given");
-//   const _babel_bug = buffer => Promise.resolve(buffer);
-//   const verifier = options.verifier || _babel_bug;
-
-//   return bottleReader.readPromise().then(stream => {
-//     if (!stream) throw new Error("Premature end of stream");
-//     stream.pipe(hashStream);
-
-//     const hexPromise = new Promise((resolve, reject) => {
-//       hashStream.endPromise().then(() => {
-//         return bottleReader.readPromise().then(digestStream => {
-//           if (!digestStream) throw new Error("Premature end of stream");
-//           return pipeToBuffer(digestStream).then(signedBuffer => {
-//             return header.signedBy ? verifier(signedBuffer, header.signedBy) : signedBuffer;
-//           }).then(digestBuffer => {
-//             if (!digestBuffer) digestBuffer = new Buffer(0);
-//             const realHex = hashStream.digest.toString("hex");
-//             const gotHex = digestBuffer.toString("hex");
-//             if (realHex == gotHex) {
-//               resolve(gotHex);
-//             } else {
-//               reject(new Error(`Incorrect hash (expected ${realHex}, got ${gotHex})`));
-//             }
-//           });
-//         });
-//       }).catch(error => {
-//         reject(error);
-//       });
-//     });
-
-//     return { stream: hashStream, hexPromise };
-//   });
-// }

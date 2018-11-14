@@ -9,14 +9,14 @@ import "source-map-support/register";
 
 // pretend we signed it.
 async function signer(data: Buffer): Promise<Buffer> {
-  return Buffer.concat([ new Buffer("sign"), data ]);
+  return Buffer.concat([ Buffer.from("sign"), data ]);
 }
 
-// function verifier(data, signedBy) {
-//   if (signedBy != "garfield") return Promise.reject(new Error("not garfield"));
-//   if (data.slice(0, 4).toString() != "sign") return Promise.reject(new Error("not signed"));
-//   return Promise.resolve(data.slice(4));
-// }
+async function verifier(data: Buffer, signedBy: string): Promise<Buffer> {
+  if (signedBy != "garfield") throw new Error("not garfield");
+  if (data.slice(0, 4).toString() != "sign") throw new Error("not signed");
+  return data.slice(4);
+}
 
 async function drain(s: Stream): Promise<Buffer> {
   return Buffer.concat(await Decorate.asyncIterator(s).collect());
@@ -49,6 +49,22 @@ describe("hashBottleWriter", () => {
     await b.assertEndOfStreams();
   });
 
+  it("verifies a small stream", async () => {
+    const buffer = await writeBottle(Buffer.from("i choose you!"));
+
+    const b = await readBottle(buffer);
+    b.cap.type.should.eql(BottleType.Hashed);
+    b.cap.header.toString().should.eql("Header(I0=0)");
+
+    const hashBottle = await HashBottle.read(b);
+    (await drain(hashBottle.stream)).toString().should.eql("i choose you!");
+    const hash = await hashBottle.check();
+    hash.toString("hex").should.eql(
+      "d134df6f6314fca50918f8c2dea596a49bb723eb9ec156c21abe2c9d9803c614" +
+      "86d07f8006c7428c780846209e9ffa6ed60dbf2a0408a109509c802545ee65b9"
+    );
+  });
+
   it("writes and hashes a file stream", async () => {
     const bottleStream = FileBottle.write(
       { filename: "file.txt", folder: false, size: 21 },
@@ -79,57 +95,32 @@ describe("hashBottleWriter", () => {
   });
 
   it("signs a bottle", async () => {
-    // const buffer = await writeHexBottle(Buffer.from("lasagna"), { signedBy: "garfield", signer });
-    // const b = await readBottle(buffer);
-    // b.bottle.type.should.eql(BottleType.Hashed);
-    // b.bottle.header.toString().should.eql("Header(I0=0, S0=garfield)");
+    const buffer = await writeBottle(Buffer.from("lasagna"), { signedBy: "garfield", signer });
 
     // now decode it.
-          // const reader = readBottle();
-          // sourceStream(buffer).pipe(reader);
-          // return reader.readPromise().then(data => {
-          //   data.type.should.eql(TYPE_HASHED);
-          //   const header = decodeHashHeader(data.header);
-          //   header.hashType.should.eql(HASH_SHA512);
-          //   header.signedBy.should.eql("garfield");
+    const bottle = await readBottle(buffer);
+    bottle.cap.type.should.eql(BottleType.Hashed);
+    bottle.cap.header.toString().should.eql("Header(I0=0, S0=garfield)");
+    const hashBottle = await HashBottle.read(bottle);
+    (await drain(hashBottle.stream)).toString().should.eql("lasagna");
 
-//             return readHashBottle(header, reader, { verifier });
-//           }).then(({ stream, hexPromise }) => {
-//             return readFile(stream, "file.txt").then(() => {
-//               return hexPromise;
-//             });
-//           }).then(hex => {
-//             hex.should.eql(
-//               "872613ed7e437f332b77ae992925ea33a4565e3f26c9d623da6c78aea9522d90" +
-//               "261c4f52824b64f5ad4fdd020a4678c47bf862f53f02a62183749a1e0616b940"
-//             );
-//           });
-//         });
-//       });
-//     });
+    const hash = await hashBottle.check(verifier);
+    hash.toString("hex").should.eql(
+      "c6266ad3710a8f1981220ae89f7f4168b2407925c18af56e9a6086b88df44bfc" +
+      "c906784332fb6ffd8a502185aa5b1b1d141d888156172dddbac56db4be02098a"
+    );
   });
 
-//   it("rejects a badly signed hashed stream", future(() => {
-//     return writeFile("file.txt").then(fileBuffer => {
-//       return writeHashBottle(HASH_SHA512, { signedBy: "odie", signer }).then(({ writer, bottle }) => {
-//         sourceStream(fileBuffer).pipe(writer);
-//         return pipeToBuffer(bottle).then(buffer => {
-//           // now decode it.
-//           const reader = readBottle();
-//           sourceStream(buffer).pipe(reader);
-//           return reader.readPromise().then(data => {
-//             return readHashBottle(decodeHashHeader(data.header), reader, { verifier });
-//           }).then(({ stream, hexPromise }) => {
-//             return readFile(stream, "file.txt").then(() => {
-//               return hexPromise;
-//             });
-//           }).then(hex => {
-//             hex.should.eql("nothing good can be here");
-//           }, error => {
-//             error.message.should.match(/not garfield/);
-//           });
-//         });
-//       });
-//     });
-//   }));
+  it("rejects a badly signed hashed stream", async () => {
+    const buffer = await writeBottle(Buffer.from("lasagna"), { signedBy: "odie", signer });
+
+    // now decode it.
+    const bottle = await readBottle(buffer);
+    bottle.cap.type.should.eql(BottleType.Hashed);
+    bottle.cap.header.toString().should.eql("Header(I0=0, S0=odie)");
+    const hashBottle = await HashBottle.read(bottle);
+    (await drain(hashBottle.stream)).toString().should.eql("lasagna");
+
+    await hashBottle.check(verifier).should.be.rejectedWith(/not garfield/);
+  });
 });
