@@ -31,7 +31,7 @@ function readBottle(data: Buffer): Promise<Bottle> {
 }
 
 
-describe("hashBottleWriter", () => {
+describe("HashBottle", () => {
   it("hashes a small stream", async () => {
     const buffer = await writeBottle(Buffer.from("i choose you!"));
 

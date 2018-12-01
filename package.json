@@ -25,12 +25,13 @@
     "ballvalve": "^2.1.1",
     "js-scrypt": "^0.2.0",
     "posix": "^4.1.2",
-    "snappy": "^6.0.4",
-    "xz": "^1.1.1"
+    "snappy": "^6.1.1",
+    "xz": "^1.4.0"
   },
   "devDependencies": {
     "@types/mocha": "^2.2.48",
-    "@types/node": "^8.9.5",
+    "@types/node": "^10.12.11",
+    "@types/snappy": "^6.0.0",
     "mocha": "^5.0.4",
     "should": "^13.2.1",
     "source-map-support": "^0.5.3",
