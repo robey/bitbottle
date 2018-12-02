@@ -1,8 +1,8 @@
 import { Decorate, Stream } from "ballvalve";
 import { Bottle } from "../bottle";
-import { setLogger } from "../debug";
 import { Header } from "../header";
 import { Readable } from "../readable";
+import { delay, hex } from "./tools";
 
 import "should";
 import "source-map-support/register";
@@ -10,11 +10,6 @@ import "source-map-support/register";
 const MAGIC_STRING = "f09f8dbc0000";
 const BASIC_MAGIC = MAGIC_STRING + "00e09dcdda54";
 
-const delay = (msec: number) => new Promise<void>(resolve => setTimeout(resolve, msec));
-
-async function hex(s: Stream): Promise<string> {
-  return Buffer.concat(await Decorate.asyncIterator(s).collect()).toString("hex");
-}
 
 
 describe("Bottle.write", () => {

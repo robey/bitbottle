@@ -1,8 +1,9 @@
-import { Decorate, Stream } from "ballvalve";
+import { Decorate } from "ballvalve";
 import { Bottle, BottleType } from "../bottle";
 import { FileBottle } from "../file_bottle";
 import { Hash, HashBottle, HashOptions } from "../hash_bottle";
 import { Readable } from "../readable";
+import { drain, readBottle } from "./tools";
 
 import "should";
 import "source-map-support/register";
@@ -18,18 +19,9 @@ async function verifier(data: Buffer, signedBy: string): Promise<Buffer> {
   return data.slice(4);
 }
 
-async function drain(s: Stream): Promise<Buffer> {
-  return Buffer.concat(await Decorate.asyncIterator(s).collect());
-}
-
 function writeBottle(data: Buffer, options: HashOptions = {}): Promise<Buffer> {
   return drain(HashBottle.write(Hash.SHA512, Decorate.iterator([ data ]), options));
 }
-
-function readBottle(data: Buffer): Promise<Bottle> {
-  return Bottle.read(new Readable(Decorate.iterator([ data ])));
-}
-
 
 describe("HashBottle", () => {
   it("hashes a small stream", async () => {

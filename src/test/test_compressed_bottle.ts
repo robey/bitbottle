@@ -1,21 +1,13 @@
-import { Decorate, Stream } from "ballvalve";
-import { Bottle, BottleType } from "../bottle";
+import { Decorate } from "ballvalve";
+import { BottleType } from "../bottle";
 import { CompressedBottle, Compression } from "../compressed_bottle";
-import { Readable } from "../readable";
+import { drain, readBottle } from "./tools";
 
 import "should";
 import "source-map-support/register";
 
-async function drain(s: Stream): Promise<Buffer> {
-  return Buffer.concat(await Decorate.asyncIterator(s).collect());
-}
-
 function writeBottle(compression: Compression, data: Buffer): Promise<Buffer> {
   return drain(CompressedBottle.write(compression, Decorate.iterator([ data ])));
-}
-
-function readBottle(data: Buffer): Promise<Bottle> {
-  return Bottle.read(new Readable(Decorate.iterator([ data ])));
 }
 
 const TestString = "My cat's breath smells like cat food.";
