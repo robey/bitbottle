@@ -10,12 +10,12 @@ export function delay(msec: number) {
   return new Promise<void>(resolve => setTimeout(resolve, msec));
 }
 
-export async function hex(s: Stream): Promise<string> {
-  return Buffer.concat(await Decorate.asyncIterator(s).collect()).toString("hex");
-}
-
 export async function drain(s: Stream): Promise<Buffer> {
   return Buffer.concat(await Decorate.asyncIterator(s).collect());
+}
+
+export async function hex(s: Stream): Promise<string> {
+  return (await drain(s)).toString("hex");
 }
 
 export function readBottle(data: Buffer): Promise<Bottle> {

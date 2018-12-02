@@ -1,6 +1,5 @@
-import { Decorate, PushAsyncIterator, Stream } from "ballvalve";
+import { Decorate, Stream } from "ballvalve";
 import { Crc32 } from "./crc32";
-import { debug, named } from "./debug";
 import { framed, unframed } from "./framed";
 import { Header } from "./header";
 import { Readable } from "./readable";

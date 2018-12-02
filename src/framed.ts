@@ -1,5 +1,4 @@
-import { AsyncIterableOnce, Decorate, Stream } from "ballvalve";
-import { debug, nameOf } from "./debug";
+import { Decorate, Stream } from "ballvalve";
 import { Readable } from "./readable";
 import { decodeLength, encodeLength, lengthLength } from "./zint";
 
