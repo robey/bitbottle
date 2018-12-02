@@ -106,7 +106,7 @@ export class Header {
       // each field has a 16-bit prefix: TTDDDDLL LLLLLLLL (T = type, D = id#, L = length)
       buffers.push(Buffer.from([
         content.length & 0xff,
-        (f.type << 6) | (f.id << 2) | ((content.length >> 6) & 0x3),
+        (f.type << 6) | (f.id << 2) | ((content.length >> 8) & 0x3),
       ]));
       buffers.push(content);
     });

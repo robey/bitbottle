@@ -1,4 +1,4 @@
-import { Header, Type } from "../header";
+import { Header } from "../header";
 
 import "should";
 import "source-map-support/register";
@@ -34,6 +34,17 @@ describe("header", () => {
     (() => Header.unpack(Buffer.from("c4", "hex"))).should.throw(/truncated/i);
     (() => Header.unpack(Buffer.from("c401", "hex"))).should.throw(/truncated/i);
     (() => Header.unpack(Buffer.from("c403ffff", "hex"))).should.throw(/truncated/i);
+  });
+
+  it("pack/unpack long fields", () => {
+    const b65 = Buffer.alloc(65);
+    const b135 = Buffer.alloc(135);
+    for (let i = 0; i < b65.length; i++) b65[i] = 0x40;
+    for (let i = 0; i < b135.length; i++) b135[i] = 0x40;
+    const h1 = new Header().addString(1, b65.toString()).pack();
+    const h2 = new Header().addString(2, b135.toString()).pack();
+    Header.unpack(h1).toString().should.eql(`Header(S1=${b65.toString()})`);
+    Header.unpack(h2).toString().should.eql(`Header(S2=${b135.toString()})`);
   });
 
   it("get", () => {
