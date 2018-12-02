@@ -1,6 +1,5 @@
 import { Decorate, Stream } from "ballvalve";
 import * as crypto from "crypto";
-import { debug } from "./debug";
 import { Header } from "./header";
 import { Bottle, BottleType } from "./bottle";
 

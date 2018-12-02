@@ -11,7 +11,6 @@ const MAGIC_STRING = "f09f8dbc0000";
 const BASIC_MAGIC = MAGIC_STRING + "00e09dcdda54";
 
 
-
 describe("Bottle.write", () => {
   it("writes a bottle header", async () => {
     const b = Bottle.write(10, new Header().addInt(0, 150), Decorate.iterator([]));
