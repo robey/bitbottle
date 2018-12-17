@@ -23,6 +23,7 @@ enum Field {
 
 const LZMA2_PRESET = 9;
 
+type SnappyProcessor = (buffer: Buffer, callback: (error: Error | null, result: Buffer) => void) => void;
 
 export class CompressedBottle {
   private constructor(public bottle: Bottle, public stream: Stream) {
@@ -36,10 +37,10 @@ export class CompressedBottle {
     let compressedStream: Stream;
     switch (type) {
       case Compression.LZMA2:
-        compressedStream = new LzmaCompressor(stream);
+        compressedStream = new LzmaStream(stream, new Compressor({ preset: LZMA2_PRESET }));
         break;
       case Compression.SNAPPY:
-        compressedStream = new SnappyCompressor(stream);
+        compressedStream = new SnappyStream(stream, snappy.compress);
         break;
       default:
         throw new Error("Unknown compression");
@@ -56,10 +57,10 @@ export class CompressedBottle {
     let decompressedStream: Stream;
     switch (type) {
       case Compression.LZMA2:
-        decompressedStream = new LzmaDecompressor(stream);
+        decompressedStream = new LzmaStream(stream, new Decompressor());
         break;
       case Compression.SNAPPY:
-        decompressedStream = new SnappyDecompressor(stream);
+        decompressedStream = new SnappyStream(stream, snappy.uncompress);
         break;
       default:
         throw new Error("Unknown compression");
@@ -69,35 +70,31 @@ export class CompressedBottle {
   }
 }
 
-class SnappyCompressor implements Stream {
-  constructor(public wrapped: Stream) {
+
+class SnappyStream implements Stream {
+  constructor(public wrapped: Stream, public processor: SnappyProcessor) {
     // pass
   }
 
   async next(): Promise<IteratorResult<Buffer>> {
     const item = await this.wrapped.next();
     if (item.done || item.value === undefined) return item;
-    return { done: false, value: snappy.compressSync(item.value) };
+    // snappy doesn't support promises yet 😦
+    const value = await new Promise<Buffer>((resolve, reject) => {
+      this.processor(item.value, (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      });
+    });
+    return { done: false, value };
   }
 }
 
-class SnappyDecompressor implements Stream {
-  constructor(public wrapped: Stream) {
-    // pass
-  }
 
-  async next(): Promise<IteratorResult<Buffer>> {
-    const item = await this.wrapped.next();
-    if (item.done || item.value === undefined) return item;
-    return { done: false, value: snappy.uncompressSync(item.value) };
-  }
-}
-
-class LzmaCompressor implements Stream {
-  lzma = new Compressor({ preset: LZMA2_PRESET });
+class LzmaStream implements Stream {
   finished = false;
 
-  constructor(public wrapped: Stream) {
+  constructor(public wrapped: Stream, public lzma: Compressor | Decompressor) {
     // pass
   }
 
@@ -106,27 +103,8 @@ class LzmaCompressor implements Stream {
     const item = await this.wrapped.next();
     if (item.done || item.value === undefined) {
       this.finished = true;
-      return { done: false, value: this.lzma.process(undefined, ENCODE_FINISH) };
+      return { done: false, value: await this.lzma.finalPromise() };
     }
-    return { done: false, value: this.lzma.process(item.value) };
-  }
-}
-
-class LzmaDecompressor implements Stream {
-  lzma = new Decompressor();
-  finished = false;
-
-  constructor(public wrapped: Stream) {
-    // pass
-  }
-
-  async next(): Promise<IteratorResult<Buffer>> {
-    if (this.finished) return { done: true } as IteratorResult<Buffer>;
-    const item = await this.wrapped.next();
-    if (item.done || item.value === undefined) {
-      this.finished = true;
-      return { done: false, value: this.lzma.process(undefined, ENCODE_FINISH) };
-    }
-    return { done: false, value: this.lzma.process(item.value) };
+    return { done: false, value: await this.lzma.updatePromise(item.value) };
   }
 }
