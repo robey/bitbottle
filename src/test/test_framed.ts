@@ -19,6 +19,13 @@ describe("framed", () => {
     );
   });
 
+  it("ignores empty buffers", async () => {
+    const stream = Decorate.iterator([ Buffer.from("he"), Buffer.alloc(0), Buffer.from("llo") ]);
+    Buffer.concat(await Decorate.asyncIterator(framed(stream)).collect()).toString("hex").should.eql(
+      "026865036c6c6f00"
+    );
+  })
+
   it("writes a power-of-two frame", async () => {
     for (const blockSize of [ 128, 1024, Math.pow(2, 18), Math.pow(2, 21) ]) {
       const stream = Decorate.iterator([ Buffer.alloc(blockSize) ]);

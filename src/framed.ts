@@ -15,8 +15,10 @@ export function framed(stream: Stream): Stream {
   return Decorate.asyncIterator(
     async function* () {
       for await (const data of Decorate.asyncIterator(stream)) {
-        yield encodeLength(data.length);
-        yield data;
+        if (data.length > 0) {
+          yield encodeLength(data.length);
+          yield data;
+        }
       }
       yield END_OF_STREAM;
     }(),
