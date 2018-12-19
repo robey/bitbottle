@@ -1,6 +1,6 @@
 import { Decorate, Stream } from "ballvalve";
 import * as snappy from "snappy";
-import { Compressor, Decompressor, ENCODE_FINISH } from "xz";
+import { Compressor, Decompressor } from "xz";
 import { Bottle, BottleType } from "./bottle";
 import { Header } from "./header";
 
