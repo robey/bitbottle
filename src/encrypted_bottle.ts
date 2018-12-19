@@ -5,11 +5,11 @@ import { Bottle, BottleType } from "./bottle";
 import { Header } from "./header";
 
 export enum Encryption {
-  AES_256_GCM = 0,
+  AES_128_GCM = 0,
 }
 
 const NAME = {
-  [Encryption.AES_256_GCM]: "AES-256-GCM",
+  [Encryption.AES_128_GCM]: "AES-128-GCM",
 };
 
 enum Field {
@@ -19,7 +19,7 @@ enum Field {
 }
 
 // switch to a new key every 1GB at least
-const DEFAULT_MAX_STREAM_SIZE = Math.pow(1, 9);
+const DEFAULT_MAX_STREAM_SIZE = Math.pow(2, 30);
 
 export interface EncryptionOptions {
   // when should we switch to a new key?
@@ -67,7 +67,7 @@ export class EncryptedBottle {
     // pass
   }
 
-  static write(type: Encryption, stream: Stream, options: EncryptionOptions): Stream {
+  static write(type: Encryption, stream: Stream, options: EncryptionOptions, needMore: [boolean]): Stream {
     const argonOptions: FullArgonOptions = {
       raw: true,
       timeCost: options.argonTimeCost || DEFAULT_ARGON_TIMECOST,
@@ -85,15 +85,15 @@ export class EncryptedBottle {
 
     let params: CryptoParams;
     switch (type) {
-      case Encryption.AES_256_GCM:
-        params = { cipherName: "aes-256-gcm", keyLength: 32, ivLength: 16 };
+      case Encryption.AES_128_GCM:
+        params = { cipherName: "aes-128-gcm", keyLength: 16, ivLength: 16 };
         break;
       default:
         throw new Error("Unknown encryption");
     }
 
     const maxSize = options.maxStreamSize || DEFAULT_MAX_STREAM_SIZE;
-    const encryptedStreams = encryptStream(stream, params, options.key, maxSize, argonOptions);
+    const encryptedStreams = encryptStreamAndTag(stream, params, options.key, maxSize, argonOptions, needMore);
     const outStreams = Decorate.asyncIterator(writeKeys(options)).chain(encryptedStreams);
     return Bottle.write(BottleType.Encrypted, header, outStreams);
   }
@@ -106,56 +106,41 @@ async function* writeKeys(options: EncryptionOptions): AsyncIterator<Stream> {
   }
 }
 
-async function* encryptStream(
+async function* encryptStreamAndTag(
   wrapped: Stream,
   params: CryptoParams,
   keyData: Buffer,
   maxBytes: number,
-  argonOptions: FullArgonOptions
+  argonOptions: FullArgonOptions,
+  needMore: [boolean]
 ): AsyncIterator<Stream> {
   const options = Object.assign({ hashLength: params.keyLength + params.ivLength }, argonOptions);
 
-  // generate a new pair of streams for each `maxBytes` bytes.
-  while (true) {
-    // use argon to generate a new key/iv and a new EncryptedStream
-    keyData = await argon2.hash(keyData, options);
-    const key = keyData.slice(0, params.keyLength);
-    const iv = keyData.slice(params.ivLength);
-    const cipher = crypto.createCipheriv(params.cipherName, key, iv);
-    const s = new EncryptedStream(wrapped, cipher, maxBytes);
-    yield s;
+  // use argon to generate a new key/iv and a new EncryptedStream
+  keyData = await argon2.hash(keyData, options);
+  const key = keyData.slice(0, params.keyLength);
+  const iv = keyData.slice(params.ivLength);
+  const cipher = crypto.createCipheriv(params.cipherName, key, iv);
+  yield encryptStream(wrapped, cipher, maxBytes, needMore);
 
-    // a separate stream for the auth tag
-    yield Decorate.iterator([ cipher.getAuthTag() ]);
-
-    if (s.finished) return;
-  }
+  // a separate stream for the auth tag
+  yield Decorate.iterator([ cipher.getAuthTag() ]);
 }
 
-class EncryptedStream implements Stream {
-  finished = false;
-  limited = false;
-  bytes = 0;
+async function* encryptStream(wrapped: Stream, cipher: crypto.Cipher, maxBytes: number, needMore: [boolean]): Stream {
+  let bytes = 0;
+  needMore[0] = false;
 
-  constructor(public wrapped: Stream, public cipher: crypto.CipherGCM, public maxBytes: number) {
-    // pass
+  for await (const buffer of Decorate.asyncIterator(wrapped)) {
+    yield cipher.update(buffer);
+    bytes += buffer.length;
+    if (bytes >= maxBytes) {
+      needMore[0] = true;
+      break;
+    }
   }
 
-  async next(): Promise<IteratorResult<Buffer>> {
-    if (this.finished) return { done: true } as IteratorResult<Buffer>;
-    if (this.bytes >= this.maxBytes) {
-      this.limited = true;
-      this.finished = true;
-      return { done: false, value: this.cipher.final() };
-    }
-    const item = await this.wrapped.next();
-    if (item.done || item.value === undefined) {
-      this.finished = true;
-      return { done: false, value: this.cipher.final() };
-    }
-    this.bytes += item.value.length;
-    return { done: false, value: this.cipher.update(item.value) };
-  }
+  yield cipher.final();
 }
 
 
