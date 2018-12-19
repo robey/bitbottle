@@ -15,6 +15,15 @@ function writeBottle(type: Encryption, data: Buffer, options: EncryptionOptions,
 
 const TestString = "spoon!";
 
+async function encryptedContent(key: Buffer, text: string): Promise<[ Buffer, Buffer ]> {
+  const argonOptions = { raw: true, salt: Buffer.alloc(16) } as argon2.Options & { raw: true };
+  const keyData = await argon2.hash(key, argonOptions);
+  const cipher = crypto.createCipheriv("aes-128-gcm", keyData.slice(0, 16), keyData.slice(16));
+  const encrypted = Buffer.concat([ cipher.update(Buffer.from(text)), cipher.final() ]);
+  const authTag = cipher.getAuthTag();
+  return [ encrypted, authTag ];
+}
+
 describe("EncryptedBottle", () => {
   describe("encrypts", () => {
     it("with key", async () => {
@@ -28,12 +37,33 @@ describe("EncryptedBottle", () => {
       b.cap.header.toString().should.eql("Header(I0=0, S1=3,4096,1,AAAAAAAAAAAAAAAAAAAAAA==)");
 
       // encrypt the same data manually
-      const argonOptions = { raw: true, salt: Buffer.alloc(16) } as argon2.Options & { raw: true };
-      const keyData = await argon2.hash(Buffer.alloc(16), argonOptions);
-      const cipher = crypto.createCipheriv("aes-128-gcm", keyData.slice(0, 16), keyData.slice(16));
-      const encrypted = Buffer.concat([ cipher.update(Buffer.from(TestString)), cipher.final() ]);
-      const authTag = cipher.getAuthTag();
+      const [ encrypted, authTag ] = await encryptedContent(options.key, TestString);
+      (await drain(await b.nextStream())).should.eql(encrypted);
+      (await drain(await b.nextStream())).should.eql(authTag);
+      await b.assertEndOfStreams();
+    });
 
+    it("with recipients", async ()  => {
+      const encrypter = (recipient: string): Promise<Buffer> => {
+        return Promise.resolve(Buffer.from("odie:" + recipient));
+      };
+      const options = {
+        key: Buffer.alloc(16),
+        argonSalt: Buffer.alloc(16),
+        recipients: [ "garfield", "jon" ],
+        encrypter
+      };
+      const needMore: [boolean] = [ false ];
+      const buffer = await writeBottle(Encryption.AES_128_GCM, Buffer.from(TestString), options, needMore);
+      needMore[0].should.eql(false);
+
+      const b = await readBottle(buffer);
+      b.cap.type.should.eql(BottleType.Encrypted);
+      b.cap.header.toString().should.eql("Header(I0=0, S0=garfield,jon, S1=3,4096,1,AAAAAAAAAAAAAAAAAAAAAA==)");
+
+      const [ encrypted, authTag ] = await encryptedContent(options.key, TestString);
+      (await drain(await b.nextStream())).should.eql(Buffer.from("odie:garfield"));
+      (await drain(await b.nextStream())).should.eql(Buffer.from("odie:jon"));
       (await drain(await b.nextStream())).should.eql(encrypted);
       (await drain(await b.nextStream())).should.eql(authTag);
       await b.assertEndOfStreams();
