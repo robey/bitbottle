@@ -37,11 +37,10 @@ const CRC32_TABLE = [...Array(256).keys()].map(n => parseInt(_data.slice(n * 8, 
 export class Crc32 {
   accumulator = 0xffffffff;
 
-  update(b: Buffer): Crc32 {
+  update(b: Buffer, start: number = 0, end: number = -1): Crc32 {
+    if (end < 0) end = b.length - start;
     let crc = this.accumulator;
-    b.forEach(byte => {
-      crc = CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
-    });
+    for (let i = start; i < end; i++) crc = CRC32_TABLE[(crc ^ b[i]) & 0xff] ^ (crc >>> 8);
     this.accumulator = crc;
     return this;
   }
@@ -50,8 +49,8 @@ export class Crc32 {
     return (this.accumulator ^ -1) >>> 0;
   }
 
-  static from(b: Buffer): number {
-    return new Crc32().update(b).finish();
+  static from(b: Buffer, start: number = 0, end: number = -1): number {
+    return new Crc32().update(b, start, end).finish();
   }
 
   static lsbFrom(b: Buffer): Buffer {

@@ -1,138 +1,212 @@
-import * as zint from "./zint";
+/*
+ * the header is up to 1KB of fields. each field is a 1 byte descriptor
+ * followed by content. the high nybble of the descriptor is the type, and
+ * the low nybble is the id (distinct per type).
+ *
+ * types:
+ *   - 0: boolean/flag, len=0
+ *   - 1: u8, len=1
+ *   - 2: u16, len=2
+ *   - 3: u32, len=4
+ *   - 4: u64, len=8
+ *   - 5: utf-8 string, len byte follows
+ */
 
-const EMPTY = Buffer.from([]);
+// let's not get carried away, kids
+const MAX_HEADER_BYTES = 1023;
 
 export enum Type {
-  STRING = 0,
-  INT = 2,
-  BOOLEAN = 3,
+  FLAG = 0,
+  U8 = 1,
+  U16 = 2,
+  U32 = 3,
+  U64 = 4,
+  STRING = 5,
+}
+
+const Lengths: { [key: number]: number } = {
+  [Type.FLAG]: 0,
+  [Type.U8]: 1,
+  [Type.U16]: 2,
+  [Type.U32]: 4,
+  [Type.U64]: 8,
+  [Type.STRING]: 1,
 }
 
 export class Field {
-  int?: number;
-  list?: string[];
+  rawStr?: Buffer;
 
-  constructor(public type: Type, public id: number) {
-    // pass
+  constructor(public type: Type, public id: number, public int?: number, public str?: string) {
+    if (str) this.rawStr = Buffer.from(str);
   }
 
   toString(): string {
     switch (this.type) {
-      case Type.STRING: return `S${this.id}=${(this.list || []).join(",")}`;
-      case Type.INT: return `I${this.id}=${this.int || 0}`;
-      case Type.BOOLEAN: return `B${this.id}`;
+      case Type.FLAG:
+        return `F(${this.id})`;
+      case Type.U8:
+        return `U8(${this.id})=${this.int}`;
+      case Type.U16:
+        return `U16(${this.id})=${this.int}`;
+      case Type.U32:
+        return `U32(${this.id})=${this.int}`;
+      case Type.U64:
+        return `U64(${this.id})=${this.int}`;
+      case Type.STRING:
+        return `S(${this.id})="${this.str}"`;
+      default:
+        console.log(this.type);
+        return "?";
     }
-  }
-
-  static fromBool(id: number): Field {
-    return new Field(Type.BOOLEAN, id);
-  }
-
-  static fromInt(id: number, n: number): Field {
-    const rv = new Field(Type.INT, id);
-    rv.int = n;
-    return rv;
-  }
-
-  static fromStrings(id: number, list: string[]): Field {
-    const rv = new Field(Type.STRING, id);
-    rv.list = list;
-    return rv;
   }
 }
 
 export class Header {
   fields: Field[] = [];
 
-  addBoolean(id: number) {
-    this.fields.push(Field.fromBool(id));
+  addFlag(id: number): this {
+    this.fields.push(new Field(Type.FLAG, id));
     return this;
   }
 
-  addInt(id: number, int: number) {
-    this.fields.push(Field.fromInt(id, int));
+  addU8(id: number, int: number): this {
+    this.fields.push(new Field(Type.U8, id, int));
     return this;
   }
 
-  addString(id: number, str: string) {
-    this.addStringList(id, [ str ]);
+  addU16(id: number, int: number): this {
+    this.fields.push(new Field(Type.U16, id, int));
     return this;
   }
 
-  addStringList(id: number, list: string[]) {
-    this.fields.push(Field.fromStrings(id, list));
+  addU32(id: number, int: number): this {
+    this.fields.push(new Field(Type.U32, id, int));
     return this;
   }
 
-  getBoolean(id: number): boolean {
-    return this.fields.filter(f => f.type == Type.BOOLEAN && f.id == id).length > 0;
+  addU64(id: number, int: number): this {
+    this.fields.push(new Field(Type.U64, id, int));
+    return this;
   }
 
-  getInt(id: number): number | undefined {
-    return this.fields.filter(f => f.type == Type.INT && f.id == id).map(f => f.int)[0];
+  addString(id: number, str: string): this {
+    this.fields.push(new Field(Type.STRING, id, undefined, str));
+    return this;
   }
 
-  getStringList(id: number): string[] | undefined {
-    return this.fields.filter(f => f.type == Type.STRING && f.id == id).map(f => f.list)[0];
+  getFlag(id: number): boolean {
+    return this.fields.find(f => f.type == Type.FLAG && f.id == id) !== undefined;
+  }
+
+  getU8(id: number): number | undefined {
+    return this.fields.find(f => f.type == Type.U8 && f.id == id)?.int;
+  }
+
+  getU16(id: number): number | undefined {
+    return this.fields.find(f => f.type == Type.U16 && f.id == id)?.int;
+  }
+
+  getU32(id: number): number | undefined {
+    return this.fields.find(f => f.type == Type.U32 && f.id == id)?.int;
+  }
+
+  getU64(id: number): number | undefined {
+    return this.fields.find(f => f.type == Type.U64 && f.id == id)?.int;
   }
 
   getString(id: number): string | undefined {
-    const list = this.getStringList(id);
-    return list === undefined ? undefined : list[0];
+    return this.fields.find(f => f.type == Type.STRING && f.id == id)?.str;
   }
 
   toString(): string {
     return "Header(" + this.fields.map(f => f.toString()).join(", ") + ")";
   }
 
-  pack(): Buffer {
-    const buffers: Buffer[] = [];
-    this.fields.forEach(f => {
+  byteLength(): number {
+    return this.fields.reduce((sum, f) => sum + 1 + Lengths[f.type] + (f.rawStr?.length ?? 0), 0);
+  }
+
+  packInto(buffer: Buffer, offset: number) {
+    const bufferLen = this.byteLength();
+    if (bufferLen > MAX_HEADER_BYTES) throw new Error(`Header too large (${bufferLen} > ${MAX_HEADER_BYTES})`);
+    if (buffer.length < offset + bufferLen) throw new Error("Buffer isn't big enough");
+
+    let n = offset;
+    for (const f of this.fields) {
       if (f.id > 15 || f.id < 0) throw new Error(`Header ID out of range: ${f.id}`);
+      buffer[n++] = ((f.type & 15) << 4) | f.id;
 
-      let content: Buffer = EMPTY;
       switch (f.type) {
-        case Type.STRING:
-          content = Buffer.from((f.list || []).join("\u0000"));
+        case Type.FLAG:
           break;
-        case Type.INT:
-          content = zint.encodePackedInt(f.int || 0);
+        case Type.U8:
+          buffer.writeUInt8(f.int || 0, n);
+          n += 1;
           break;
-        case Type.BOOLEAN:
+        case Type.U16:
+          buffer.writeUInt16LE(f.int || 0, n);
+          n += 2;
           break;
+        case Type.U32:
+          buffer.writeUInt32LE(f.int || 0, n);
+          n += 4;
+          break;
+        case Type.U64:
+          buffer.writeUInt32LE((f.int || 0) >>> 0, n);
+          buffer.writeUInt32LE(Math.floor((f.int || 0) / Math.pow(2, 32)) >>> 0, n + 4);
+          n += 8;
+          break;
+        case Type.STRING: {
+          const len = f.rawStr?.length ?? 0;
+          buffer.writeUInt8(len, n);
+          if (f.rawStr) f.rawStr.copy(buffer, n + 1);
+          n += 1 + len;
+          break;
+        }
       }
-      if (content.length > 1023) throw new Error(`Header ${f.id} too large (${content.length} > 1023)`);
+    }
+  }
 
-      // each field has a 16-bit prefix: TTDDDDLL LLLLLLLL (T = type, D = id#, L = length)
-      buffers.push(Buffer.from([
-        content.length & 0xff,
-        (f.type << 6) | (f.id << 2) | ((content.length >> 8) & 0x3),
-      ]));
-      buffers.push(content);
-    });
-    return Buffer.concat(buffers);
+  pack(): Buffer {
+    const buffer = Buffer.alloc(this.byteLength());
+    this.packInto(buffer, 0);
+    return buffer;
   }
 
   static unpack(data: Buffer): Header {
     const header = new Header();
     let i = 0;
     while (i < data.length) {
-      if (i + 2 > data.length) throw new Error("Truncated header");
-      const type = (data[i + 1] & 0xc0) >> 6;
-      const id = (data[i + 1] & 0x3c) >> 2;
-      const length = (data[i] & 0xff) + (data[i + 1] & 0x3) * 256;
-      i += 2;
-
+      const type = (data[i] & 0xf0) >> 4;
+      const id = data[i] & 0xf;
       const f = new Field(type, id);
+      i++;
+
+      const length = Lengths[type];
       if (i + length > data.length) throw new Error("Truncated header");
-      const content = data.slice(i, i + length);
       switch (type) {
-        case Type.INT:
-          f.int = zint.decodePackedInt(content);
+        case Type.FLAG:
           break;
-        case Type.STRING:
-          f.list = content.toString("UTF-8").split("\u0000");
+        case Type.U8:
+          f.int = data.readUInt8(i);
           break;
+        case Type.U16:
+          f.int = data.readUInt16LE(i);
+          break;
+        case Type.U32:
+          f.int = data.readUInt32LE(i);
+          break;
+        case Type.U64:
+          f.int = data.readUInt32LE(i) + data.readUInt32LE(i + 4) * Math.pow(2, 32);
+          break;
+        case Type.STRING: {
+          const strlen = data.readUInt8(i);
+          if (i + 1 + strlen > data.length) throw new Error("Truncated header");
+          f.rawStr = data.slice(i + 1, i + 1 + strlen);
+          f.str = f.rawStr.toString("UTF-8");
+          i += strlen;
+          break;
+        }
       }
 
       header.fields.push(f);
