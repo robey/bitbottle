@@ -1,8 +1,8 @@
+import { ByteReader } from "ballvalve";
 import { Crc32 } from "./crc32";
 import { Header } from "./header";
-import { ExtendedReadableStream } from "ballvalve";
 
-export const MAGIC = Buffer.from([ 0xf0, 0x9f, 0x8d, 0xbc ]);
+export const MAGIC = Buffer.from("f09f8dbc", "hex");
 export const VERSION = 0x00;
 
 export enum BottleType {
@@ -11,7 +11,6 @@ export enum BottleType {
   Encrypted = 3,
   Compressed = 4,
 }
-
 
 /*
  * metadata for a bit bottle:
@@ -45,10 +44,10 @@ export class BottleCap {
     return cap;
   }
 
-  static async read(stream: ExtendedReadableStream): Promise<BottleCap> {
+  static async read(stream: ByteReader): Promise<BottleCap> {
     const crc = new Crc32();
 
-    const b = await stream.readExact(8);
+    const b = await stream.read(8);
     if (b === undefined || b.length < 8) throw new Error("End of stream");
     if (!b.slice(0, 4).equals(MAGIC)) throw new Error("Incorrect magic (not a bitbottle)");
     crc.update(b);
@@ -60,14 +59,14 @@ export class BottleCap {
 
     let header = new Header();
     if (headerLength > 0) {
-      const b2 = await stream.readExact(headerLength);
+      const b2 = await stream.read(headerLength);
       if (b2 === undefined || b2.length < headerLength) throw new Error("Truncated header");
       header = Header.unpack(b2);
       crc.update(b2);
     }
 
     const realCrc = crc.finish();
-    const crcBuffer = await stream.readExact(4);
+    const crcBuffer = await stream.read(4);
     if (crcBuffer === undefined || crcBuffer.length < 4) throw new Error("Truncated header");
     const encodedCrc = crcBuffer.readUInt32LE(0);
     if (encodedCrc != realCrc) {

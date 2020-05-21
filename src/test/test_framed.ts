@@ -1,6 +1,5 @@
-import { asyncIter, readableStream } from "ballvalve";
-import { buffered } from "../buffered";
-import { framed, unframed } from "../framed";
+import { asyncIter, byteReader } from "ballvalve";
+import { buffered, framed, unframed } from "../framed";
 
 import "should";
 import "source-map-support/register";
@@ -59,7 +58,7 @@ describe("framed", () => {
 describe("unframed", () => {
   it("reads a simple frame", async () => {
     const stream = asyncIter([ Buffer.from("03010203", "hex") ]);
-    Buffer.concat(await asyncIter(unframed(readableStream(stream))).collect()).toString("hex").should.eql("010203");
+    Buffer.concat(await asyncIter(unframed(byteReader(stream))).collect()).toString("hex").should.eql("010203");
   });
 
   it("reads power-of-two frames", async () => {
@@ -70,7 +69,7 @@ describe("unframed", () => {
       b[0] = (scale << 6) | frameLen;
 
       const stream = asyncIter([ b ]);
-      Buffer.concat(await asyncIter(unframed(readableStream(stream))).collect()).length.should.eql(blockSize);
+      Buffer.concat(await asyncIter(unframed(byteReader(stream))).collect()).length.should.eql(blockSize);
     }
   });
 
@@ -79,7 +78,7 @@ describe("unframed", () => {
     b[0] = 0x41;
     b[65] = 0x06;
     const stream = asyncIter([ b ]);
-    Buffer.concat(await asyncIter(unframed(readableStream(stream))).collect()).length.should.eql(70);
+    Buffer.concat(await asyncIter(unframed(byteReader(stream))).collect()).length.should.eql(70);
   });
 
   it("reads a 4-frame chunk", async () => {
@@ -89,6 +88,6 @@ describe("unframed", () => {
     b[2 + 0x7e000] = 0x40 + 0x3b;
     b[3 + 0x7eec0] = 0x1d;
     const stream = asyncIter([ b ]);
-    Buffer.concat(await asyncIter(unframed(readableStream(stream))).collect()).length.should.eql(0x7eedd);
+    Buffer.concat(await asyncIter(unframed(byteReader(stream))).collect()).length.should.eql(0x7eedd);
   });
 });

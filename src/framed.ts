@@ -1,4 +1,4 @@
-import { asyncIter, ExtendedReadableStream, Stream } from "ballvalve";
+import { asyncIter, ByteReader } from "ballvalve";
 
 const DEFAULT_BLOCK_SIZE = Math.pow(2, 20);  // 1MB
 
@@ -6,7 +6,10 @@ const DEFAULT_BLOCK_SIZE = Math.pow(2, 20);  // 1MB
  * buffer stream data to emit blocks of a specific size.
  * the last block may be smaller.
  */
-export async function* buffered(stream: Stream, blockSize: number = DEFAULT_BLOCK_SIZE): Stream {
+export async function* buffered(
+  stream: AsyncIterable<Buffer>,
+  blockSize: number = DEFAULT_BLOCK_SIZE
+): AsyncIterable<Buffer> {
   let queue: Buffer[] = [];
   let size = 0;
 
@@ -30,7 +33,7 @@ export async function* buffered(stream: Stream, blockSize: number = DEFAULT_BLOC
  * int X, shifted left Y * 6 times. according to legend, only the final
  * frame may have Y = 0.
  */
-export async function* framed(stream: Stream, blockSize?: number): Stream {
+export async function* framed(stream: AsyncIterable<Buffer>, blockSize?: number): AsyncIterable<Buffer> {
   let sentZero = false;
 
   if ((blockSize ?? DEFAULT_BLOCK_SIZE) < 64) throw new Error("Try harder, Homer");
@@ -63,13 +66,16 @@ export async function* framed(stream: Stream, blockSize?: number): Stream {
  * unpack a stream of frames back into data. the stream end is detected by
  * having a final frame with Y = 0.
  */
-export async function* unframed(stream: ExtendedReadableStream): Stream {
+export async function* unframed(stream: ByteReader): AsyncIterable<Buffer> {
   while (true) {
-    const frameLen = await stream.readExact(1);
+    const frameLen = await stream.read(1);
     if (frameLen === undefined) throw new Error("Truncated stream (missing frame)");
-    const len = (frameLen[0] & 0x3f) << (((frameLen[0] & 0xc0) >> 6) * 6);
+    const span = frameLen[0] & 0x3f;
+    const scale = ((frameLen[0] & 0xc0) >> 6) * 6;
+    if (span == 0 && scale != 0) throw new Error("Illegal frame marker");
+    const len = span << scale;
     if (len > 0) {
-      const data = await stream.readExact(len);
+      const data = await stream.read(len);
       if (data === undefined) throw new Error("Truncated stream");
       yield data;
     }

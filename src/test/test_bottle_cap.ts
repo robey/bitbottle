@@ -1,4 +1,4 @@
-import { asyncIter, readableStream } from "ballvalve";
+import { byteReader } from "ballvalve";
 import { BottleCap } from "../bottle_cap";
 import { Header } from "../header";
 
@@ -8,7 +8,7 @@ import "source-map-support/register";
 const MAGIC_STRING = "f09f8dbc00";
 
 function read(hex: string): Promise<BottleCap> {
-  return BottleCap.read(readableStream(asyncIter([ Buffer.from(hex, "hex") ])));
+  return BottleCap.read(byteReader([ Buffer.from(hex, "hex") ]));
 }
 
 
