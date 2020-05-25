@@ -7,9 +7,9 @@ const DEFAULT_BLOCK_SIZE = Math.pow(2, 20);  // 1MB
  * the last block may be smaller.
  */
 export async function* buffered(
-  stream: AsyncIterable<Buffer>,
+  stream: AsyncIterator<Buffer>,
   blockSize: number = DEFAULT_BLOCK_SIZE
-): AsyncIterable<Buffer> {
+): AsyncIterator<Buffer> {
   let queue: Buffer[] = [];
   let size = 0;
 
@@ -33,7 +33,7 @@ export async function* buffered(
  * int X, shifted left Y * 6 times. according to legend, only the final
  * frame may have Y = 0.
  */
-export async function* framed(stream: AsyncIterable<Buffer>, blockSize?: number): AsyncIterable<Buffer> {
+export async function* framed(stream: AsyncIterator<Buffer>, blockSize?: number): AsyncIterator<Buffer> {
   let sentZero = false;
 
   if ((blockSize ?? DEFAULT_BLOCK_SIZE) < 64) throw new Error("Try harder, Homer");
@@ -66,7 +66,7 @@ export async function* framed(stream: AsyncIterable<Buffer>, blockSize?: number)
  * unpack a stream of frames back into data. the stream end is detected by
  * having a final frame with Y = 0.
  */
-export async function* unframed(stream: ByteReader): AsyncIterable<Buffer> {
+export async function* unframed(stream: ByteReader): AsyncIterator<Buffer> {
   while (true) {
     const frameLen = await stream.read(1);
     if (frameLen === undefined) throw new Error("Truncated stream (missing frame)");

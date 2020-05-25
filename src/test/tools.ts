@@ -2,32 +2,39 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { Decorate, Stream } from "ballvalve";
-import { Bottle } from "../bottle";
-import { Readable } from "../readable";
+import { asyncIter, byteReader } from "ballvalve";
+
 
 export function delay(msec: number) {
   return new Promise<void>(resolve => setTimeout(resolve, msec));
 }
 
-export async function drain(s: Stream): Promise<Buffer> {
-  return Buffer.concat(await Decorate.asyncIterator(s).collect());
+export async function* asyncify<A>(iter: Iterable<A>): AsyncIterator<A> {
+  for (const item of iter) yield item;
 }
 
-export async function hex(s: Stream): Promise<string> {
+export async function drain(s: AsyncIterator<Buffer>): Promise<Buffer> {
+  return Buffer.concat(await asyncIter(s).collect());
+}
+
+export async function hex(s: AsyncIterator<Buffer>): Promise<string> {
   return (await drain(s)).toString("hex");
 }
 
-export function readBottle(data: Buffer): Promise<Bottle> {
-  return Bottle.read(new Readable(Decorate.iterator([ data ])));
+export function fromHex(hex: string): AsyncIterator<Buffer> {
+  return asyncify([ Buffer.from(hex, "hex") ]);
 }
+
+// export function readBottle(data: Buffer): Promise<Bottle> {
+//   return Bottle.read(byteReader([ data ]));
+// }
 
 export function makeTempFolder(): string {
   let uniq: string;
   let tries = 0;
   while (true) {
     tries += 1;
-    uniq = path.join(os.tmpdir(), `mocha-testfolder-${crypto.pseudoRandomBytes(16).toString("hex")}`);
+    uniq = path.join(os.tmpdir(), `mocha-test-${crypto.pseudoRandomBytes(16).toString("hex")}`);
     try {
       fs.mkdirSync(uniq, 7 << 6);
       break;
@@ -41,17 +48,17 @@ export function makeTempFolder(): string {
   return uniq;
 }
 
-function rmdirAll(rootpath: string) {
-  for (const filename of fs.readdirSync(rootpath)) {
-    const fullname = path.join(rootpath, filename);
-    if (fs.lstatSync(fullname).isDirectory()) {
-      rmdirAll(fullname);
+function rmdirAll(root_path: string) {
+  for (const filename of fs.readdirSync(root_path)) {
+    const full_name = path.join(root_path, filename);
+    if (fs.lstatSync(full_name).isDirectory()) {
+      rmdirAll(full_name);
     } else {
-      fs.chmodSync(fullname, 6 << 6);
-      fs.unlinkSync(fullname);
+      fs.chmodSync(full_name, 6 << 6);
+      fs.unlinkSync(full_name);
     }
   }
 
-  fs.chmodSync(rootpath, 7 << 6);
-  fs.rmdirSync(rootpath);
+  fs.chmodSync(root_path, 7 << 6);
+  fs.rmdirSync(root_path);
 }
