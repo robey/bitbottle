@@ -21,24 +21,26 @@ export class Bottle {
     return item.value;
   }
 
-  write(): AsyncIterator<Buffer> {
-    const id = ++counter;
-    const self = this;
+  async nextDataStream(): Promise<AsyncIterator<Buffer>> {
+    const stream = await this.nextStream();
+    if (stream === undefined) throw new Error("Expected stream, reached end");
+    if (stream instanceof Bottle) throw new Error("Expected stream, got nested bottle");
+    return stream;
+  }
 
-    return async function* (): AsyncIterator<Buffer> {
-      yield self.cap.write();
-      for await (const s of asyncIter(self.streams)) {
-        if (s instanceof Bottle) {
-          yield Buffer.from([ STREAM_BOTTLE ]);
-          yield* asyncIter(s.write());
-        } else {
-          // raw stream
-          yield Buffer.from([ STREAM_RAW ]);
-          yield* asyncIter(framed(s));
-        }
+  async* write(): AsyncIterator<Buffer> {
+    yield this.cap.write();
+    for await (const s of asyncIter(this.streams)) {
+      if (s instanceof Bottle) {
+        yield Buffer.from([ STREAM_BOTTLE ]);
+        yield* asyncIter(s.write());
+      } else {
+        // raw stream
+        yield Buffer.from([ STREAM_RAW ]);
+        yield* asyncIter(framed(s));
       }
-      yield Buffer.from([ STREAM_END ]);
-    }();
+    }
+    yield Buffer.from([ STREAM_END ]);
   }
 
   static async read(stream: ByteReader): Promise<Bottle> {
@@ -52,9 +54,8 @@ export class Bottle {
         switch (marker[0]) {
           case STREAM_RAW: {
             // need to wait for the stream to finish before reading the next one
-            const inner = asyncIter(unframed(stream)).alerting();
-            const done = inner.done;
-            yield inner;
+            const [ inner, done ] = asyncIter(unframed(stream)).withPromiseAfter();
+            yield inner[Symbol.asyncIterator]();
             await done;
             break;
           }

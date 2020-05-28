@@ -1,6 +1,6 @@
 import { asyncIter, byteReader } from "ballvalve";
+import { asyncify } from "../async";
 import { buffered, framed, unframed } from "../framed";
-import { asyncify } from "./tools";
 
 import "should";
 import "source-map-support/register";

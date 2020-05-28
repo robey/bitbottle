@@ -6,10 +6,10 @@ export const MAGIC = Buffer.from("f09f8dbc", "hex");
 export const VERSION = 0x00;
 
 export enum BottleType {
-  File = 0,
-  Hashed = 1,
-  Encrypted = 3,
-  Compressed = 4,
+  FILE = 0,
+  HASHED = 1,
+  ENCRYPTED = 3,
+  COMPRESSED = 4,
 }
 
 /*

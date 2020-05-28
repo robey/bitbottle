@@ -1,8 +1,9 @@
 import { byteReader } from "ballvalve";
+import { asyncify } from "../async";
 import { Bottle } from "../bottle";
 import { BottleCap, MAGIC } from "../bottle_cap";
 import { Header } from "../header";
-import { asyncify, delay, drain, fromHex, hex } from "./tools";
+import { delay, drain, fromHex, hex } from "./tools";
 
 import "should";
 import "source-map-support/register";

@@ -1,3 +1,4 @@
+import * as bigInt from "big-integer";
 import { Header } from "../header";
 
 import "should";
@@ -17,8 +18,8 @@ describe("header", () => {
 
     const h2 = new Header();
     h2.addU32(15, 0xabcd1234);
-    h2.addU64(14, 0x12345678 * Math.pow(2, 32) + 0x9a000000);
-    h2.pack().toString("hex").should.eql("3f3412cdab4e0000009a78563412");
+    h2.addU64(14, bigInt("12aa34bb56cc78dd", 16));
+    h2.pack().toString("hex").should.eql("3f3412cdab4edd78cc56bb34aa12");
   });
 
   it("unpack", () => {

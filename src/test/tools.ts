@@ -2,15 +2,12 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { asyncIter, byteReader } from "ballvalve";
+import { asyncIter } from "ballvalve";
+import { asyncify } from "../async";
 
 
 export function delay(msec: number) {
   return new Promise<void>(resolve => setTimeout(resolve, msec));
-}
-
-export async function* asyncify<A>(iter: Iterable<A>): AsyncIterator<A> {
-  for (const item of iter) yield item;
 }
 
 export async function drain(s: AsyncIterator<Buffer>): Promise<Buffer> {

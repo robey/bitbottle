@@ -1,3 +1,5 @@
+import * as bigInt from "big-integer";
+
 /*
  * the header is up to 1KB of fields. each field is a 1 byte descriptor
  * followed by content. the high nybble of the descriptor is the type, and
@@ -33,10 +35,18 @@ const Lengths: { [key: number]: number } = {
   [Type.STRING]: 1,
 }
 
+const MASK_32 = bigInt("ffffffff", 16);
+
 export class Field {
   rawStr?: Buffer;
 
-  constructor(public type: Type, public id: number, public int?: number, public str?: string) {
+  constructor(
+    public type: Type,
+    public id: number,
+    public int?: number,
+    public str?: string,
+    public bigint?: bigInt.BigInteger
+  ) {
     if (str) this.rawStr = Buffer.from(str);
   }
 
@@ -51,7 +61,7 @@ export class Field {
       case Type.U32:
         return `U32(${this.id})=${this.int}`;
       case Type.U64:
-        return `U64(${this.id})=${this.int}`;
+        return `U64(${this.id})=${this.bigint}`;
       case Type.STRING:
         return `S(${this.id})="${this.str}"`;
       default:
@@ -84,8 +94,8 @@ export class Header {
     return this;
   }
 
-  addU64(id: number, int: number): this {
-    this.fields.push(new Field(Type.U64, id, int));
+  addU64(id: number, bigint: bigInt.BigInteger): this {
+    this.fields.push(new Field(Type.U64, id, undefined, undefined, bigint));
     return this;
   }
 
@@ -110,8 +120,8 @@ export class Header {
     return this.fields.find(f => f.type == Type.U32 && f.id == id)?.int;
   }
 
-  getU64(id: number): number | undefined {
-    return this.fields.find(f => f.type == Type.U64 && f.id == id)?.int;
+  getU64(id: number): bigInt.BigInteger | undefined {
+    return this.fields.find(f => f.type == Type.U64 && f.id == id)?.bigint;
   }
 
   getString(id: number): string | undefined {
@@ -152,8 +162,8 @@ export class Header {
           n += 4;
           break;
         case Type.U64:
-          buffer.writeUInt32LE((f.int || 0) >>> 0, n);
-          buffer.writeUInt32LE(Math.floor((f.int || 0) / Math.pow(2, 32)) >>> 0, n + 4);
+          buffer.writeUInt32LE(f.bigint?.and(MASK_32).toJSNumber() || 0, n);
+          buffer.writeUInt32LE(f.bigint?.shiftRight(32).and(MASK_32).toJSNumber() || 0, n + 4);
           n += 8;
           break;
         case Type.STRING: {
@@ -197,13 +207,13 @@ export class Header {
           f.int = data.readUInt32LE(i);
           break;
         case Type.U64:
-          f.int = data.readUInt32LE(i) + data.readUInt32LE(i + 4) * Math.pow(2, 32);
+          f.bigint = bigInt(data.readUInt32LE(i)).add(bigInt(data.readUInt32LE(i + 4)).shiftLeft(32));
           break;
         case Type.STRING: {
           const strlen = data.readUInt8(i);
           if (i + 1 + strlen > data.length) throw new Error("Truncated header");
           f.rawStr = data.slice(i + 1, i + 1 + strlen);
-          f.str = f.rawStr.toString("UTF-8");
+          f.str = f.rawStr.toString("utf8");
           i += strlen;
           break;
         }
