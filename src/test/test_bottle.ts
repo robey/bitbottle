@@ -18,9 +18,9 @@ const CAP_14_HEX = `${MAGIC_STRING}0e0000ef024efe`;
 
 describe("Bottle.write", () => {
   it("writes a bottle header", async () => {
-    const cap = new BottleCap(10, new Header().addU8(0, 150));
+    const cap = new BottleCap(10, new Header().addInt(0, 150));
     const b = new Bottle(cap, asyncify([]));
-    (await hex(b.write())).should.eql(`${MAGIC_STRING}0a02001096d528167ac0`);
+    (await hex(b.write())).should.eql(`${MAGIC_STRING}0a02000096843ad430c0`);
   });
 
   it("writes data", async () => {

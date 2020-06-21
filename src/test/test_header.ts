@@ -8,32 +8,32 @@ describe("header", () => {
   it("pack", () => {
     const h = new Header();
     h.addFlag(1);
-    h.pack().toString("hex").should.eql("01");
-    h.addU8(10, 10);
-    h.pack().toString("hex").should.eql("011a0a");
-    h.addU16(10, 1000);
-    h.pack().toString("hex").should.eql("011a0a2ae803");
+    h.pack().toString("hex").should.eql("81");
+    h.addInt(10, 10);
+    h.pack().toString("hex").should.eql("810a0a");
+    h.addInt(10, 1000);
+    h.pack().toString("hex").should.eql("810a0a1ae803");
     h.addString(3, "iron");
-    h.pack().toString("hex").should.eql("011a0a2ae803530469726f6e");
+    h.pack().toString("hex").should.eql("810a0a1ae803930469726f6e");
 
     const h2 = new Header();
-    h2.addU32(15, 0xabcd1234);
-    h2.addU64(14, bigInt("12aa34bb56cc78dd", 16));
-    h2.pack().toString("hex").should.eql("3f3412cdab4edd78cc56bb34aa12");
+    h2.addInt(15, 0xabcd1234);
+    h2.addBigInt(14, bigInt("12aa34bb56cc78dd", 16));
+    h2.pack().toString("hex").should.eql("2f3412cdab3edd78cc56bb34aa12");
   });
 
   it("unpack", () => {
-    Header.unpack(Buffer.from("01", "hex")).toString().should.eql("Header(F(1))");
-    Header.unpack(Buffer.from("011a0a", "hex")).toString().should.eql(
+    Header.unpack(Buffer.from("81", "hex")).toString().should.eql("Header(F(1))");
+    Header.unpack(Buffer.from("810a0a", "hex")).toString().should.eql(
       "Header(F(1), U8(10)=10)"
     );
-    Header.unpack(Buffer.from("011a0a2ae803", "hex")).toString().should.eql(
+    Header.unpack(Buffer.from("810a0a1ae803", "hex")).toString().should.eql(
       "Header(F(1), U8(10)=10, U16(10)=1000)"
     );
-    Header.unpack(Buffer.from("011a0a2ae803530469726f6e", "hex")).toString().should.eql(
+    Header.unpack(Buffer.from("810a0a1ae803930469726f6e", "hex")).toString().should.eql(
       `Header(F(1), U8(10)=10, U16(10)=1000, S(3)="iron")`
     );
-    Header.unpack(Buffer.from("3f3412cdab4e0000009a78563400", "hex")).toString().should.eql(
+    Header.unpack(Buffer.from("2f3412cdab3e0000009a78563400", "hex")).toString().should.eql(
       "Header(U32(15)=2882343476, U64(14)=14731774768709632)"
     );
   });
@@ -58,14 +58,19 @@ describe("header", () => {
   it("get", () => {
     const h = new Header();
     h.addFlag(1);
-    h.addU16(10, 1000);
-    h.addU32(11, 900);
+    h.addInt(10, 1000);
+    h.addInt(11, 900 + (1 << 24));
+    h.addBigInt(12, bigInt(Math.pow(2, 50)));
     h.addString(3, "iron");
 
     h.getFlag(1).should.eql(true);
     h.getFlag(10).should.eql(false);
-    (h.getU16(10) || -1).should.eql(1000);
-    (h.getU32(11) || -1).should.eql(900);
+    (h.getInt(10) || -1).should.eql(1000);
+    (h.getInt(11) || -1).should.eql(900 + (1 << 24));
+    (h.getInt(12) ?? -1).should.eql(Math.pow(2, 50));
+    (h.getBigInt(10)?.toJSNumber() ?? -1).should.eql(1000);
+    (h.getBigInt(11)?.toJSNumber() ?? -1).should.eql(900 + (1 << 24));
+    (h.getBigInt(12)?.toJSNumber() ?? -1).should.eql(Math.pow(2, 50));
     (h.getString(3) || "q").should.eql("iron");
     (h.getString(1) || "q").should.eql("q");
   });

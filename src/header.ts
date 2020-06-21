@@ -6,32 +6,32 @@ import * as bigInt from "big-integer";
  * the low nybble is the id (distinct per type).
  *
  * types:
- *   - 0: boolean/flag, len=0
- *   - 1: u8, len=1
- *   - 2: u16, len=2
- *   - 3: u32, len=4
- *   - 4: u64, len=8
- *   - 5: utf-8 string, len byte follows
+ *   - 0: u8, len=1
+ *   - 1: u16, len=2
+ *   - 2: u32, len=4
+ *   - 3: u64, len=8
+ *   - 8: boolean/flag, len=0
+ *   - 9: utf-8 string, len byte follows
  */
 
 // let's not get carried away, kids
 const MAX_HEADER_BYTES = 1023;
 
 export enum Type {
-  FLAG = 0,
-  U8 = 1,
-  U16 = 2,
-  U32 = 3,
-  U64 = 4,
-  STRING = 5,
+  U8 = 0,
+  U16 = 1,
+  U32 = 2,
+  U64 = 3,
+  FLAG = 8,
+  STRING = 9,
 }
 
 const Lengths: { [key: number]: number } = {
-  [Type.FLAG]: 0,
   [Type.U8]: 1,
   [Type.U16]: 2,
   [Type.U32]: 4,
   [Type.U64]: 8,
+  [Type.FLAG]: 0,
   [Type.STRING]: 1,
 }
 
@@ -52,8 +52,6 @@ export class Field {
 
   toString(): string {
     switch (this.type) {
-      case Type.FLAG:
-        return `F(${this.id})`;
       case Type.U8:
         return `U8(${this.id})=${this.int}`;
       case Type.U16:
@@ -62,6 +60,8 @@ export class Field {
         return `U32(${this.id})=${this.int}`;
       case Type.U64:
         return `U64(${this.id})=${this.bigint}`;
+      case Type.FLAG:
+        return `F(${this.id})`;
       case Type.STRING:
         return `S(${this.id})="${this.str}"`;
       default:
@@ -79,22 +79,24 @@ export class Header {
     return this;
   }
 
-  addU8(id: number, int: number): this {
-    this.fields.push(new Field(Type.U8, id, int));
+  addInt(id: number, int: number): this {
+    if (int < 0) throw new Error("can't be negative");
+    if (int < 256) {
+      this.fields.push(new Field(Type.U8, id, int));
+    } else if (int < 65536) {
+      this.fields.push(new Field(Type.U16, id, int));
+    } else if (int < Math.pow(2, 32)) {
+      this.fields.push(new Field(Type.U32, id, int));
+    } else {
+      this.fields.push(new Field(Type.U64, id, int));
+    }
     return this;
   }
 
-  addU16(id: number, int: number): this {
-    this.fields.push(new Field(Type.U16, id, int));
-    return this;
-  }
-
-  addU32(id: number, int: number): this {
-    this.fields.push(new Field(Type.U32, id, int));
-    return this;
-  }
-
-  addU64(id: number, bigint: bigInt.BigInteger): this {
+  addBigInt(id: number, bigint: bigInt.BigInteger): this {
+    if (bigint.lesserOrEquals(MASK_32)) {
+      return this.addInt(id, bigint.toJSNumber());
+    }
     this.fields.push(new Field(Type.U64, id, undefined, undefined, bigint));
     return this;
   }
@@ -108,20 +110,15 @@ export class Header {
     return this.fields.find(f => f.type == Type.FLAG && f.id == id) !== undefined;
   }
 
-  getU8(id: number): number | undefined {
-    return this.fields.find(f => f.type == Type.U8 && f.id == id)?.int;
+  getInt(id: number): number | undefined {
+    const f = this.fields.find(f => f.type >= Type.U8 && f.type <= Type.U64 && f.id == id);
+    return f?.int ?? f?.bigint?.toJSNumber();
   }
 
-  getU16(id: number): number | undefined {
-    return this.fields.find(f => f.type == Type.U16 && f.id == id)?.int;
-  }
-
-  getU32(id: number): number | undefined {
-    return this.fields.find(f => f.type == Type.U32 && f.id == id)?.int;
-  }
-
-  getU64(id: number): bigInt.BigInteger | undefined {
-    return this.fields.find(f => f.type == Type.U64 && f.id == id)?.bigint;
+  getBigInt(id: number): bigInt.BigInteger | undefined {
+    const f = this.fields.find(f => f.type >= Type.U8 && f.type <= Type.U64 && f.id == id);
+    if (f?.int !== undefined) return bigInt(f.int);
+    return f?.bigint;
   }
 
   getString(id: number): string | undefined {

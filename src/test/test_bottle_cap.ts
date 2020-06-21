@@ -14,8 +14,8 @@ function read(hex: string): Promise<BottleCap> {
 
 describe("BottleCap.write", () => {
   it("writes a bottle cap", async () => {
-    const b = new BottleCap(10, new Header().addU8(0, 150)).write();
-    b.toString("hex").should.eql(`${MAGIC_STRING}0a02001096d528167a`);
+    const b = new BottleCap(10, new Header().addInt(0, 150)).write();
+    b.toString("hex").should.eql(`${MAGIC_STRING}0a02000096843ad430`);
   });
 
   it("validates the header", async () => {
@@ -31,7 +31,7 @@ describe("BottleCap.write", () => {
     b.type.should.eql(12);
     b.header.toString().should.eql("Header()");
 
-    const b2 = await read("f09f8dbc000e02001096158e968f");
+    const b2 = await read("f09f8dbc000e02000096449c54c5");
     b2.type.should.eql(14);
     b2.header.toString().should.eql("Header(U8(0)=150)");
   });

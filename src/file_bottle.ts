@@ -8,11 +8,11 @@ import { Bottle } from "./bottle";
 import { BottleType, BottleCap } from "./bottle_cap"
 
 enum Field {
-  U64Size = 0,
-  U16PosixMode = 0,
-  U64CreatedNanos = 1,
-  U64ModifiedNanos = 2,
-  U64AccessedNanos = 3,
+  IntSize = 0,
+  IntPosixMode = 1,
+  IntCreatedNanos = 2,
+  IntModifiedNanos = 3,
+  IntAccessedNanos = 4,
 
   StringFilename = 0,
   StringMimeType = 1,
@@ -80,14 +80,14 @@ function encodeFileHeader(meta: FileMetadata): Header {
   if (meta.folder) {
     header.addFlag(Field.FlagFolder);
   } else {
-    header.addU64(Field.U64Size, meta.size ?? bigInt["0"]);
+    header.addBigInt(Field.IntSize, meta.size ?? bigInt["0"]);
   }
   if (meta.mimeType !== undefined) header.addString(Field.StringMimeType, meta.mimeType);
 
-  if (meta.posixMode !== undefined) header.addU16(Field.U16PosixMode, meta.posixMode);
-  if (meta.createdNanos !== undefined) header.addU64(Field.U64CreatedNanos, meta.createdNanos);
-  if (meta.modifiedNanos !== undefined) header.addU64(Field.U64ModifiedNanos, meta.modifiedNanos);
-  if (meta.accessedNanos !== undefined) header.addU64(Field.U64AccessedNanos, meta.accessedNanos);
+  if (meta.posixMode !== undefined) header.addInt(Field.IntPosixMode, meta.posixMode);
+  if (meta.createdNanos !== undefined) header.addBigInt(Field.IntCreatedNanos, meta.createdNanos);
+  if (meta.modifiedNanos !== undefined) header.addBigInt(Field.IntModifiedNanos, meta.modifiedNanos);
+  if (meta.accessedNanos !== undefined) header.addBigInt(Field.IntAccessedNanos, meta.accessedNanos);
 
   if (meta.user !== undefined) header.addString(Field.StringPosixUser, meta.user);
   if (meta.group !== undefined) header.addString(Field.StringPosixGroup, meta.group);
@@ -133,16 +133,16 @@ function decodeFileHeader(header: Header): FileMetadata {
 
   const mimeType = header.getString(Field.StringMimeType);
   if (mimeType !== undefined) meta.mimeType = mimeType;
-  const size = header.getU64(Field.U64Size);
+  const size = header.getBigInt(Field.IntSize);
   if (size !== undefined) meta.size = size;
 
-  const posixMode = header.getU16(Field.U16PosixMode);
+  const posixMode = header.getInt(Field.IntPosixMode);
   if (posixMode !== undefined) meta.posixMode = posixMode;
-  const createdNanos = header.getU64(Field.U64CreatedNanos);
+  const createdNanos = header.getBigInt(Field.IntCreatedNanos);
   if (createdNanos !== undefined) meta.createdNanos = createdNanos;
-  const modifiedNanos = header.getU64(Field.U64ModifiedNanos);
+  const modifiedNanos = header.getBigInt(Field.IntModifiedNanos);
   if (modifiedNanos !== undefined) meta.modifiedNanos = modifiedNanos;
-  const accessedNanos = header.getU64(Field.U64AccessedNanos);
+  const accessedNanos = header.getBigInt(Field.IntAccessedNanos);
   if (accessedNanos !== undefined) meta.accessedNanos = accessedNanos;
 
   const user = header.getString(Field.StringPosixUser);

@@ -97,19 +97,19 @@ describe("FileBottle.write", () => {
 
     data.should.eql(
       "f09f8dbc00000800" + // file bottle, header len=8
-      "5005" + "6f75746572" + // name(0) = "outer"
-      "00" + // folder(0)
-      "7a3c7c53" + // crc
+      "9005" + "6f75746572" + // name(0) = "outer"
+      "80" + // folder(0)
+      "6df862c4" + // crc
       "80" + // bottle
         "f09f8dbc00000800" + // file bottle, header len=8
-        "5005" + "696e6e6572" + // name(0) = "inner"
-        "00" + // folder(0)
-        "0fceb1ad" + // crc
+        "9005" + "696e6e6572" + // name(0) = "inner"
+        "80" + // folder(0)
+        "180aaf3a" + // crc
         "80" + // bottle
-          "f09f8dbc00001300" + // file bottle, header len=19
-          "5008" + "746573742e747874" + // name(0) = "test.txt"
-          "400300000000000000" + // size(0) = 3
-          "138c3a55" + // crc
+          "f09f8dbc00000c00" + // file bottle, header len=12
+          "9008" + "746573742e747874" + // name(0) = "test.txt"
+          "0003" + // size(0) = 3
+          "639e4550" + // crc
           "40" + // data
             "03" + "616263" + // "abc"
           "c0" + // end of stream
