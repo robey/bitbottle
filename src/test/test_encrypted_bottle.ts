@@ -1,72 +1,159 @@
-import * as argon2 from "argon2";
-import { Decorate } from "ballvalve";
+import { byteReader } from "ballvalve";
 import * as crypto from "crypto";
-import { BottleType, Bottle } from "../bottle";
-import { EncryptedBottle, Encryption, EncryptionOptions } from "../encrypted_bottle";
-import { Readable } from "../readable";
-import { drain, hex, readBottle } from "./tools";
+import { asyncOne, asyncify } from "../async";
+import { Bottle } from "../bottle";
+import { BottleCap, BottleType } from "../bottle_cap";
+import { decryptStream, EncryptedBottle, Encryption, encryptStream } from "../encrypted_bottle";
+import { Header } from "../header";
+import { drain, fromHex } from "./tools";
 
 import "should";
 import "source-map-support/register";
 
-function writeBottle(type: Encryption, data: Buffer, options: EncryptionOptions, needMore: [boolean]): Promise<Buffer> {
-  return drain(EncryptedBottle.write(type, Decorate.iterator([ data ]), options, needMore));
-}
+const LONG_STRING = "Time can stand still inside my funeral home / And the things I do, not set in stone / Oh the bright ideas / In the dark when you feel oh so cold";
 
-const TestString = "spoon!";
+describe("encrypted stream", () => {
+  it("aes-128-gcm", async () => {
+    const key = Buffer.from("all i ever knew.");
+    const s1 = encryptStream(asyncOne(Buffer.from(LONG_STRING)), Encryption.AES_128_GCM, key, 32);
+    const out = await drain(s1);
+    out.length.should.eql(Math.ceil(LONG_STRING.length / 32) * 32 + LONG_STRING.length);
 
-async function encryptedContent(key: Buffer, text: string): Promise<[ Buffer, Buffer ]> {
-  const argonOptions = { raw: true, salt: Buffer.alloc(16) } as argon2.Options & { raw: true };
-  const keyData = await argon2.hash(key, argonOptions);
-  const cipher = crypto.createCipheriv("aes-128-gcm", keyData.slice(0, 16), keyData.slice(16));
-  const encrypted = Buffer.concat([ cipher.update(Buffer.from(text)), cipher.final() ]);
-  const authTag = cipher.getAuthTag();
-  return [ encrypted, authTag ];
-}
+    const s2 = decryptStream(asyncOne(out), Encryption.AES_128_GCM, key, 32);
+    const text = await drain(s2);
+    text.length.should.eql(LONG_STRING.length);
+    text.toString().should.eql(LONG_STRING);
+  });
+
+  // seems to not matter.
+  // it("compare 16k -> 1M block sizes", async () => {
+  //   const key = Buffer.from("all i ever knew.");
+  //   const data = Buffer.alloc(Math.pow(2, 20));
+
+  //   for (let round = 0; round < 10; round++) {
+  //     const timings: number[] = [];
+  //     for (let bits = 14; bits <= 20; bits++) {
+  //       const blockSize = Math.pow(2, bits);
+  //       const start = process.hrtime();
+  //       await drain(encryptStream(asyncOne(data), Encryption.AES_128_GCM, key, 32));
+  //       const elapsed = process.hrtime(start);
+  //       timings.push(elapsed[0] * 1_000 + elapsed[1] / 1_000_000);
+  //       console.log(".")
+  //     }
+  //     console.log("Timings:", timings.join(", "));
+  //   }
+  // });
+});
+
 
 describe("EncryptedBottle", () => {
-  describe("encrypts", () => {
+  const CAP_14 = new BottleCap(14, new Header());
+
+  describe("encrypts AES_128_GCM", () => {
     it("with key", async () => {
-      const options = { key: Buffer.alloc(16), argonSalt: Buffer.alloc(16) };
-      const needMore: [boolean] = [ false ];
-      const buffer = await writeBottle(Encryption.AES_128_GCM, Buffer.from(TestString), options, needMore);
-      needMore[0].should.eql(false);
+      const options = { key: Buffer.alloc(16), blockSize: 65536 };
+      const clearBottle = new Bottle(CAP_14, asyncify([ fromHex("68656c6c6f") ]));
+      const bottle = await EncryptedBottle.write(Encryption.AES_128_GCM, clearBottle, options);
 
-      const b = await readBottle(buffer);
-      b.cap.type.should.eql(BottleType.Encrypted);
-      b.cap.header.toString().should.eql("Header(I0=0, S1=3,4096,1,AAAAAAAAAAAAAAAAAAAAAA==)");
+      // read it out manually
+      const b = await Bottle.read(byteReader(bottle.write()));
+      b.cap.type.should.eql(BottleType.ENCRYPTED);
+      b.cap.header.toString().should.eql("Header(U8(0)=0, U8(1)=16)");
 
-      // encrypt the same data manually
-      const [ encrypted, authTag ] = await encryptedContent(options.key, TestString);
-      (await drain(await b.nextStream())).should.eql(encrypted);
-      (await drain(await b.nextStream())).should.eql(authTag);
-      await b.assertEndOfStreams();
+      const s = decryptStream(await b.nextDataStream(), Encryption.AES_128_GCM, options.key, options.blockSize);
+      const b2 = await Bottle.read(byteReader(s));
+
+      b2.cap.type.should.eql(14);
+      b2.cap.header.toString().should.eql("Header()");
+      (await drain(await b2.nextDataStream())).toString().should.eql("hello");
+
+      await b2.done();
+      await b.done();
+    });
+
+    it("round trip with key", async () => {
+      const options = { key: Buffer.alloc(16), blockSize: 65536 };
+      const clearBottle = new Bottle(CAP_14, asyncify([ fromHex("68656c6c6f") ]));
+      const bottle = await EncryptedBottle.write(Encryption.AES_128_GCM, clearBottle, options);
+
+      // read it out using EncryptedBottle.read
+      const b = await Bottle.read(byteReader(bottle.write()));
+      b.cap.type.should.eql(BottleType.ENCRYPTED);
+      b.cap.header.toString().should.eql("Header(U8(0)=0, U8(1)=16)");
+
+      const b2 = await EncryptedBottle.read(b, { getKey: async () => options.key });
+      b2.cap.type.should.eql(14);
+      b2.cap.header.toString().should.eql("Header()");
+      (await drain(await b2.nextDataStream())).toString().should.eql("hello");
+
+      await b2.done();
+      await b.done();
+    });
+
+    it("with argon", async () => {
+      const options = { argonKey: Buffer.from("cat"), argonSalt: Buffer.alloc(16) };
+      const clearBottle = new Bottle(CAP_14, asyncify([ fromHex("68656c6c6f") ]));
+      const bottle = await EncryptedBottle.write(Encryption.AES_128_GCM, clearBottle, options);
+
+      // read it out using EncryptedBottle.read
+      const b = await Bottle.read(byteReader(bottle.write()));
+      b.cap.type.should.eql(BottleType.ENCRYPTED);
+      b.cap.header.toString().should.eql(`Header(U8(0)=0, U8(1)=16, S(1)="3,4096,1,AAAAAAAAAAAAAAAAAAAAAA==")`);
+
+      const b2 = await EncryptedBottle.read(b, { getPassword: async () => options.argonKey });
+      b2.cap.type.should.eql(14);
+      b2.cap.header.toString().should.eql("Header()");
+      (await drain(await b2.nextDataStream())).toString().should.eql("hello");
+
+      await b2.done();
+      await b.done();
     });
 
     it("with recipients", async ()  => {
-      const encrypter = (recipient: string): Promise<Buffer> => {
-        return Promise.resolve(Buffer.from("odie:" + recipient));
+      const encrypter = (recipient: string, key: Buffer): Promise<Buffer> => {
+        return Promise.resolve(Buffer.from(recipient + ":" + key.toString("hex")));
       };
+      const decrypterFor = (name: string) => {
+        return async (keys: Map<string, Buffer>) => {
+          const hexKey = keys.get(name)?.toString().split(":")[1];
+          if (!hexKey) throw new Error("nope");
+          return Buffer.from(hexKey, "hex");
+        };
+      };
+
       const options = {
-        key: Buffer.alloc(16),
-        argonSalt: Buffer.alloc(16),
+        key: crypto.randomBytes(16),
         recipients: [ "garfield", "jon" ],
         encrypter
       };
-      const needMore: [boolean] = [ false ];
-      const buffer = await writeBottle(Encryption.AES_128_GCM, Buffer.from(TestString), options, needMore);
-      needMore[0].should.eql(false);
+      const clearBottle = new Bottle(CAP_14, asyncify([ fromHex("68656c6c6f") ]));
+      const bottle = await EncryptedBottle.write(Encryption.AES_128_GCM, clearBottle, options);
+      const bottleData = await drain(bottle.write());
 
-      const b = await readBottle(buffer);
-      b.cap.type.should.eql(BottleType.Encrypted);
-      b.cap.header.toString().should.eql("Header(I0=0, S0=garfield,jon, S1=3,4096,1,AAAAAAAAAAAAAAAAAAAAAA==)");
+      // read it out using EncryptedBottle.read
+      let b = await Bottle.read(byteReader([ bottleData ]));
+      b.cap.type.should.eql(BottleType.ENCRYPTED);
+      b.cap.header.toString().should.eql(`Header(U8(0)=0, U8(1)=16, S(0)="garfield,jon")`);
 
-      const [ encrypted, authTag ] = await encryptedContent(options.key, TestString);
-      (await drain(await b.nextStream())).should.eql(Buffer.from("odie:garfield"));
-      (await drain(await b.nextStream())).should.eql(Buffer.from("odie:jon"));
-      (await drain(await b.nextStream())).should.eql(encrypted);
-      (await drain(await b.nextStream())).should.eql(authTag);
-      await b.assertEndOfStreams();
+      const b2 = await EncryptedBottle.read(b, { decryptKey: decrypterFor("jon") });
+      b2.cap.type.should.eql(14);
+      b2.cap.header.toString().should.eql("Header()");
+      (await drain(await b2.nextDataStream())).toString().should.eql("hello");
+
+      await b2.done();
+      await b.done();
+
+      b = await Bottle.read(byteReader([ bottleData ]));
+      b.cap.type.should.eql(BottleType.ENCRYPTED);
+      b.cap.header.toString().should.eql(`Header(U8(0)=0, U8(1)=16, S(0)="garfield,jon")`);
+
+      const b3 = await EncryptedBottle.read(b, { decryptKey: decrypterFor("garfield") });
+      b3.cap.type.should.eql(14);
+      b3.cap.header.toString().should.eql("Header()");
+      (await drain(await b3.nextDataStream())).toString().should.eql("hello");
+
+      await b3.done();
+      await b.done();
     });
   });
 });

@@ -28,6 +28,19 @@ export class Bottle {
     return stream;
   }
 
+  async nextBottle(): Promise<Bottle> {
+    const stream = await this.nextStream();
+    if (stream === undefined) throw new Error("Expected stream, reached end");
+    if (!(stream instanceof Bottle)) throw new Error("Expected nested bottle, got stream");
+    return stream;
+  }
+
+  // we think the bottle is done, so finish it.
+  async done(): Promise<void> {
+    const stream = await this.nextStream();
+    if (stream !== undefined) throw new Error("Expected end of bottle");
+  }
+
   async* write(): AsyncIterator<Buffer> {
     yield this.cap.write();
     for await (const s of asyncIter(this.streams)) {

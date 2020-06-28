@@ -2,7 +2,6 @@ import * as fs from "fs";
 import * as posix from "posix";
 import { asyncIter } from "ballvalve";
 import * as bigInt from "big-integer";
-import { asyncOne } from "./async";
 import { Header } from "./header";
 import { Bottle } from "./bottle";
 import { BottleType, BottleCap } from "./bottle_cap"
