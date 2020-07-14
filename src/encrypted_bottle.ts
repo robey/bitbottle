@@ -91,127 +91,74 @@ export interface HeaderOptions {
 }
 
 
-// each block is preceded by [ iv, hash ]
-export async function* encryptStream(
-  stream: AsyncIterator<Buffer>,
+export async function writeEncryptedBottle(
   method: Encryption,
-  key: Buffer,
-  blockSize: number,
-): AsyncIterator<Buffer> {
-  const params = PARAMS[method];
-  const reader = byteReader(stream);
+  bottle: Bottle,
+  options: EncryptionOptions
+): Promise<Bottle> {
+  if (options.recipients && !options.encrypter) throw new Error("Can't use recipients without encrypter");
 
-  while (true) {
-    const buffer = await reader.read(blockSize);
-    if (buffer === undefined) return;
-
-    const iv = crypto.randomBytes(params.ivLength);
-    const cipher = crypto.createCipheriv(params.cipherName, key, iv);
-    const out1 = cipher.update(buffer);
-    const out2 = cipher.final();
-    const hash = cipher.getAuthTag();
-    yield* [ iv, hash, out1, out2 ];
+  if (options.blockSize !== undefined && (options.blockSize < MIN_BLOCK_SIZE || options.blockSize > MAX_BLOCK_SIZE)) {
+    throw new Error("Invalid block size");
   }
+  const blockSizeBits = Math.round(Math.log2(options.blockSize ?? DEFAULT_BLOCK_SIZE));
+  const blockSize = Math.pow(2, blockSizeBits);
+  const argonOptions: FullArgonOptions = {
+    raw: true,
+    timeCost: options.argonTimeCost ?? DEFAULT_ARGON_TIME_COST,
+    memoryCost: options.argonMemoryCost ?? DEFAULT_ARGON_MEMORY_COST,
+    parallelism: options.argonParallelism ?? DEFAULT_ARGON_PARALLELISM,
+    salt: options.argonSalt ?? crypto.randomBytes(16),
+  };
+
+  const cap = new BottleCap(BottleType.ENCRYPTED, encodeHeader({
+    method,
+    blockSizeBits,
+    recipients: options.recipients,
+    argonOptions: options.argonKey ? argonOptions : undefined
+  }));
+  const params = PARAMS[method];
+
+  let key: Buffer;
+  if (options.key) {
+    key = options.key;
+  } else if (options.argonKey) {
+    key = await argon2.hash(options.argonKey, Object.assign({
+      type: "argon2i",
+      hashLength: params.keyLength,
+    }, argonOptions));
+  } else {
+    key = crypto.randomBytes(params.keyLength);
+  }
+
+  let encrypted = encryptStream(bottle.write(), method, key, blockSize);
+  let streams = asyncIter(writeKeys(key, options)).chain(asyncIter(asyncOne(encrypted)));
+  return new Bottle(cap, streams[Symbol.asyncIterator]());
 }
 
-export async function* decryptStream(
-  stream: AsyncIterator<Buffer>,
-  method: Encryption,
-  key: Buffer,
-  blockSize: number,
-): AsyncIterator<Buffer> {
-  const params = PARAMS[method];
-  const reader = byteReader(stream);
+export async function readEncryptedBottle(bottle: Bottle, options: EncryptReadOptions): Promise<Bottle> {
+  if (bottle.cap.type != BottleType.ENCRYPTED) throw new Error("Not an encrypted bottle");
+  const headerOptions = decodeHeader(bottle.cap.header);
+  const params = PARAMS[headerOptions.method];
 
-  while (true) {
-    const iv = await reader.read(params.ivLength);
-    if (!iv) return;
-    if (iv.length < params.ivLength) throw new Error("truncated stream");
-    const hash = await reader.read(params.hashLength);
-    if (!hash || hash.length < params.hashLength) throw new Error("truncated stream");
-    const buffer = await reader.read(blockSize);
-    if (!buffer) throw new Error("truncated stream");
-
-    const cipher = crypto.createDecipheriv(params.cipherName, key, iv);
-    const out1 = cipher.update(buffer);
-    cipher.setAuthTag(hash);
-    // this will throw if the auth tag was wrong:
-    const out2 = cipher.final();
-    yield* [ out1, out2 ];
-  }
-}
-
-
-export class EncryptedBottle {
-  constructor(public bottle: Bottle) {
-    // pass
+  let key: Buffer;
+  if (headerOptions.recipients) {
+    const keys = await readKeys(bottle, headerOptions.recipients);
+    const decrypter = options.decryptKey ?? (_ => { throw new Error("no recipient decryption found") });
+    key = await decrypter(keys);
+  } else if (headerOptions.argonOptions) {
+    const password = await (options.getPassword ?? (() => { throw new Error("no password") }))();
+    key = await argon2.hash(password, Object.assign({
+      type: "argon2i",
+      hashLength: params.keyLength,
+    }, headerOptions.argonOptions));
+  } else {
+    key = await (options.getKey ?? (() => { throw new Error("key required") }))();
   }
 
-  static async write(method: Encryption, bottle: Bottle, options: EncryptionOptions): Promise<Bottle> {
-    if (options.recipients && !options.encrypter) throw new Error("Can't use recipients without encrypter");
-
-    if (options.blockSize !== undefined && (options.blockSize < MIN_BLOCK_SIZE || options.blockSize > MAX_BLOCK_SIZE)) {
-      throw new Error("Invalid block size");
-    }
-    const blockSizeBits = Math.round(Math.log2(options.blockSize ?? DEFAULT_BLOCK_SIZE));
-    const blockSize = Math.pow(2, blockSizeBits);
-    const argonOptions: FullArgonOptions = {
-      raw: true,
-      timeCost: options.argonTimeCost ?? DEFAULT_ARGON_TIME_COST,
-      memoryCost: options.argonMemoryCost ?? DEFAULT_ARGON_MEMORY_COST,
-      parallelism: options.argonParallelism ?? DEFAULT_ARGON_PARALLELISM,
-      salt: options.argonSalt ?? crypto.randomBytes(16),
-    };
-
-    const cap = new BottleCap(BottleType.ENCRYPTED, encodeHeader({
-      method: method,
-      blockSizeBits,
-      recipients: options.recipients,
-      argonOptions: options.argonKey ? argonOptions : undefined
-    }));
-    const params = PARAMS[method];
-
-    let key: Buffer;
-    if (options.key) {
-      key = options.key;
-    } else if (options.argonKey) {
-      key = await argon2.hash(options.argonKey, Object.assign({
-        type: "argon2i",
-        hashLength: params.keyLength,
-      }, argonOptions));
-    } else {
-      key = crypto.randomBytes(params.keyLength);
-    }
-
-    let encrypted = encryptStream(bottle.write(), method, key, blockSize);
-    let streams = asyncIter(writeKeys(key, options)).chain(asyncIter(asyncOne(encrypted)));
-    return new Bottle(cap, streams[Symbol.asyncIterator]());
-  }
-
-  static async read(bottle: Bottle, options: EncryptReadOptions): Promise<Bottle> {
-    if (bottle.cap.type != BottleType.ENCRYPTED) throw new Error("Not a file bottle");
-    const headerOptions = decodeHeader(bottle.cap.header);
-    const params = PARAMS[headerOptions.method];
-
-    let key: Buffer;
-    if (headerOptions.recipients) {
-      const keys = await readKeys(bottle, headerOptions.recipients);
-      const decrypter = options.decryptKey ?? (_ => { throw new Error("no recipient decryption found") });
-      key = await decrypter(keys);
-    } else if (headerOptions.argonOptions) {
-      const password = await (options.getPassword ?? (() => { throw new Error("no password") }))();
-      key = await argon2.hash(password, Object.assign({
-        type: "argon2i",
-        hashLength: params.keyLength,
-      }, headerOptions.argonOptions));
-    } else {
-      key = await (options.getKey ?? (() => { throw new Error("key required") }))();
-    }
-
-    const blockSize = Math.pow(2, headerOptions.blockSizeBits);
-    const s = decryptStream(await bottle.nextDataStream(), headerOptions.method, key, blockSize);
-    return await Bottle.read(byteReader(s));
-  }
+  const blockSize = Math.pow(2, headerOptions.blockSizeBits);
+  const s = decryptStream(await bottle.nextDataStream(), headerOptions.method, key, blockSize);
+  return await Bottle.read(byteReader(s));
 }
 
 function encodeHeader(h: HeaderOptions): Header {
@@ -269,4 +216,54 @@ function argonOptionsToList(options: FullArgonOptions): string {
     options.parallelism.toString(),
     options.salt.toString("base64")
   ].join(",");
+}
+
+// each block is preceded by [ iv, hash ]
+export async function* encryptStream(
+  stream: AsyncIterator<Buffer>,
+  method: Encryption,
+  key: Buffer,
+  blockSize: number,
+): AsyncIterator<Buffer> {
+  const params = PARAMS[method];
+  const reader = byteReader(stream);
+
+  while (true) {
+    const buffer = await reader.read(blockSize);
+    if (buffer === undefined) return;
+
+    const iv = crypto.randomBytes(params.ivLength);
+    const cipher = crypto.createCipheriv(params.cipherName, key, iv);
+    const out1 = cipher.update(buffer);
+    const out2 = cipher.final();
+    const hash = cipher.getAuthTag();
+    yield* [ iv, hash, out1, out2 ];
+  }
+}
+
+export async function* decryptStream(
+  stream: AsyncIterator<Buffer>,
+  method: Encryption,
+  key: Buffer,
+  blockSize: number,
+): AsyncIterator<Buffer> {
+  const params = PARAMS[method];
+  const reader = byteReader(stream);
+
+  while (true) {
+    const iv = await reader.read(params.ivLength);
+    if (!iv) return;
+    if (iv.length < params.ivLength) throw new Error("truncated stream");
+    const hash = await reader.read(params.hashLength);
+    if (!hash || hash.length < params.hashLength) throw new Error("truncated stream");
+    const buffer = await reader.read(blockSize);
+    if (!buffer) throw new Error("truncated stream");
+
+    const cipher = crypto.createDecipheriv(params.cipherName, key, iv);
+    const out1 = cipher.update(buffer);
+    cipher.setAuthTag(hash);
+    // this will throw if the auth tag was wrong:
+    const out2 = cipher.final();
+    yield* [ out1, out2 ];
+  }
 }
