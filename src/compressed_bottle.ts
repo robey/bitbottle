@@ -1,110 +1,112 @@
-import { Decorate, Stream } from "ballvalve";
+import { byteReader, asyncIter } from "ballvalve";
 import * as snappy from "snappy";
-import { Compressor, Decompressor } from "xz";
-import { Bottle, BottleType } from "./bottle";
+import * as xz from "xz";
+import { asyncOne } from "./async";
+import { Bottle } from "./bottle";
+import { BottleCap, BottleType } from "./bottle_cap";
 import { Header } from "./header";
+
+const LZMA2_PRESET = 9;
 
 export enum Compression {
   LZMA2 = 0,
   SNAPPY = 1,
-  // for decoding:
-  MIN = 0,
-  MAX = 1,
 }
-
-const NAME = {
-  [Compression.LZMA2]: "LZMA2",
-  [Compression.SNAPPY]: "Snappy"
-};
 
 enum Field {
   IntCompressionType = 0,
+  IntBlockSizeBits = 1,
 }
 
-const LZMA2_PRESET = 9;
+// (power of 2) we have to buffer this much data, so don't go crazy here.
+const MIN_BLOCK_SIZE = 16 * 1024;  // 16KB
+const DEFAULT_BLOCK_SIZE = 64 * 1024;  // 64KB
+const MAX_BLOCK_SIZE = 1024 * 1024;  // 1MB
 
-type SnappyProcessor = (buffer: Buffer, callback: (error: Error | null, result: Buffer) => void) => void;
 
-export class CompressedBottle {
-  private constructor(public bottle: Bottle, public stream: Stream) {
-    // pass
+// blockSize only matters for snappy
+export async function writeCompressedBottle(method: Compression, bottle: Bottle, blockSize?: number): Promise<Bottle> {
+  if (blockSize !== undefined && (blockSize < MIN_BLOCK_SIZE || blockSize > MAX_BLOCK_SIZE)) {
+    throw new Error("Invalid block size");
+  }
+  const blockSizeBits = Math.round(Math.log2(blockSize ?? DEFAULT_BLOCK_SIZE));
+  blockSize = Math.pow(2, blockSizeBits);
+
+  const header = new Header();
+  header.addInt(Field.IntCompressionType, method);
+  if (method == Compression.SNAPPY) header.addInt(Field.IntBlockSizeBits, blockSizeBits);
+  const cap = new BottleCap(BottleType.COMPRESSED, header);
+
+  let stream = bottle.write();
+  let compressedStream: AsyncIterator<Buffer>;
+
+  switch (method) {
+    case Compression.LZMA2:
+      compressedStream = compressLzma2(stream);
+      break;
+
+    case Compression.SNAPPY:
+      compressedStream = compressSnappy(stream, blockSize);
+      break;
+
+    default:
+      throw new Error("Unknown compression");
   }
 
-  static write(type: Compression, stream: Stream): Stream {
-    const header = new Header();
-    header.addInt(Field.IntCompressionType, type);
+  return new Bottle(cap, asyncOne(compressedStream));
+}
 
-    let compressedStream: Stream;
-    switch (type) {
-      case Compression.LZMA2:
-        compressedStream = new LzmaStream(stream, new Compressor({ preset: LZMA2_PRESET }));
-        break;
-      case Compression.SNAPPY:
-        compressedStream = new SnappyStream(stream, snappy.compress);
-        break;
-      default:
-        throw new Error("Unknown compression");
-    }
+export async function readCompressedBottle(bottle: Bottle): Promise<Bottle> {
+  if (bottle.cap.type != BottleType.COMPRESSED) throw new Error("Not a compressed bottle");
+  const method: Compression = bottle.cap.header.getInt(Field.IntCompressionType) ?? Compression.LZMA2;
+  const blockSize = Math.pow(2, bottle.cap.header.getInt(Field.IntBlockSizeBits) ?? 16);
+  const compressedStream = await bottle.nextDataStream();
+  let stream: AsyncIterator<Buffer>;
 
-    return Bottle.write(BottleType.Compressed, header, Decorate.iterator([ compressedStream ]));
+  switch (method) {
+    case Compression.LZMA2:
+      stream = uncompressLzma2(compressedStream);
+      break;
+
+    case Compression.SNAPPY:
+      stream = uncompressSnappy(compressedStream, blockSize);
+      break;
+
+    default:
+      throw new Error("Unknown compression");
   }
 
-  static async read(bottle: Bottle): Promise<CompressedBottle> {
-    const type: Compression = bottle.cap.header.getInt(Field.IntCompressionType) || 0;
-    if (type < Compression.MIN || type > Compression.MAX) throw new Error(`Unknown compression type ${type}`);
-    const stream = await bottle.nextStream();
+  return Bottle.read(byteReader(stream));
+}
 
-    let decompressedStream: Stream;
-    switch (type) {
-      case Compression.LZMA2:
-        decompressedStream = new LzmaStream(stream, new Decompressor());
-        break;
-      case Compression.SNAPPY:
-        decompressedStream = new SnappyStream(stream, snappy.uncompress);
-        break;
-      default:
-        throw new Error("Unknown compression");
-    }
+async function* compressLzma2(stream: AsyncIterator<Buffer>): AsyncIterator<Buffer> {
+  const compressor = new xz.Compressor({ preset: LZMA2_PRESET });
+  for await (const b of asyncIter(stream)) yield compressor.updatePromise(b);
+  yield compressor.finalPromise();
+}
 
-    return new CompressedBottle(bottle, decompressedStream);
+async function* uncompressLzma2(stream: AsyncIterator<Buffer>): AsyncIterator<Buffer> {
+  const decompressor = new xz.Decompressor();
+  for await (const b of asyncIter(stream)) yield decompressor.updatePromise(b);
+  yield decompressor.finalPromise();
+}
+
+async function* compressSnappy(stream: AsyncIterator<Buffer>, blockSize: number): AsyncIterator<Buffer> {
+  const reader = byteReader(stream);
+
+  while (true) {
+    const buffer = await reader.read(blockSize);
+    if (buffer === undefined) return;
+    yield snappy.compressSync(buffer);
   }
 }
 
+async function* uncompressSnappy(stream: AsyncIterator<Buffer>, blockSize: number): AsyncIterator<Buffer> {
+  const reader = byteReader(stream);
 
-class SnappyStream implements Stream {
-  constructor(public wrapped: Stream, public processor: SnappyProcessor) {
-    // pass
-  }
-
-  async next(): Promise<IteratorResult<Buffer>> {
-    const item = await this.wrapped.next();
-    if (item.done || item.value === undefined) return item;
-    // snappy doesn't support promises yet 😦
-    const value = await new Promise<Buffer>((resolve, reject) => {
-      this.processor(item.value, (error, result) => {
-        if (error) return reject(error);
-        resolve(result);
-      });
-    });
-    return { done: false, value };
-  }
-}
-
-
-class LzmaStream implements Stream {
-  finished = false;
-
-  constructor(public wrapped: Stream, public lzma: Compressor | Decompressor) {
-    // pass
-  }
-
-  async next(): Promise<IteratorResult<Buffer>> {
-    if (this.finished) return { done: true } as IteratorResult<Buffer>;
-    const item = await this.wrapped.next();
-    if (item.done || item.value === undefined) {
-      this.finished = true;
-      return { done: false, value: await this.lzma.finalPromise() };
-    }
-    return { done: false, value: await this.lzma.updatePromise(item.value) };
+  while (true) {
+    const buffer = await reader.read(blockSize);
+    if (buffer === undefined) return;
+    yield snappy.uncompressSync(buffer, { asBuffer: true }) as Buffer;
   }
 }
