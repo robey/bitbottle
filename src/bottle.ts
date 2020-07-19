@@ -11,13 +11,24 @@ let counter = 0;
 
 
 export class Bottle {
+  streamCount = 0;
+  finished = false;
+
   constructor(public cap: BottleCap, public streams: AsyncIterator<AsyncIterator<Buffer> | Bottle>) {
     // pass
   }
 
+  toString(): string {
+    return `Bottle(${this.cap}, read=${this.streamCount}, finished=${this.finished})`;
+  }
+
   async nextStream(): Promise<AsyncIterator<Buffer> | Bottle | undefined> {
     const item = await this.streams.next();
-    if (item.done) return undefined;
+    if (item.done) {
+      this.finished = true;
+      return undefined;
+    }
+    this.streamCount++;
     return item.value;
   }
 
@@ -67,8 +78,8 @@ export class Bottle {
         switch (marker[0]) {
           case STREAM_RAW: {
             // need to wait for the stream to finish before reading the next one
-            const [ inner, done ] = asyncIter(unframed(stream)).withPromiseAfter();
-            yield inner[Symbol.asyncIterator]();
+            const [ inner, done ] = unframed(stream).withPromiseAfter();
+            yield inner;
             await done;
             break;
           }
@@ -86,7 +97,7 @@ export class Bottle {
       }
     }(), () => `BottleReader[${id}](${cap}, ${stream})`);
 
-    return new Bottle(cap, streams[Symbol.asyncIterator]());
+    return new Bottle(cap, streams);
   }
 
 }

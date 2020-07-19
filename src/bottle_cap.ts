@@ -7,7 +7,7 @@ export const VERSION = 0x00;
 
 export enum BottleType {
   FILE = 0,
-  HASHED = 1,
+  SIGNED = 1,
   ENCRYPTED = 3,
   COMPRESSED = 4,
 }
@@ -27,7 +27,7 @@ export class BottleCap {
   }
 
   toString(): string {
-    return `Bottle(${this.type}, ${this.header})`;
+    return (BottleType[this.type] ?? this.type.toString()) + ":" + this.header.toString();
   }
 
   write(): Buffer {
