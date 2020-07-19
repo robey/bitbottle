@@ -133,7 +133,7 @@ export async function writeEncryptedBottle(
 
   let encrypted = encryptStream(bottle.write(), method, key, blockSize);
   let streams = asyncIter(writeKeys(key, options)).chain(asyncIter(asyncOne(encrypted)));
-  return new Bottle(cap, streams[Symbol.asyncIterator]());
+  return new Bottle(cap, streams);
 }
 
 export async function readEncryptedBottle(bottle: Bottle, options: EncryptReadOptions): Promise<Bottle> {
@@ -178,7 +178,7 @@ function decodeHeader(header: Header): HeaderOptions {
   return { method, blockSizeBits, recipients, argonOptions };
 }
 
-async function* writeKeys(key: Buffer, options: EncryptionOptions): AsyncIterator<AsyncIterator<Buffer> | Bottle> {
+async function* writeKeys(key: Buffer, options: EncryptionOptions): AsyncIterator<AsyncIterator<Buffer>> {
   if (!options.recipients || options.recipients.length == 0 || !options.encrypter) return;
   for (const r of options.recipients) {
     yield asyncOne(await options.encrypter(r, key));

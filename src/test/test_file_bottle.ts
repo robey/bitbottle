@@ -13,15 +13,14 @@ import "source-map-support/register";
 
 describe("FileBottle.write", () => {
   it("writes and decodes from data", async () => {
-    const meta: FileMetadata = {
+    const meta: Partial<FileMetadata> = {
       filename: "bogus.txt",
-      folder: false,
       posixMode: 7,
       size: bigInt(10),
       createdNanos: bigInt(1234567890),
       user: "tyrion"
     };
-    const bottleStream = new FileBottle(meta, asyncify([ asyncOne(Buffer.from("television")) ])).write();
+    const bottleStream = FileBottle.writeFile(meta, asyncOne(Buffer.from("television")));
 
     const bottle = await Bottle.read(byteReader(bottleStream.write()));
     bottle.cap.type.should.eql(BottleType.FILE);
@@ -43,7 +42,7 @@ describe("FileBottle.write", () => {
     fs.writeFileSync(filename, "hello!\n");
     const stats = fs.statSync(filename);
     const stream = new StreamAsyncIterator(fs.createReadStream(filename));
-    const bottleStream = new FileBottle(statsToMetadata(filename, stats), asyncOne(stream)).write();
+    const bottleStream = FileBottle.writeFile(statsToMetadata(filename, stats), stream);
 
     const bottle = await Bottle.read(byteReader(bottleStream.write()));
     bottle.cap.type.should.eql(BottleType.FILE);
@@ -59,14 +58,11 @@ describe("FileBottle.write", () => {
   it("writes and decodes a folder", async () => {
     const contents1 = asyncify([ Buffer.from("abc") ]);
     const contents2 = asyncify([ Buffer.from("defghij") ]);
-    const bottle1 = new FileBottle({ folder: false, filename: "test1.txt", size: bigInt(3) }, asyncOne(contents1));
-    const bottle2 = new FileBottle({ folder: false, filename: "test2.txt", size: bigInt(7) }, asyncOne(contents2));
-    const bottle = new FileBottle(
-      { folder: true, filename: "folder" },
-      asyncify([ bottle1.write(), bottle2.write() ]),
-    );
+    const bottle1 = FileBottle.writeFile({ filename: "test1.txt", size: bigInt(3) }, contents1);
+    const bottle2 = FileBottle.writeFile({ filename: "test2.txt", size: bigInt(7) }, contents2);
+    const bottle = FileBottle.writeFolder({ filename: "folder" }, asyncify([ bottle1, bottle2 ]));
 
-    const rBottle = await Bottle.read(byteReader(bottle.write().write()));
+    const rBottle = await Bottle.read(byteReader(bottle.write()));
     rBottle.cap.type.should.eql(BottleType.FILE);
     const folder = await FileBottle.read(rBottle);
     folder.meta.should.eql({ folder: true, filename: "folder" });
@@ -90,9 +86,9 @@ describe("FileBottle.write", () => {
 
   it("writes a nested folder correctly", async () => {
     const contents = asyncify([ Buffer.from("abc") ]);
-    const bottle3 = new FileBottle({ folder: false, filename: "test.txt", size: bigInt(3) }, asyncOne(contents)).write();
-    const bottle2 = new FileBottle({ folder: true, filename: "inner" }, asyncOne(bottle3)).write();
-    const bottle1 = new FileBottle({ folder: true, filename: "outer" }, asyncOne(bottle2)).write();
+    const bottle3 = FileBottle.writeFile({ filename: "test.txt", size: bigInt(3) }, contents);
+    const bottle2 = FileBottle.writeFolder({ filename: "inner" }, asyncOne(bottle3));
+    const bottle1 = FileBottle.writeFolder({ filename: "outer" }, asyncOne(bottle2));
     const data = await hex(bottle1.write());
 
     data.should.eql(

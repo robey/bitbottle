@@ -81,7 +81,7 @@ describe("Bottle.write", () => {
 describe("Bottle.read", () => {
   it("reads data", async () => {
     const b = await Bottle.read(byteReader(fromHex(`${CAP_10_HEX}400568656c6c6fc0`)));
-    b.cap.toString().should.eql("Bottle(10, Header())");
+    b.cap.toString().should.eql("10:Header()");
     const s1 = await b.nextStream();
     (s1 !== undefined).should.eql(true);
     (s1 instanceof Bottle).should.eql(false);
@@ -93,7 +93,7 @@ describe("Bottle.read", () => {
     const bigBlock = Buffer.alloc(64);
     Buffer.from("whatchamacallit").copy(bigBlock, 23);
     const b = await Bottle.read(byteReader(fromHex(`${CAP_10_HEX}4041${bigBlock.toString("hex")}0568656c6c6fc0`)));
-    b.cap.toString().should.eql("Bottle(10, Header())");
+    b.cap.toString().should.eql("10:Header()");
     const s1 = await b.nextStream();
     (s1 !== undefined).should.eql(true);
     (s1 instanceof Bottle).should.eql(false);
@@ -106,7 +106,7 @@ describe("Bottle.read", () => {
 
   it("reads several data streams", async () => {
     const b = await Bottle.read(byteReader(fromHex(`${CAP_14_HEX}4003f0f0f04003e0e0e04003ccccccc0`)));
-    b.cap.toString().should.eql("Bottle(14, Header())");
+    b.cap.toString().should.eql("14:Header()");
 
     const s1 = await b.nextStream();
     (s1 !== undefined).should.eql(true);
@@ -129,13 +129,13 @@ describe("Bottle.read", () => {
   it("reads nested bottles", async () => {
     const nested = `${CAP_14_HEX}4003636174c0`;
     const b = await Bottle.read(byteReader(fromHex(`${CAP_10_HEX}80${nested}4003626174c0`)));
-    b.cap.toString().should.eql("Bottle(10, Header())");
+    b.cap.toString().should.eql("10:Header()");
 
     const s1 = await b.nextStream();
     (s1 !== undefined).should.eql(true);
     (s1 instanceof Bottle).should.eql(true);
     if (s1 && (s1 instanceof Bottle)) {
-      s1.cap.toString().should.eql("Bottle(14, Header())");
+      s1.cap.toString().should.eql("14:Header()");
 
       const s2 = await s1.nextStream();
       (s2 !== undefined).should.eql(true);

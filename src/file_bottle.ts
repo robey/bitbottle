@@ -50,7 +50,7 @@ export class FileBottle {
       const next = await this.files.next();
       if (!next.done) throw new Error("Garbage after file contents");
     });
-    return stream[Symbol.asyncIterator]();
+    return stream;
   }
 
   async nextBottle(): Promise<Bottle | undefined> {
@@ -61,9 +61,14 @@ export class FileBottle {
     return item.value;
   }
 
-  write(): Bottle {
-    const cap = new BottleCap(BottleType.FILE, encodeFileHeader(this.meta));
-    return new Bottle(cap, this.files);
+  static writeFile(meta: Partial<FileMetadata>, contents: AsyncIterator<Buffer>): Bottle {
+    const cap = new BottleCap(BottleType.FILE, encodeFileHeader(Object.assign({ folder: false, filename: "" }, meta)));
+    return new Bottle(cap, asyncIter([ contents ]));
+  }
+
+  static writeFolder(meta: Partial<FileMetadata>, files: AsyncIterator<Bottle>): Bottle {
+    const cap = new BottleCap(BottleType.FILE, encodeFileHeader(Object.assign({ folder: true, filename: "" }, meta)));
+    return new Bottle(cap, files);
   }
 
   static async read(bottle: Bottle): Promise<FileBottle> {
