@@ -20,6 +20,17 @@ async function thrown(valid: Promise<void>): Promise<string> {
   }
 }
 
+// pretend we signed it.
+async function signer(data: Buffer): Promise<Buffer> {
+  return Buffer.concat([ Buffer.from("sign"), data ]);
+}
+
+async function verifier(data: Buffer, signedBy: string): Promise<Buffer> {
+  if (signedBy != "garfield") throw new Error("not garfield");
+  if (data.slice(0, 4).toString() != "sign") throw new Error("not signed");
+  return data.slice(4);
+}
+
 
 describe("SignedBottle", () => {
   it("hashes a small stream", async () => {
@@ -73,5 +84,44 @@ describe("SignedBottle", () => {
     await b3.done();
 
     (await thrown(valid)).should.match(/Mismatched digest/);
+  });
+
+  it("signs and verifies", async () => {
+    const b1 = new Bottle(CAP_14, asyncify([ asyncOne(Buffer.from("i choose you!")) ]));
+    const b2 = await writeSignedBottle(Hash.SHA256, b1, { signedBy: "garfield", signer });
+
+    const { bottle: b3, valid } = await readSignedBottle(b2, { verifier });
+    b3.cap.type.should.eql(14);
+    b3.cap.header.toString().should.eql("Header()");
+    (await drain(await b3.nextDataStream())).toString().should.eql("i choose you!");
+    await b3.done();
+
+    (await thrown(valid)).should.eql("");
+  });
+
+  it("demands a verifier", async () => {
+    const b1 = new Bottle(CAP_14, asyncify([ asyncOne(Buffer.from("i choose you!")) ]));
+    const b2 = await writeSignedBottle(Hash.SHA256, b1, { signedBy: "garfield", signer });
+
+    const { bottle: b3, valid } = await readSignedBottle(b2);
+    b3.cap.type.should.eql(14);
+    b3.cap.header.toString().should.eql("Header()");
+    (await drain(await b3.nextDataStream())).toString().should.eql("i choose you!");
+    await b3.done();
+
+    (await thrown(valid)).should.match(/need verifier/);
+  });
+
+  it("rejects a bad signature", async () => {
+    const b1 = new Bottle(CAP_14, asyncify([ asyncOne(Buffer.from("i choose you!")) ]));
+    const b2 = await writeSignedBottle(Hash.SHA256, b1, { signedBy: "odie", signer });
+
+    const { bottle: b3, valid } = await readSignedBottle(b2, { verifier });
+    b3.cap.type.should.eql(14);
+    b3.cap.header.toString().should.eql("Header()");
+    (await drain(await b3.nextDataStream())).toString().should.eql("i choose you!");
+    await b3.done();
+
+    (await thrown(valid)).should.eql("not garfield");
   });
 });

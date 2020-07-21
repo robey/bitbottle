@@ -65,7 +65,8 @@ export async function readSignedBottle(bottle: Bottle, options: VerifyOptions = 
   const valid = (async () => {
     const d = await digest;
     let signedDigest = Buffer.concat(await asyncIter(await bottle.nextDataStream()).collect());
-    if (signedBy && options.verifier) {
+    if (signedBy) {
+      if (!options.verifier) throw new Error(`Signed by ${signedBy} -- need verifier`);
       signedDigest = await options.verifier(signedDigest, signedBy);
     }
     if (!d.equals(signedDigest)) {
