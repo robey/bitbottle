@@ -90,6 +90,24 @@ export interface HeaderOptions {
   argonOptions?: FullArgonOptions;
 }
 
+export class DecryptionRequiredError extends Error {
+  constructor(public recipients: string[]) {
+    super("Encrypted for private recipient(s)");
+  }
+}
+
+export class PasswordRequiredError extends Error {
+  constructor() {
+    super("Password required");
+  }
+}
+
+export class KeyRequiredError extends Error {
+  constructor() {
+    super("Key required");
+  }
+}
+
 
 export async function writeEncryptedBottle(
   method: Encryption,
@@ -144,16 +162,17 @@ export async function readEncryptedBottle(bottle: Bottle, options: EncryptReadOp
   let key: Buffer;
   if (headerOptions.recipients) {
     const keys = await readKeys(bottle, headerOptions.recipients);
-    const decrypter = options.decryptKey ?? (_ => { throw new Error("no recipient decryption found") });
+    const decrypter = options.decryptKey ??
+      (_ => { throw new DecryptionRequiredError(headerOptions.recipients || []) });
     key = await decrypter(keys);
   } else if (headerOptions.argonOptions) {
-    const password = await (options.getPassword ?? (() => { throw new Error("no password") }))();
+    const password = await (options.getPassword ?? (() => { throw new PasswordRequiredError() }))();
     key = await argon2.hash(password, Object.assign({
       type: "argon2i",
       hashLength: params.keyLength,
     }, headerOptions.argonOptions));
   } else {
-    key = await (options.getKey ?? (() => { throw new Error("key required") }))();
+    key = await (options.getKey ?? (() => { throw new KeyRequiredError() }))();
   }
 
   const blockSize = Math.pow(2, headerOptions.blockSizeBits);
