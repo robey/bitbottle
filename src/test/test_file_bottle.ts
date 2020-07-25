@@ -40,7 +40,7 @@ describe("FileBottle.write", () => {
   it("writes and decodes an actual file", async () => {
     const filename = path.join(makeTempFolder(), "test.txt");
     fs.writeFileSync(filename, "hello!\n");
-    const stats = fs.statSync(filename);
+    const stats = fs.statSync(filename, { bigint: true });
     const stream = new StreamAsyncIterator(fs.createReadStream(filename));
     const bottleStream = FileBottle.writeFile(statsToMetadata(filename, stats), stream);
 

@@ -101,27 +101,27 @@ function encodeFileHeader(meta: FileMetadata): Header {
 
 // build a file bottle header out of an fs.Stats object.
 // some hackery because typescript doesn't know that fs.Stats can have bigint fields now.
-export function statsToMetadata(filename: string, stats: fs.Stats): FileMetadata {
+export function statsToMetadata(filename: string, stats: fs.BigIntStats): FileMetadata {
   const meta: FileMetadata = {
     // for mysterious reasons, isDirectory() must be checked first, before it decays away.
     folder: stats.isDirectory(),
     filename,
     size: bigInt(stats.size as any as bigint),
 
-    posixMode: stats.mode & 0x1ff,
-    createdNanos: bigInt((stats as any).ctimeNs as bigint),
-    modifiedNanos: bigInt((stats as any).mtimeNs as bigint),
-    accessedNanos: bigInt((stats as any).atimeNs as bigint),
+    posixMode: bigInt(stats.mode).and(0x1ff).toJSNumber(),
+    createdNanos: bigInt(stats.ctimeNs),
+    modifiedNanos: bigInt(stats.mtimeNs),
+    accessedNanos: bigInt(stats.atimeNs),
   };
 
   try {
-    meta.user = posix.getpwnam(stats.uid).name;
+    meta.user = posix.getpwnam(bigInt(stats.uid).toJSNumber()).name;
   } catch (error) {
     // pass
   }
 
   try {
-    meta.group = posix.getgrnam(stats.gid).name;
+    meta.group = posix.getgrnam(bigInt(stats.gid).toJSNumber()).name;
   } catch (error) {
     // pass
   }
