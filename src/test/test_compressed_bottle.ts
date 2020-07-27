@@ -12,7 +12,7 @@ const CAP_14 = new BottleCap(14, new Header());
 describe("CompressedBottle", () => {
   it("compresses a stream with lzma2", async () => {
     const clearBottle = new Bottle(CAP_14, asyncify([ asyncOne(Buffer.from(TEST_STRING)) ]));
-    const bottle = await writeCompressedBottle(Compression.LZMA2, clearBottle);
+    const bottle = await writeCompressedBottle(Compression.LZMA2, clearBottle.write());
     const data = await drain(bottle.write());
 
     const b = await Bottle.read(byteReader(asyncify([ data ])));
@@ -27,7 +27,7 @@ describe("CompressedBottle", () => {
 
   it("compresses a stream with snappy", async () => {
     const clearBottle = new Bottle(CAP_14, asyncify([ asyncOne(Buffer.from(TEST_STRING)) ]));
-    const bottle = await writeCompressedBottle(Compression.SNAPPY, clearBottle);
+    const bottle = await writeCompressedBottle(Compression.SNAPPY, clearBottle.write());
     const data = await drain(bottle.write());
 
     const b = await Bottle.read(byteReader(asyncify([ data ])));

@@ -3,7 +3,7 @@ import { asyncify, asyncOne } from "../async";
 import { Bottle } from "../bottle";
 import { BottleCap, BottleType } from "../bottle_cap";
 import { Header } from "../header";
-import { Hash, readSignedBottle, writeSignedBottle } from "../signed_bottle";
+import { Hash, SignedStatus, readSignedBottle, writeSignedBottle } from "../signed_bottle";
 import { drain } from "./tools";
 
 import "should";
@@ -35,7 +35,7 @@ async function verifier(data: Buffer, signedBy: string): Promise<Buffer> {
 describe("SignedBottle", () => {
   it("hashes a small stream", async () => {
     const b1 = new Bottle(CAP_14, asyncify([ asyncOne(Buffer.from("i choose you!")) ]));
-    const b2 = await writeSignedBottle(Hash.SHA256, b1);
+    const b2 = await writeSignedBottle(Hash.SHA256, b1.write());
     const data = await drain(b2.write());
 
     // parse the raw sections
@@ -57,71 +57,81 @@ describe("SignedBottle", () => {
 
   it("verifies a hashed stream", async () => {
     const b1 = new Bottle(CAP_14, asyncify([ asyncOne(Buffer.from("i choose you!")) ]));
-    const b2 = await writeSignedBottle(Hash.SHA256, b1);
+    const b2 = await writeSignedBottle(Hash.SHA256, b1.write());
 
-    const { bottle: b3, valid } = await readSignedBottle(b2);
+    const { bottle: b3, verified } = await readSignedBottle(b2);
     b3.cap.type.should.eql(14);
     b3.cap.header.toString().should.eql("Header()");
     (await drain(await b3.nextDataStream())).toString().should.eql("i choose you!");
     await b3.done();
 
-    (await thrown(valid)).should.eql("");
+    const v = await verified;
+    v.status.should.eql(SignedStatus.OK);
   });
 
   it("does not verify a corrupt stream", async () => {
     const b1 = new Bottle(CAP_14, asyncify([ asyncOne(Buffer.from("i choose you!")) ]));
-    const b2 = await writeSignedBottle(Hash.SHA256, b1);
+    const b2 = await writeSignedBottle(Hash.SHA256, b1.write());
 
     // mess up something roughly in the middle of the 20-byte hash
     const data = await drain(b2.write());
     data[data.length - 16] = 0xff;
     const b2bad = await Bottle.read(byteReader([ data ]));
 
-    const { bottle: b3, valid } = await readSignedBottle(b2bad);
+    const { bottle: b3, verified } = await readSignedBottle(b2bad);
     b3.cap.type.should.eql(14);
     b3.cap.header.toString().should.eql("Header()");
     (await drain(await b3.nextDataStream())).toString().should.eql("i choose you!");
     await b3.done();
 
-    (await thrown(valid)).should.match(/Mismatched digest/);
+    const v = await verified;
+    v.status.should.eql(SignedStatus.BAD_HASH);
   });
 
   it("signs and verifies", async () => {
     const b1 = new Bottle(CAP_14, asyncify([ asyncOne(Buffer.from("i choose you!")) ]));
-    const b2 = await writeSignedBottle(Hash.SHA256, b1, { signedBy: "garfield", signer });
+    const b2 = await writeSignedBottle(Hash.SHA256, b1.write(), { signedBy: "garfield", signer });
 
-    const { bottle: b3, valid } = await readSignedBottle(b2, { verifier });
+    const { bottle: b3, verified } = await readSignedBottle(b2, { verifier });
     b3.cap.type.should.eql(14);
     b3.cap.header.toString().should.eql("Header()");
     (await drain(await b3.nextDataStream())).toString().should.eql("i choose you!");
     await b3.done();
 
-    (await thrown(valid)).should.eql("");
+    const v = await verified;
+    v.status.should.eql(SignedStatus.OK);
+    (v.signedBy ?? "").should.eql("garfield");
   });
 
   it("demands a verifier", async () => {
     const b1 = new Bottle(CAP_14, asyncify([ asyncOne(Buffer.from("i choose you!")) ]));
-    const b2 = await writeSignedBottle(Hash.SHA256, b1, { signedBy: "garfield", signer });
+    const b2 = await writeSignedBottle(Hash.SHA256, b1.write(), { signedBy: "garfield", signer });
 
-    const { bottle: b3, valid } = await readSignedBottle(b2);
+    const { bottle: b3, verified } = await readSignedBottle(b2);
     b3.cap.type.should.eql(14);
     b3.cap.header.toString().should.eql("Header()");
     (await drain(await b3.nextDataStream())).toString().should.eql("i choose you!");
     await b3.done();
 
-    (await thrown(valid)).should.match(/need verifier/);
+    const v = await verified;
+    v.status.should.eql(SignedStatus.UNVERIFIED);
+    (v.signedBy ?? "").should.eql("garfield");
+    (v.reason ?? "").should.match(/no verifier/);
   });
 
   it("rejects a bad signature", async () => {
     const b1 = new Bottle(CAP_14, asyncify([ asyncOne(Buffer.from("i choose you!")) ]));
-    const b2 = await writeSignedBottle(Hash.SHA256, b1, { signedBy: "odie", signer });
+    const b2 = await writeSignedBottle(Hash.SHA256, b1.write(), { signedBy: "odie", signer });
 
-    const { bottle: b3, valid } = await readSignedBottle(b2, { verifier });
+    const { bottle: b3, verified } = await readSignedBottle(b2, { verifier });
     b3.cap.type.should.eql(14);
     b3.cap.header.toString().should.eql("Header()");
     (await drain(await b3.nextDataStream())).toString().should.eql("i choose you!");
     await b3.done();
 
-    (await thrown(valid)).should.eql("not garfield");
+    const v = await verified;
+    v.status.should.eql(SignedStatus.UNVERIFIED);
+    (v.signedBy ?? "").should.eql("odie");
+    (v.reason ?? "").should.match(/not garfield/);
   });
 });

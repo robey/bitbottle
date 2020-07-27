@@ -90,28 +90,24 @@ export interface HeaderOptions {
   argonOptions?: FullArgonOptions;
 }
 
-export class DecryptionRequiredError extends Error {
-  constructor(public recipients: string[]) {
-    super("Encrypted for private recipient(s)");
-  }
+export enum DecryptStatus {
+  OK = 0,
+  NO_RECIPIENT = 1,  // didn't get a decrypted key from `decryptKey`
+  NEED_PASSWORD = 2,
+  NEED_KEY = 3,
 }
 
-export class PasswordRequiredError extends Error {
-  constructor() {
-    super("Password required");
-  }
-}
-
-export class KeyRequiredError extends Error {
-  constructor() {
-    super("Key required");
-  }
+export interface DecryptedBottle {
+  status: DecryptStatus;
+  bottle?: Bottle;
+  recipients?: string[];
+  reason?: string;
 }
 
 
 export async function writeEncryptedBottle(
   method: Encryption,
-  bottle: Bottle,
+  bottle: AsyncIterator<Buffer>,
   options: EncryptionOptions
 ): Promise<Bottle> {
   if (options.recipients && !options.encrypter) throw new Error("Can't use recipients without encrypter");
@@ -149,35 +145,48 @@ export async function writeEncryptedBottle(
     key = crypto.randomBytes(params.keyLength);
   }
 
-  let encrypted = encryptStream(bottle.write(), method, key, blockSize);
+  let encrypted = encryptStream(bottle, method, key, blockSize);
   let streams = asyncIter(writeKeys(key, options)).chain(asyncIter(asyncOne(encrypted)));
   return new Bottle(cap, streams);
 }
 
-export async function readEncryptedBottle(bottle: Bottle, options: EncryptReadOptions): Promise<Bottle> {
+export async function readEncryptedBottle(bottle: Bottle, options: EncryptReadOptions): Promise<DecryptedBottle> {
   if (bottle.cap.type != BottleType.ENCRYPTED) throw new Error("Not an encrypted bottle");
   const headerOptions = decodeHeader(bottle.cap.header);
   const params = PARAMS[headerOptions.method];
 
   let key: Buffer;
   if (headerOptions.recipients) {
-    const keys = await readKeys(bottle, headerOptions.recipients);
-    const decrypter = options.decryptKey ??
-      (_ => { throw new DecryptionRequiredError(headerOptions.recipients || []) });
-    key = await decrypter(keys);
+    const recipients = headerOptions.recipients;
+    const keys = await readKeys(bottle, recipients);
+    if (!options.decryptKey) return { status: DecryptStatus.NO_RECIPIENT, recipients };
+    try {
+      key = await options.decryptKey(keys);
+    } catch (error) {
+      return { status: DecryptStatus.NO_RECIPIENT, recipients, reason: error.message.toString() };
+    }
   } else if (headerOptions.argonOptions) {
-    const password = await (options.getPassword ?? (() => { throw new PasswordRequiredError() }))();
-    key = await argon2.hash(password, Object.assign({
-      type: "argon2i",
-      hashLength: params.keyLength,
-    }, headerOptions.argonOptions));
+    if (!options.getPassword) return { status: DecryptStatus.NEED_PASSWORD };
+    try {
+      key = await argon2.hash(await options.getPassword(), Object.assign({
+        type: "argon2i",
+        hashLength: params.keyLength,
+      }, headerOptions.argonOptions));
+    } catch (error) {
+      return { status: DecryptStatus.NEED_PASSWORD, reason: error.message.toString() };
+    }
   } else {
-    key = await (options.getKey ?? (() => { throw new KeyRequiredError() }))();
+    if (!options.getKey) return { status: DecryptStatus.NEED_KEY };
+    try {
+      key = await options.getKey();
+    } catch (error) {
+      return { status: DecryptStatus.NEED_KEY, reason: error.message.toString() };
+    }
   }
 
   const blockSize = Math.pow(2, headerOptions.blockSizeBits);
   const s = decryptStream(await bottle.nextDataStream(), headerOptions.method, key, blockSize);
-  return await Bottle.read(byteReader(s));
+  return { status: DecryptStatus.OK, bottle: await Bottle.read(byteReader(s)) };
 }
 
 function encodeHeader(h: HeaderOptions): Header {

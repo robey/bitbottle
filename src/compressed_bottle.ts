@@ -25,7 +25,11 @@ const MAX_BLOCK_SIZE = 1024 * 1024;  // 1MB
 
 
 // blockSize only matters for snappy
-export async function writeCompressedBottle(method: Compression, bottle: Bottle, blockSize?: number): Promise<Bottle> {
+export async function writeCompressedBottle(
+  method: Compression,
+  bottle: AsyncIterator<Buffer>,
+  blockSize?: number
+): Promise<Bottle> {
   if (blockSize !== undefined && (blockSize < MIN_BLOCK_SIZE || blockSize > MAX_BLOCK_SIZE)) {
     throw new Error("Invalid block size");
   }
@@ -37,16 +41,15 @@ export async function writeCompressedBottle(method: Compression, bottle: Bottle,
   if (method == Compression.SNAPPY) header.addInt(Field.IntBlockSizeBits, blockSizeBits);
   const cap = new BottleCap(BottleType.COMPRESSED, header);
 
-  let stream = bottle.write();
   let compressedStream: AsyncIterator<Buffer>;
 
   switch (method) {
     case Compression.LZMA2:
-      compressedStream = compressLzma2(stream);
+      compressedStream = compressLzma2(bottle);
       break;
 
     case Compression.SNAPPY:
-      compressedStream = compressSnappy(stream, blockSize);
+      compressedStream = compressSnappy(bottle, blockSize);
       break;
 
     default:

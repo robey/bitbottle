@@ -3,7 +3,7 @@ import * as crypto from "crypto";
 import { asyncOne, asyncify } from "../async";
 import { Bottle } from "../bottle";
 import { BottleCap, BottleType } from "../bottle_cap";
-import { decryptStream, Encryption, encryptStream, readEncryptedBottle, writeEncryptedBottle } from "../encrypted_bottle";
+import { decryptStream, Encryption, encryptStream, readEncryptedBottle, writeEncryptedBottle, DecryptStatus } from "../encrypted_bottle";
 import { Header } from "../header";
 import { drain, fromHex } from "./tools";
 
@@ -53,7 +53,7 @@ describe("EncryptedBottle", () => {
     it("with key", async () => {
       const options = { key: Buffer.alloc(16), blockSize: 65536 };
       const clearBottle = new Bottle(CAP_14, asyncify([ fromHex("68656c6c6f") ]));
-      const bottle = await writeEncryptedBottle(Encryption.AES_128_GCM, clearBottle, options);
+      const bottle = await writeEncryptedBottle(Encryption.AES_128_GCM, clearBottle.write(), options);
 
       // read it out manually
       const b = await Bottle.read(byteReader(bottle.write()));
@@ -74,14 +74,17 @@ describe("EncryptedBottle", () => {
     it("round trip with key", async () => {
       const options = { key: Buffer.alloc(16), blockSize: 65536 };
       const clearBottle = new Bottle(CAP_14, asyncify([ fromHex("68656c6c6f") ]));
-      const bottle = await writeEncryptedBottle(Encryption.AES_128_GCM, clearBottle, options);
+      const bottle = await writeEncryptedBottle(Encryption.AES_128_GCM, clearBottle.write(), options);
 
       // read it out using EncryptedBottle.read
       const b = await Bottle.read(byteReader(bottle.write()));
       b.cap.type.should.eql(BottleType.ENCRYPTED);
       b.cap.header.toString().should.eql("Header(U8(0)=0, U8(1)=16)");
 
-      const b2 = await readEncryptedBottle(b, { getKey: async () => options.key });
+      const result = await readEncryptedBottle(b, { getKey: async () => options.key });
+      result.status.should.eql(DecryptStatus.OK);
+      const b2 = result.bottle;
+      if (!b2) throw new Error("boo");
       b2.cap.type.should.eql(14);
       b2.cap.header.toString().should.eql("Header()");
       (await drain(await b2.nextDataStream())).toString().should.eql("hello");
@@ -93,14 +96,17 @@ describe("EncryptedBottle", () => {
     it("with argon", async () => {
       const options = { argonKey: Buffer.from("cat"), argonSalt: Buffer.alloc(16) };
       const clearBottle = new Bottle(CAP_14, asyncify([ fromHex("68656c6c6f") ]));
-      const bottle = await writeEncryptedBottle(Encryption.AES_128_GCM, clearBottle, options);
+      const bottle = await writeEncryptedBottle(Encryption.AES_128_GCM, clearBottle.write(), options);
 
       // read it out using EncryptedBottle.read
       const b = await Bottle.read(byteReader(bottle.write()));
       b.cap.type.should.eql(BottleType.ENCRYPTED);
       b.cap.header.toString().should.eql(`Header(U8(0)=0, U8(1)=16, S(1)="3,4096,1,AAAAAAAAAAAAAAAAAAAAAA==")`);
 
-      const b2 = await readEncryptedBottle(b, { getPassword: async () => options.argonKey });
+      const result = await readEncryptedBottle(b, { getPassword: async () => options.argonKey });
+      result.status.should.eql(DecryptStatus.OK);
+      const b2 = result.bottle;
+      if (!b2) throw new Error("boo");
       b2.cap.type.should.eql(14);
       b2.cap.header.toString().should.eql("Header()");
       (await drain(await b2.nextDataStream())).toString().should.eql("hello");
@@ -127,7 +133,7 @@ describe("EncryptedBottle", () => {
         encrypter
       };
       const clearBottle = new Bottle(CAP_14, asyncify([ fromHex("68656c6c6f") ]));
-      const bottle = await writeEncryptedBottle(Encryption.AES_128_GCM, clearBottle, options);
+      const bottle = await writeEncryptedBottle(Encryption.AES_128_GCM, clearBottle.write(), options);
       const bottleData = await drain(bottle.write());
 
       // read it out using EncryptedBottle.read
@@ -135,7 +141,10 @@ describe("EncryptedBottle", () => {
       b.cap.type.should.eql(BottleType.ENCRYPTED);
       b.cap.header.toString().should.eql(`Header(U8(0)=0, U8(1)=16, S(0)="garfield,jon")`);
 
-      const b2 = await readEncryptedBottle(b, { decryptKey: decrypterFor("jon") });
+      const result = await readEncryptedBottle(b, { decryptKey: decrypterFor("jon") });
+      result.status.should.eql(DecryptStatus.OK);
+      const b2 = result.bottle;
+      if (!b2) throw new Error("boo");
       b2.cap.type.should.eql(14);
       b2.cap.header.toString().should.eql("Header()");
       (await drain(await b2.nextDataStream())).toString().should.eql("hello");
@@ -147,7 +156,10 @@ describe("EncryptedBottle", () => {
       b.cap.type.should.eql(BottleType.ENCRYPTED);
       b.cap.header.toString().should.eql(`Header(U8(0)=0, U8(1)=16, S(0)="garfield,jon")`);
 
-      const b3 = await readEncryptedBottle(b, { decryptKey: decrypterFor("garfield") });
+      const result2 = await readEncryptedBottle(b, { decryptKey: decrypterFor("garfield") });
+      result2.status.should.eql(DecryptStatus.OK);
+      const b3 = result2.bottle;
+      if (!b3) throw new Error("boo");
       b3.cap.type.should.eql(14);
       b3.cap.header.toString().should.eql("Header()");
       (await drain(await b3.nextDataStream())).toString().should.eql("hello");
