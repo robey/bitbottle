@@ -99,5 +99,4 @@ export class Bottle {
 
     return new Bottle(cap, streams);
   }
-
 }
