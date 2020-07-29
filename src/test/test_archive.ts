@@ -1,37 +1,56 @@
 import { asyncIter, PushAsyncIterator } from "ballvalve";
 import * as fs from "fs";
-import { archiveFile, archiveFiles, FileBottleAndEvents } from "../archive";
-import { Bottle } from "../bottle";
-import { Encryption, writeEncryptedBottle } from "../encrypted_bottle";
-import { AsyncEvent, FileEvent } from "../events";
+import { archiveFile, archiveFiles, readArchive } from "../archive";
+import { asyncOne } from "../async";
+import { DecryptStatus, Encryption, writeEncryptedBottle } from "../encrypted_bottle";
+import { AsyncEvent, BytesEvent, countStream, EncryptedEvent, FileEvent } from "../events";
 import { drain, makeTempFolder } from "./tools";
 
 import "should";
 import "source-map-support/register";
 
-function merge(archive: FileBottleAndEvents): AsyncIterator<AsyncEvent> {
-  const bottleEvents = asyncIter(archive.bottle.write()).map(data => ({ event: "data", data: data.toString("hex") }));
-  return bottleEvents.merge(asyncIter(archive.events));
+
+async function* drainFileEvents(events: AsyncIterable<AsyncEvent>): AsyncIterator<AsyncEvent> {
+  for await (const e of asyncIter(events)) {
+    if (e.event == "file") {
+      const fe = e as FileEvent;
+      if (fe.content) fe.content = asyncOne(await drain(fe.content));
+    }
+    yield e;
+  }
 }
+
 
 describe("ArchiveWriter", () => {
   const folder = makeTempFolder();
 
-  it("processes a file", async () => {
+  it("writes a file", async () => {
     fs.writeFileSync(`${folder}/test.txt`, "hello");
 
     // basic structure and data size
     const events = new PushAsyncIterator<AsyncEvent>();
     const bottle = archiveFile(`${folder}/test.txt`, events, "test/");
     const data = await drain(bottle.write());
-    data.length.should.eql(81);
+    data.length.should.be.greaterThan(70);
     events.end();
     const eventObjects = await asyncIter(events).collect();
     new Set(eventObjects.map(e => e.event)).should.eql(new Set([ "file" ]));
     new Set(eventObjects.map(e => (e as FileEvent).metadata.filename)).should.eql(new Set([ "test/test.txt" ]));
   });
 
-  it("processes a folder", async () => {
+  it("reads a file", async () => {
+    fs.writeFileSync(`${folder}/test.txt`, "hello");
+    const data = await drain(archiveFile(`${folder}/test.txt`, undefined, "test/").write());
+
+    const events = await asyncIter(readArchive(asyncOne(data))).collect();
+    events.length.should.eql(1);
+    events[0].event.should.eql("file");
+    (events[0] as FileEvent).metadata.filename.should.eql("test/test.txt");
+    const content = (events[0] as FileEvent).content ?? asyncOne(Buffer.alloc(0));
+    (await drain(content)).toString().should.eql("hello");
+  });
+
+  it("writes a folder", async () => {
     fs.mkdirSync(`${folder}/stuff`);
     fs.writeFileSync(`${folder}/stuff/one.txt`, "one!");
     fs.writeFileSync(`${folder}/stuff/two.txt`, "two!");
@@ -39,7 +58,7 @@ describe("ArchiveWriter", () => {
     const events = new PushAsyncIterator<AsyncEvent>();
     const bottle = archiveFile(`${folder}/stuff`, events);
     const data = await drain(bottle.write());
-    data.length.should.eql(227);
+    data.length.should.be.greaterThan(200);
     events.end();
     (await asyncIter(events).collect()).map(e => {
       return { event: e.event, filename: (e as FileEvent).metadata.filename };
@@ -50,14 +69,32 @@ describe("ArchiveWriter", () => {
     ]);
   });
 
-  it("processes files", async () => {
+  it("reads a folder", async () => {
+    fs.mkdirSync(`${folder}/stuff2`);
+    fs.writeFileSync(`${folder}/stuff2/one.txt`, "one!");
+    fs.writeFileSync(`${folder}/stuff2/two.txt`, "two!");
+    const data = await drain(archiveFile(`${folder}/stuff2`).write());
+
+    const events = await asyncIter(drainFileEvents(readArchive(asyncOne(data)))).collect();
+    events.length.should.eql(3);
+    new Set(events.map(e => e.event)).should.eql(new Set([ "file" ]));
+    const fileEvents = events.map(e => e as FileEvent);
+    fileEvents[0].metadata.filename.should.eql("stuff2");
+    fileEvents[1].metadata.filename.should.eql("stuff2/one.txt");
+    fileEvents[2].metadata.filename.should.eql("stuff2/two.txt");
+    fileEvents.map(fe => fe.metadata.folder).should.eql([ true, false, false ]);
+    (await drain(fileEvents[1].content ?? asyncOne(Buffer.alloc(0)))).toString().should.eql("one!");
+    (await drain(fileEvents[2].content ?? asyncOne(Buffer.alloc(0)))).toString().should.eql("two!");
+  });
+
+  it("writes an assortment of random files", async () => {
     fs.writeFileSync(`${folder}/test.txt`, "hello");
     fs.writeFileSync(`${folder}/test2.txt`, "goodbye");
 
     const events = new PushAsyncIterator<AsyncEvent>();
     const bottle = archiveFiles([ `${folder}/test.txt`, `${folder}/test2.txt` ], events, "stuff");
     const data = await drain(bottle.write());
-    data.length.should.eql(190);
+    data.length.should.be.greaterThan(150);
     events.end();
     (await asyncIter(events).collect()).map(e => {
       return { event: e.event, filename: (e as FileEvent).metadata.filename };
@@ -68,7 +105,22 @@ describe("ArchiveWriter", () => {
     ]);
   });
 
-  // // FIXME: read the archive too?
+  it("reads an assortment of random files", async () => {
+    fs.writeFileSync(`${folder}/test.txt`, "hello");
+    fs.writeFileSync(`${folder}/test2.txt`, "goodbye");
+    const data = await drain(archiveFiles([ `${folder}/test.txt`, `${folder}/test2.txt` ], undefined, "stuff").write());
+
+    const events = await asyncIter(drainFileEvents(readArchive(asyncOne(data)))).collect();
+    events.length.should.eql(3);
+    new Set(events.map(e => e.event)).should.eql(new Set([ "file" ]));
+    const fileEvents = events.map(e => e as FileEvent);
+    fileEvents[0].metadata.filename.should.eql("stuff");
+    fileEvents[1].metadata.filename.should.eql("stuff/test.txt");
+    fileEvents[2].metadata.filename.should.eql("stuff/test2.txt");
+    fileEvents.map(fe => fe.metadata.folder).should.eql([ true, false, false ]);
+    (await drain(fileEvents[1].content ?? asyncOne(Buffer.alloc(0)))).toString().should.eql("hello");
+    (await drain(fileEvents[2].content ?? asyncOne(Buffer.alloc(0)))).toString().should.eql("goodbye");
+  });
 
   it("interleaves events", async () => {
     fs.writeFileSync(`${folder}/test.txt`, "hello");
@@ -93,34 +145,35 @@ describe("ArchiveWriter", () => {
     Math.abs(lines[2] - lines[1]).should.be.greaterThan(1);
   });
 
-  // it("creates and reads an encrypted archive", async () => {
-  //   fs.writeFileSync(`${folder}/hello.txt`, "hello, i must be going!");
+  it("creates and reads an encrypted archive", async () => {
+    fs.writeFileSync(`${folder}/hello.txt`, "hello, i must be going!");
 
-  //   const { bottle, events } = archiveFile(`${folder}/hello.txt`, "test/");
-  //   const eBottle = await writeEncryptedBottle(Encryption.AES_128_GCM, bottle, {
-  //     argonKey: Buffer.from("throwing muses")
-  //   });
-  //   const { stream, countEvents: eEvents } = countingStream(eBottle.write(), "", "encrypted");
-  //   const totalEvents = asyncIter(events).merge(asyncIter(eEvents));
+    const events = new PushAsyncIterator<AsyncEvent>();
+    const bottle = archiveFile(`${folder}/hello.txt`, events, "test/");
+    const eBottle = await writeEncryptedBottle(Encryption.AES_128_GCM, bottle.write(), {
+      argonKey: Buffer.from("throwing muses")
+    });
+    const stream = countStream(eBottle.write(), events, "encrypted");
 
-  //   const data = await drain(stream);
-  //   data.length.should.eql(182);
-  //   new Set((await asyncIter(totalEvents).collect()).map(e => e.event)).should.eql(new Set([ "file", "encrypted" ]));
+    const data = await drain(stream);
+    data.length.should.be.greaterThan(150);
+    events.end();
+    const collectedEvents = await asyncIter(events).collect();
+    new Set(collectedEvents.map(e => e.event)).should.eql(new Set([ "file", "byte-count" ]));
+    collectedEvents.filter(e => e.event == "byte-count" && (e as BytesEvent).bytes == 0).length.should.eql(1);
+    collectedEvents.filter(e => e.event == "byte-count" && (e as BytesEvent).bytes == 187).length.should.eql(1);
 
-  //   // const options = {
-  //   //     getPassword: () => Promise.resolve("throwing muses")
-  //   //   };
-  //   //   return scan(sourceStream(data), options).then(events => {
-  //   //     events.map(e => e.event).should.eql([
-  //   //       "enter-encrypt",
-  //   //       "file",
-  //   //       "exit-encrypt"
-  //   //     ]);
-  //   //     events[1].data.toString().should.eql("hello, i must be going!");
-  //   //   });
-  //   // });
-  // });
+    const options = {
+      getPassword: () => Promise.resolve(Buffer.from("throwing muses"))
+    };
+    const events2 = await asyncIter(drainFileEvents(readArchive(asyncOne(data), options))).collect();
+    events2.length.should.eql(2);
+    events2.map(e => e.event).should.eql([ "encrypted", "file" ]);
+
+    const encryptedEvent = events2[0] as EncryptedEvent;
+    const fileEvent = events2[1] as FileEvent;
+    encryptedEvent.info.should.eql({ status: DecryptStatus.OK });
+    fileEvent.metadata.filename.should.eql("test/hello.txt");
+    (await drain(fileEvent.content ?? asyncOne(Buffer.alloc(0)))).toString().should.eql("hello, i must be going!");
+  });
 });
-
-
-        // w.collectedEvents.filter(e => e.event == "filename").map(e => e.filename).should.eql([ "test.txt" ]);

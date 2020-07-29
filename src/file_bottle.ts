@@ -53,6 +53,14 @@ export class FileBottle {
     return stream;
   }
 
+  async* readBottles(): AsyncIterator<Bottle> {
+    while (true) {
+      const bottle = await this.nextBottle();
+      if (bottle === undefined) return;
+      yield bottle;
+    }
+  }
+
   async nextBottle(): Promise<Bottle | undefined> {
     if (!this.meta.folder) throw new Error("nextBottle called on file data");
     const item = await this.files.next();

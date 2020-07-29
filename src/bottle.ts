@@ -12,10 +12,12 @@ let counter = 0;
 
 export class Bottle {
   streamCount = 0;
-  finished = false;
+  finished: Promise<void>;
 
   constructor(public cap: BottleCap, public streams: AsyncIterator<AsyncIterator<Buffer> | Bottle>) {
-    // pass
+    const [ s, done ] = asyncIter(streams).withPromiseAfter();
+    this.finished = done;
+    this.streams = s;
   }
 
   toString(): string {
@@ -24,10 +26,7 @@ export class Bottle {
 
   async nextStream(): Promise<AsyncIterator<Buffer> | Bottle | undefined> {
     const item = await this.streams.next();
-    if (item.done) {
-      this.finished = true;
-      return undefined;
-    }
+    if (item.done) return undefined;
     this.streamCount++;
     return item.value;
   }
@@ -84,9 +83,9 @@ export class Bottle {
             break;
           }
           case STREAM_BOTTLE: {
-            const inner = Bottle.read(stream);
-            // FIXME
+            const inner = await Bottle.read(stream);
             yield inner;
+            await inner.finished;
             break;
           }
           case STREAM_END:

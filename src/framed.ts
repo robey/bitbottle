@@ -29,7 +29,7 @@ export async function* buffered(
 }
 
 /*
- * buffer a stream and add framing bytes of the form YYXXXXXX:  a 6-bit
+ * buffer a stream and add framing bytes of the form YYXXXXXX: a 6-bit
  * int X, shifted left Y * 6 times. according to legend, only the final
  * frame may have Y = 0.
  */

@@ -82,7 +82,7 @@ describe("EncryptedBottle", () => {
       b.cap.header.toString().should.eql("Header(U8(0)=0, U8(1)=16)");
 
       const result = await readEncryptedBottle(b, { getKey: async () => options.key });
-      result.status.should.eql(DecryptStatus.OK);
+      result.info.status.should.eql(DecryptStatus.OK);
       const b2 = result.bottle;
       if (!b2) throw new Error("boo");
       b2.cap.type.should.eql(14);
@@ -104,7 +104,7 @@ describe("EncryptedBottle", () => {
       b.cap.header.toString().should.eql(`Header(U8(0)=0, U8(1)=16, S(1)="3,4096,1,AAAAAAAAAAAAAAAAAAAAAA==")`);
 
       const result = await readEncryptedBottle(b, { getPassword: async () => options.argonKey });
-      result.status.should.eql(DecryptStatus.OK);
+      result.info.status.should.eql(DecryptStatus.OK);
       const b2 = result.bottle;
       if (!b2) throw new Error("boo");
       b2.cap.type.should.eql(14);
@@ -142,7 +142,7 @@ describe("EncryptedBottle", () => {
       b.cap.header.toString().should.eql(`Header(U8(0)=0, U8(1)=16, S(0)="garfield,jon")`);
 
       const result = await readEncryptedBottle(b, { decryptKey: decrypterFor("jon") });
-      result.status.should.eql(DecryptStatus.OK);
+      result.info.status.should.eql(DecryptStatus.OK);
       const b2 = result.bottle;
       if (!b2) throw new Error("boo");
       b2.cap.type.should.eql(14);
@@ -157,7 +157,7 @@ describe("EncryptedBottle", () => {
       b.cap.header.toString().should.eql(`Header(U8(0)=0, U8(1)=16, S(0)="garfield,jon")`);
 
       const result2 = await readEncryptedBottle(b, { decryptKey: decrypterFor("garfield") });
-      result2.status.should.eql(DecryptStatus.OK);
+      result2.info.status.should.eql(DecryptStatus.OK);
       const b3 = result2.bottle;
       if (!b3) throw new Error("boo");
       b3.cap.type.should.eql(14);

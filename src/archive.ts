@@ -3,16 +3,12 @@ import * as fs from "fs";
 import * as path from "path";
 import { Bottle } from "./bottle";
 import { BottleType } from "./bottle_cap";
-import { AsyncEvent, FileEvent, fileEvent } from "./events";
-import { FileBottle, statsToMetadata, FileMetadata } from "./file_bottle";
+import { EncryptReadOptions, readEncryptedBottle } from "./encrypted_bottle";
+import { AsyncEvent, fileEvent, encryptedEvent } from "./events";
+import { FileBottle, FileMetadata, statsToMetadata } from "./file_bottle";
 
 const BUFFER_SIZE = Math.pow(2, 20);
 
-
-export interface FileBottleAndEvents {
-  bottle: Bottle;
-  events: AsyncIterator<FileEvent>;
-}
 
 export function archiveFile(
   filename: string,
@@ -71,18 +67,38 @@ export function archiveFolder(
 }
 
 
+type ArchiveReadOptions = EncryptReadOptions;
 
-// export async function* readArchive(stream: AsyncIterator<Buffer>): AsyncIterable<FileEvent> {
-//   const bottle = await Bottle.read(byteReader(stream));
-//   switch (bottle.cap.type) {
-//     case BottleType.FILE: {
-//       const fileBottle = await FileBottle.read(bottle);
-//       yield { event: "file", metadata: fileBottle.meta, content: await fileBottle.readFileContents() };
-//     }
+export async function* readArchive(
+  stream: AsyncIterator<Buffer>,
+  options: ArchiveReadOptions = {}
+): AsyncIterable<AsyncEvent> {
+  yield* readArchiveBottle(await Bottle.read(byteReader(stream)), options);
+}
 
-//     default:
-//       console.log("FIXME");
-//       throw new Error("FIXME");
-//       break;
-//   }
-// }
+export async function* readArchiveBottle(bottle: Bottle, options: ArchiveReadOptions = {}): AsyncIterable<AsyncEvent> {
+  switch (bottle.cap.type) {
+    case BottleType.FILE: {
+      const fileBottle = await FileBottle.read(bottle);
+      if (fileBottle.meta.folder) {
+        yield fileEvent(fileBottle.meta);
+        for await (const b of asyncIter(fileBottle.readBottles())) yield* readArchiveBottle(b);
+      } else {
+        yield fileEvent(fileBottle.meta, await fileBottle.readFileContents());
+      }
+      break;
+    }
+
+    case BottleType.ENCRYPTED: {
+      const d = await readEncryptedBottle(bottle, options);
+      yield encryptedEvent(d.info);
+      if (d.bottle) yield* readArchiveBottle(d.bottle);
+      break;
+    }
+
+    default:
+      console.log("FIXME");
+      throw new Error("FIXME");
+      break;
+  }
+}

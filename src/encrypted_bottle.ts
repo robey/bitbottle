@@ -97,11 +97,15 @@ export enum DecryptStatus {
   NEED_KEY = 3,
 }
 
-export interface DecryptedBottle {
+export interface EncryptionInfo {
   status: DecryptStatus;
-  bottle?: Bottle;
   recipients?: string[];
   reason?: string;
+}
+
+export interface DecryptedBottle {
+  info: EncryptionInfo;
+  bottle?: Bottle;
 }
 
 
@@ -159,34 +163,34 @@ export async function readEncryptedBottle(bottle: Bottle, options: EncryptReadOp
   if (headerOptions.recipients) {
     const recipients = headerOptions.recipients;
     const keys = await readKeys(bottle, recipients);
-    if (!options.decryptKey) return { status: DecryptStatus.NO_RECIPIENT, recipients };
+    if (!options.decryptKey) return { info: { status: DecryptStatus.NO_RECIPIENT, recipients } };
     try {
       key = await options.decryptKey(keys);
     } catch (error) {
-      return { status: DecryptStatus.NO_RECIPIENT, recipients, reason: error.message.toString() };
+      return { info: { status: DecryptStatus.NO_RECIPIENT, recipients, reason: error.message.toString() } };
     }
   } else if (headerOptions.argonOptions) {
-    if (!options.getPassword) return { status: DecryptStatus.NEED_PASSWORD };
+    if (!options.getPassword) return { info: { status: DecryptStatus.NEED_PASSWORD } };
     try {
       key = await argon2.hash(await options.getPassword(), Object.assign({
         type: "argon2i",
         hashLength: params.keyLength,
       }, headerOptions.argonOptions));
     } catch (error) {
-      return { status: DecryptStatus.NEED_PASSWORD, reason: error.message.toString() };
+      return { info: { status: DecryptStatus.NEED_PASSWORD, reason: error.message.toString() } };
     }
   } else {
-    if (!options.getKey) return { status: DecryptStatus.NEED_KEY };
+    if (!options.getKey) return { info: { status: DecryptStatus.NEED_KEY } };
     try {
       key = await options.getKey();
     } catch (error) {
-      return { status: DecryptStatus.NEED_KEY, reason: error.message.toString() };
+      return { info: { status: DecryptStatus.NEED_KEY, reason: error.message.toString() } };
     }
   }
 
   const blockSize = Math.pow(2, headerOptions.blockSizeBits);
   const s = decryptStream(await bottle.nextDataStream(), headerOptions.method, key, blockSize);
-  return { status: DecryptStatus.OK, bottle: await Bottle.read(byteReader(s)) };
+  return { info: { status: DecryptStatus.OK }, bottle: await Bottle.read(byteReader(s)) };
 }
 
 function encodeHeader(h: HeaderOptions): Header {
