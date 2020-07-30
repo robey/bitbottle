@@ -51,9 +51,9 @@ describe("EncryptedBottle", () => {
 
   describe("encrypts AES_128_GCM", () => {
     it("with key", async () => {
-      const options = { key: Buffer.alloc(16), blockSize: 65536 };
+      const options = { encryption: Encryption.AES_128_GCM, key: Buffer.alloc(16), blockSize: 65536 };
       const clearBottle = new Bottle(CAP_14, asyncify([ fromHex("68656c6c6f") ]));
-      const bottle = await writeEncryptedBottle(Encryption.AES_128_GCM, clearBottle.write(), options);
+      const bottle = await writeEncryptedBottle(clearBottle.write(), options);
 
       // read it out manually
       const b = await Bottle.read(byteReader(bottle.write()));
@@ -72,9 +72,9 @@ describe("EncryptedBottle", () => {
     });
 
     it("round trip with key", async () => {
-      const options = { key: Buffer.alloc(16), blockSize: 65536 };
+      const options = { encryption: Encryption.AES_128_GCM, key: Buffer.alloc(16), blockSize: 65536 };
       const clearBottle = new Bottle(CAP_14, asyncify([ fromHex("68656c6c6f") ]));
-      const bottle = await writeEncryptedBottle(Encryption.AES_128_GCM, clearBottle.write(), options);
+      const bottle = await writeEncryptedBottle(clearBottle.write(), options);
 
       // read it out using EncryptedBottle.read
       const b = await Bottle.read(byteReader(bottle.write()));
@@ -94,9 +94,9 @@ describe("EncryptedBottle", () => {
     });
 
     it("with argon", async () => {
-      const options = { argonKey: Buffer.from("cat"), argonSalt: Buffer.alloc(16) };
+      const options = { encryption: Encryption.AES_128_GCM, argonKey: Buffer.from("cat"), argonSalt: Buffer.alloc(16) };
       const clearBottle = new Bottle(CAP_14, asyncify([ fromHex("68656c6c6f") ]));
-      const bottle = await writeEncryptedBottle(Encryption.AES_128_GCM, clearBottle.write(), options);
+      const bottle = await writeEncryptedBottle(clearBottle.write(), options);
 
       // read it out using EncryptedBottle.read
       const b = await Bottle.read(byteReader(bottle.write()));
@@ -128,12 +128,13 @@ describe("EncryptedBottle", () => {
       };
 
       const options = {
+        encryption: Encryption.AES_128_GCM,
         key: crypto.randomBytes(16),
         recipients: [ "garfield", "jon" ],
         encrypter
       };
       const clearBottle = new Bottle(CAP_14, asyncify([ fromHex("68656c6c6f") ]));
-      const bottle = await writeEncryptedBottle(Encryption.AES_128_GCM, clearBottle.write(), options);
+      const bottle = await writeEncryptedBottle(clearBottle.write(), options);
       const bottleData = await drain(bottle.write());
 
       // read it out using EncryptedBottle.read

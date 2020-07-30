@@ -35,7 +35,7 @@ async function verifier(data: Buffer, signedBy: string): Promise<Buffer> {
 describe("SignedBottle", () => {
   it("hashes a small stream", async () => {
     const b1 = new Bottle(CAP_14, asyncify([ asyncOne(Buffer.from("i choose you!")) ]));
-    const b2 = await writeSignedBottle(Hash.SHA256, b1.write());
+    const b2 = await writeSignedBottle(b1.write(), { hash: Hash.SHA256 });
     const data = await drain(b2.write());
 
     // parse the raw sections
@@ -57,7 +57,7 @@ describe("SignedBottle", () => {
 
   it("verifies a hashed stream", async () => {
     const b1 = new Bottle(CAP_14, asyncify([ asyncOne(Buffer.from("i choose you!")) ]));
-    const b2 = await writeSignedBottle(Hash.SHA256, b1.write());
+    const b2 = await writeSignedBottle(b1.write(), { hash: Hash.SHA256 });
 
     const { bottle: b3, verified } = await readSignedBottle(b2);
     b3.cap.type.should.eql(14);
@@ -71,7 +71,7 @@ describe("SignedBottle", () => {
 
   it("does not verify a corrupt stream", async () => {
     const b1 = new Bottle(CAP_14, asyncify([ asyncOne(Buffer.from("i choose you!")) ]));
-    const b2 = await writeSignedBottle(Hash.SHA256, b1.write());
+    const b2 = await writeSignedBottle(b1.write(), { hash: Hash.SHA256 });
 
     // mess up something roughly in the middle of the 20-byte hash
     const data = await drain(b2.write());
@@ -90,7 +90,7 @@ describe("SignedBottle", () => {
 
   it("signs and verifies", async () => {
     const b1 = new Bottle(CAP_14, asyncify([ asyncOne(Buffer.from("i choose you!")) ]));
-    const b2 = await writeSignedBottle(Hash.SHA256, b1.write(), { signedBy: "garfield", signer });
+    const b2 = await writeSignedBottle(b1.write(), { hash: Hash.SHA256, signedBy: "garfield", signer });
 
     const { bottle: b3, verified } = await readSignedBottle(b2, { verifier });
     b3.cap.type.should.eql(14);
@@ -105,7 +105,7 @@ describe("SignedBottle", () => {
 
   it("demands a verifier", async () => {
     const b1 = new Bottle(CAP_14, asyncify([ asyncOne(Buffer.from("i choose you!")) ]));
-    const b2 = await writeSignedBottle(Hash.SHA256, b1.write(), { signedBy: "garfield", signer });
+    const b2 = await writeSignedBottle(b1.write(), { hash: Hash.SHA256, signedBy: "garfield", signer });
 
     const { bottle: b3, verified } = await readSignedBottle(b2);
     b3.cap.type.should.eql(14);
@@ -121,7 +121,7 @@ describe("SignedBottle", () => {
 
   it("rejects a bad signature", async () => {
     const b1 = new Bottle(CAP_14, asyncify([ asyncOne(Buffer.from("i choose you!")) ]));
-    const b2 = await writeSignedBottle(Hash.SHA256, b1.write(), { signedBy: "odie", signer });
+    const b2 = await writeSignedBottle(b1.write(), { hash: Hash.SHA256, signedBy: "odie", signer });
 
     const { bottle: b3, verified } = await readSignedBottle(b2, { verifier });
     b3.cap.type.should.eql(14);

@@ -19,6 +19,8 @@ const CRYPTO_NAME = {
 };
 
 export interface SignOptions {
+  hash?: Hash;
+
   // if the hash should be signed, who was it signed by?
   signedBy?: string;
 
@@ -53,7 +55,9 @@ export interface VerifiedBottle {
 }
 
 
-export async function writeSignedBottle(method: Hash, bottle: AsyncIterator<Buffer>, options: SignOptions = {}): Promise<Bottle> {
+export async function writeSignedBottle(bottle: AsyncIterator<Buffer>, options: SignOptions = {}): Promise<Bottle> {
+  const method = options.hash ?? Hash.SHA256;
+
   const header = new Header();
   header.addInt(Field.IntHashType, method);
   if (options.signedBy) header.addString(Field.StringSignedBy, options.signedBy);

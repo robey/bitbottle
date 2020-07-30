@@ -43,8 +43,10 @@ const DEFAULT_ARGON_MEMORY_COST = 4096;
 const DEFAULT_ARGON_PARALLELISM = 1;
 
 export interface EncryptionOptions {
+  encryption?: Encryption;
+
   // (power of 2) how much should we buffer before computing a hash and switching the IV (nonce)?
-  blockSize?: number;
+  encryptionBlockSize?: number;
 
   // use argon to generate the key?
   argonKey?: Buffer;
@@ -109,18 +111,17 @@ export interface DecryptedBottle {
 }
 
 
-export async function writeEncryptedBottle(
-  method: Encryption,
-  bottle: AsyncIterator<Buffer>,
-  options: EncryptionOptions
-): Promise<Bottle> {
+export async function writeEncryptedBottle(bottle: AsyncIterator<Buffer>, options: EncryptionOptions = {}): Promise<Bottle> {
+  const method = options.encryption ?? Encryption.AES_128_GCM;
   if (options.recipients && !options.encrypter) throw new Error("Can't use recipients without encrypter");
 
-  if (options.blockSize !== undefined && (options.blockSize < MIN_BLOCK_SIZE || options.blockSize > MAX_BLOCK_SIZE)) {
+  let blockSize = options.encryptionBlockSize ?? DEFAULT_BLOCK_SIZE;
+  if (blockSize < MIN_BLOCK_SIZE || blockSize > MAX_BLOCK_SIZE) {
     throw new Error("Invalid block size");
   }
-  const blockSizeBits = Math.round(Math.log2(options.blockSize ?? DEFAULT_BLOCK_SIZE));
-  const blockSize = Math.pow(2, blockSizeBits);
+  const blockSizeBits = Math.round(Math.log2(blockSize));
+  blockSize = Math.pow(2, blockSizeBits);
+
   const argonOptions: FullArgonOptions = {
     raw: true,
     timeCost: options.argonTimeCost ?? DEFAULT_ARGON_TIME_COST,

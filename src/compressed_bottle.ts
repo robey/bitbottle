@@ -18,6 +18,13 @@ enum Field {
   IntBlockSizeBits = 1,
 }
 
+export interface CompressionOptions {
+  compression?: Compression;
+
+  // how many bytes to pack into each block, with snappy
+  blockSize?: number;
+}
+
 export interface UncompressedBottle {
   method: Compression;
   bottle: Bottle;
@@ -30,16 +37,13 @@ const MAX_BLOCK_SIZE = 1024 * 1024;  // 1MB
 
 
 // blockSize only matters for snappy
-export async function writeCompressedBottle(
-  method: Compression,
-  bottle: AsyncIterator<Buffer>,
-  blockSize?: number
-): Promise<Bottle> {
-  if (blockSize !== undefined && (blockSize < MIN_BLOCK_SIZE || blockSize > MAX_BLOCK_SIZE)) {
+export async function writeCompressedBottle(bottle: AsyncIterator<Buffer>, options: CompressionOptions = {}): Promise<Bottle> {
+  const method = options.compression ?? Compression.SNAPPY;
+  if (options.blockSize !== undefined && (options.blockSize < MIN_BLOCK_SIZE || options.blockSize > MAX_BLOCK_SIZE)) {
     throw new Error("Invalid block size");
   }
-  const blockSizeBits = Math.round(Math.log2(blockSize ?? DEFAULT_BLOCK_SIZE));
-  blockSize = Math.pow(2, blockSizeBits);
+  const blockSizeBits = Math.round(Math.log2(options.blockSize ?? DEFAULT_BLOCK_SIZE));
+  const blockSize = Math.pow(2, blockSizeBits);
 
   const header = new Header();
   header.addInt(Field.IntCompressionType, method);
@@ -66,7 +70,7 @@ export async function writeCompressedBottle(
 
 export async function readCompressedBottle(bottle: Bottle): Promise<UncompressedBottle> {
   if (bottle.cap.type != BottleType.COMPRESSED) throw new Error("Not a compressed bottle");
-  const method: Compression = bottle.cap.header.getInt(Field.IntCompressionType) ?? Compression.LZMA2;
+  const method: Compression = bottle.cap.header.getInt(Field.IntCompressionType) ?? Compression.SNAPPY;
   const blockSize = Math.pow(2, bottle.cap.header.getInt(Field.IntBlockSizeBits) ?? 16);
   const compressedStream = await bottle.nextDataStream();
   let stream: AsyncIterator<Buffer>;

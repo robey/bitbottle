@@ -152,7 +152,8 @@ describe("ArchiveWriter", () => {
 
     const events = new PushAsyncIterator<AsyncEvent>();
     const bottle = archiveFile(`${folder}/hello.txt`, events, "test/");
-    const eBottle = await writeEncryptedBottle(Encryption.AES_128_GCM, bottle.write(), {
+    const eBottle = await writeEncryptedBottle(bottle.write(), {
+      encryption: Encryption.AES_128_GCM,
       argonKey: Buffer.from("throwing muses")
     });
     const stream = countStream(eBottle.write(), events, "encrypted");
@@ -184,7 +185,7 @@ describe("ArchiveWriter", () => {
 
     const events = new PushAsyncIterator<AsyncEvent>();
     const bottle = archiveFile(`${folder}/hello.txt`, events, "test/");
-    const cBottle = await writeCompressedBottle(Compression.SNAPPY, bottle.write());
+    const cBottle = await writeCompressedBottle(bottle.write(), { compression: Compression.SNAPPY });
     const stream = countStream(cBottle.write(), events, "compressed");
 
     const data = await drain(stream);
@@ -211,7 +212,8 @@ describe("ArchiveWriter", () => {
 
     const events = new PushAsyncIterator<AsyncEvent>();
     const bottle = archiveFile(`${folder}/hello.txt`, events, "test/");
-    const sBottle = await writeSignedBottle(Hash.SHA256, bottle.write(), {
+    const sBottle = await writeSignedBottle(bottle.write(), {
+      hash: Hash.SHA256,
       signedBy: "moof",
       signer: async (data: Buffer) => Buffer.concat([ Buffer.from([ 0 ]), data ]),
     });

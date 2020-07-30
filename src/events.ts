@@ -1,12 +1,16 @@
 import { asyncIter, PushAsyncIterator } from "ballvalve";
+import { Compression } from "./compressed_bottle";
 import { EncryptionInfo } from "./encrypted_bottle";
 import { FileMetadata } from "./file_bottle";
+import { Hash, Verified } from "./signed_bottle";
 
 // events that are streamed from reading/writing an archive
 
-const EVENT_FILE = "file";
-const EVENT_BYTES = "byte-count";
-const EVENT_ENCRYPTED = "encrypted";
+export const EVENT_FILE = "file";
+export const EVENT_ENCRYPTED = "encrypted";
+export const EVENT_COMPRESSED = "compressed";
+export const EVENT_SIGNED = "signed";
+export const EVENT_BYTES = "byte-count";
 
 export interface AsyncEvent {
   event: string;
@@ -29,6 +33,25 @@ export interface EncryptedEvent extends AsyncEvent {
 
 export function encryptedEvent(info: EncryptionInfo): EncryptedEvent {
   return { event: EVENT_ENCRYPTED, info };
+}
+
+export interface CompressedEvent extends AsyncEvent {
+  event: typeof EVENT_COMPRESSED;
+  method: Compression;
+}
+
+export function compressedEvent(method: Compression): CompressedEvent {
+  return { event: EVENT_COMPRESSED, method };
+}
+
+export interface SignedEvent extends AsyncEvent {
+  event: typeof EVENT_SIGNED;
+  method: Hash;
+  verified: Verified;
+}
+
+export function signedEvent(method: Hash, verified: Verified): SignedEvent {
+  return { event: EVENT_SIGNED, method, verified };
 }
 
 export interface BytesEvent extends AsyncEvent {
