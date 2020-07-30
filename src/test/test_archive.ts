@@ -2,8 +2,10 @@ import { asyncIter, PushAsyncIterator } from "ballvalve";
 import * as fs from "fs";
 import { archiveFile, archiveFiles, readArchive } from "../archive";
 import { asyncOne } from "../async";
+import { Compression, writeCompressedBottle } from "../compressed_bottle";
 import { DecryptStatus, Encryption, writeEncryptedBottle } from "../encrypted_bottle";
-import { AsyncEvent, BytesEvent, countStream, EncryptedEvent, FileEvent } from "../events";
+import { AsyncEvent, BytesEvent, CompressedEvent, countStream, EncryptedEvent, FileEvent, SignedEvent } from "../events";
+import { writeSignedBottle, Hash, VerifyOptions, SignedStatus } from "../signed_bottle";
 import { drain, makeTempFolder } from "./tools";
 
 import "should";
@@ -161,7 +163,7 @@ describe("ArchiveWriter", () => {
     const collectedEvents = await asyncIter(events).collect();
     new Set(collectedEvents.map(e => e.event)).should.eql(new Set([ "file", "byte-count" ]));
     collectedEvents.filter(e => e.event == "byte-count" && (e as BytesEvent).bytes == 0).length.should.eql(1);
-    collectedEvents.filter(e => e.event == "byte-count" && (e as BytesEvent).bytes == 187).length.should.eql(1);
+    collectedEvents.filter(e => e.event == "byte-count" && (e as BytesEvent).bytes == data.length).length.should.eql(1);
 
     const options = {
       getPassword: () => Promise.resolve(Buffer.from("throwing muses"))
@@ -175,5 +177,70 @@ describe("ArchiveWriter", () => {
     encryptedEvent.info.should.eql({ status: DecryptStatus.OK });
     fileEvent.metadata.filename.should.eql("test/hello.txt");
     (await drain(fileEvent.content ?? asyncOne(Buffer.alloc(0)))).toString().should.eql("hello, i must be going!");
+  });
+
+  it("creates and reads a compressed archive", async () => {
+    fs.writeFileSync(`${folder}/hello.txt`, "hello, i must be going!");
+
+    const events = new PushAsyncIterator<AsyncEvent>();
+    const bottle = archiveFile(`${folder}/hello.txt`, events, "test/");
+    const cBottle = await writeCompressedBottle(Compression.SNAPPY, bottle.write());
+    const stream = countStream(cBottle.write(), events, "compressed");
+
+    const data = await drain(stream);
+    data.length.should.be.lessThan(150);
+    events.end();
+    const collectedEvents = await asyncIter(events).collect();
+    new Set(collectedEvents.map(e => e.event)).should.eql(new Set([ "file", "byte-count" ]));
+    collectedEvents.filter(e => e.event == "byte-count" && (e as BytesEvent).bytes == 0).length.should.eql(1);
+    collectedEvents.filter(e => e.event == "byte-count" && (e as BytesEvent).bytes == data.length).length.should.eql(1);
+
+    const events2 = await asyncIter(drainFileEvents(readArchive(asyncOne(data)))).collect();
+    events2.length.should.eql(2);
+    events2.map(e => e.event).should.eql([ "compressed", "file" ]);
+
+    const compressedEvent = events2[0] as CompressedEvent;
+    const fileEvent = events2[1] as FileEvent;
+    compressedEvent.method.should.eql(Compression.SNAPPY);
+    fileEvent.metadata.filename.should.eql("test/hello.txt");
+    (await drain(fileEvent.content ?? asyncOne(Buffer.alloc(0)))).toString().should.eql("hello, i must be going!");
+  });
+
+  it("creates and reads a signed archive", async () => {
+    fs.writeFileSync(`${folder}/hello.txt`, "hello, i must be going!");
+
+    const events = new PushAsyncIterator<AsyncEvent>();
+    const bottle = archiveFile(`${folder}/hello.txt`, events, "test/");
+    const sBottle = await writeSignedBottle(Hash.SHA256, bottle.write(), {
+      signedBy: "moof",
+      signer: async (data: Buffer) => Buffer.concat([ Buffer.from([ 0 ]), data ]),
+    });
+    const stream = countStream(sBottle.write(), events, "signed");
+
+    const data = await drain(stream);
+    data.length.should.be.greaterThan(150);
+    events.end();
+    const collectedEvents = await asyncIter(events).collect();
+    new Set(collectedEvents.map(e => e.event)).should.eql(new Set([ "file", "byte-count" ]));
+    collectedEvents.filter(e => e.event == "byte-count" && (e as BytesEvent).bytes == 0).length.should.eql(1);
+    collectedEvents.filter(e => e.event == "byte-count" && (e as BytesEvent).bytes == data.length).length.should.eql(1);
+
+    const options: VerifyOptions = {
+      verifier: async (signedDigest: Buffer, signedBy: string) => {
+        if (signedBy != "moof") throw new Error("nope");
+        return signedDigest.slice(1);
+      }
+    };
+    const events2 = await asyncIter(drainFileEvents(readArchive(asyncOne(data), options))).collect();
+    events2.length.should.eql(2);
+    events2.map(e => e.event).should.eql([ "file", "signed" ]);
+
+    const fileEvent = events2[0] as FileEvent;
+    const signedEvent = events2[1] as SignedEvent;
+    fileEvent.metadata.filename.should.eql("test/hello.txt");
+    (await drain(fileEvent.content ?? asyncOne(Buffer.alloc(0)))).toString().should.eql("hello, i must be going!");
+    signedEvent.method.should.eql(Hash.SHA256);
+    signedEvent.verified.status.should.eql(SignedStatus.OK);
+    (signedEvent.verified.signedBy ?? "").should.eql("moof");
   });
 });

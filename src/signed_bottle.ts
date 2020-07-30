@@ -45,6 +45,7 @@ export interface Verified {
 
 // a signed Bottle, and a promise that tells you whether the signature/hash was valid
 export interface VerifiedBottle {
+  method: Hash;
   bottle: Bottle;
 
   // after the bottle has been completely read, this promise will indicate if the bottle was signed/hashed correctly
@@ -92,7 +93,7 @@ export async function readSignedBottle(bottle: Bottle, options: VerifyOptions = 
     return { status: SignedStatus.OK, signedBy };
   })();
 
-  return { bottle: await Bottle.read(byteReader(stream2)), verified };
+  return { bottle: await Bottle.read(byteReader(stream2)), method, verified };
 }
 
 // somewhat awkward way to collect the hash of a stream as it passes through.

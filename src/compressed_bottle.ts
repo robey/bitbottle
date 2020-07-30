@@ -18,6 +18,11 @@ enum Field {
   IntBlockSizeBits = 1,
 }
 
+export interface UncompressedBottle {
+  method: Compression;
+  bottle: Bottle;
+}
+
 // (power of 2) we have to buffer this much data, so don't go crazy here.
 const MIN_BLOCK_SIZE = 16 * 1024;  // 16KB
 const DEFAULT_BLOCK_SIZE = 64 * 1024;  // 64KB
@@ -59,7 +64,7 @@ export async function writeCompressedBottle(
   return new Bottle(cap, asyncOne(compressedStream));
 }
 
-export async function readCompressedBottle(bottle: Bottle): Promise<Bottle> {
+export async function readCompressedBottle(bottle: Bottle): Promise<UncompressedBottle> {
   if (bottle.cap.type != BottleType.COMPRESSED) throw new Error("Not a compressed bottle");
   const method: Compression = bottle.cap.header.getInt(Field.IntCompressionType) ?? Compression.LZMA2;
   const blockSize = Math.pow(2, bottle.cap.header.getInt(Field.IntBlockSizeBits) ?? 16);
@@ -79,7 +84,7 @@ export async function readCompressedBottle(bottle: Bottle): Promise<Bottle> {
       throw new Error("Unknown compression");
   }
 
-  return Bottle.read(byteReader(stream));
+  return { method, bottle: await Bottle.read(byteReader(stream)) };
 }
 
 async function* compressLzma2(stream: AsyncIterator<Buffer>): AsyncIterator<Buffer> {

@@ -19,7 +19,7 @@ describe("CompressedBottle", () => {
     b.cap.type.should.eql(BottleType.COMPRESSED);
     b.cap.header.toString().should.eql("Header(U8(0)=0)");
 
-    const b2 = await readCompressedBottle(b);
+    const b2 = (await readCompressedBottle(b)).bottle;
     b2.cap.type.should.eql(14);
     b2.cap.header.toString().should.eql("Header()");
     (await drain(await b2.nextDataStream())).toString().should.eql(TEST_STRING);
@@ -34,7 +34,7 @@ describe("CompressedBottle", () => {
     b.cap.type.should.eql(BottleType.COMPRESSED);
     b.cap.header.toString().should.eql("Header(U8(0)=1, U8(1)=16)");
 
-    const b2 = await readCompressedBottle(b);
+    const b2 = (await readCompressedBottle(b)).bottle;
     b2.cap.type.should.eql(14);
     b2.cap.header.toString().should.eql("Header()");
     (await drain(await b2.nextDataStream())).toString().should.eql(TEST_STRING);

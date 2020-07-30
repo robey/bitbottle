@@ -1,11 +1,13 @@
-import { asyncIter, PushAsyncIterator, ExtendedAsyncIterable, byteReader } from "ballvalve";
+import { asyncIter, byteReader, PushAsyncIterator } from "ballvalve";
 import * as fs from "fs";
 import * as path from "path";
 import { Bottle } from "./bottle";
 import { BottleType } from "./bottle_cap";
+import { readCompressedBottle } from "./compressed_bottle";
 import { EncryptReadOptions, readEncryptedBottle } from "./encrypted_bottle";
-import { AsyncEvent, fileEvent, encryptedEvent } from "./events";
+import { AsyncEvent, compressedEvent, encryptedEvent, fileEvent, signedEvent } from "./events";
 import { FileBottle, FileMetadata, statsToMetadata } from "./file_bottle";
+import { readSignedBottle, VerifyOptions } from "./signed_bottle";
 
 const BUFFER_SIZE = Math.pow(2, 20);
 
@@ -67,7 +69,7 @@ export function archiveFolder(
 }
 
 
-type ArchiveReadOptions = EncryptReadOptions;
+export interface ArchiveReadOptions extends EncryptReadOptions, VerifyOptions {}
 
 export async function* readArchive(
   stream: AsyncIterator<Buffer>,
@@ -96,9 +98,22 @@ export async function* readArchiveBottle(bottle: Bottle, options: ArchiveReadOpt
       break;
     }
 
-    default:
-      console.log("FIXME");
-      throw new Error("FIXME");
+    case BottleType.COMPRESSED: {
+      const { method, bottle: inner } = await readCompressedBottle(bottle);
+      yield compressedEvent(method);
+      yield* readArchiveBottle(inner);
       break;
+    }
+
+    case BottleType.SIGNED: {
+      const s = await readSignedBottle(bottle, options);
+      yield* readArchiveBottle(s.bottle);
+      // post a signed event _after_ we can get & verify the signature
+      yield signedEvent(s.method, await s.verified);
+      break;
+    }
+
+    default:
+      throw new Error(`Unknown bottle type ${bottle.cap.type}`);
   }
 }
