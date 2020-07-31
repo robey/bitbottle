@@ -69,7 +69,7 @@ export class ArchiveWriter extends events.EventEmitter {
       if (header.folder) return this._processFolder(filename, displayName, header);
       return openPromise(filename, "r").then(fd => {
         // file -> countingStream --write-into--> fileBottle
-        const countingFileStream = countingStream();
+        const countingFileStream = countingStream({ highWaterMark: BUFFER_SIZE });
         countingFileStream.on("count", n => {
           this.emit("status", displayName, n);
         });
@@ -83,16 +83,26 @@ export class ArchiveWriter extends events.EventEmitter {
   }
 
   _processFolder(folderName, prefix, header, files = null) {
+    // Promise.map({ concurrency: 1 }) does not preserve order!
+    function sequentially(list, f, sofar = []) {
+      if (list.length == 0) return Promise.resolve(sofar);
+      return f(list.shift()).then(rv => {
+        sofar.push(rv);
+        return sequentially(list, f, sofar);
+      });
+    }
+
     return (files ? Promise.resolve(files) : readdirPromise(folderName)).then(files => {
+      files = files.sort((a, b) => a.localeCompare(b));
       const folderBottle = writeFolderBottle(header);
       // fill the bottle in the background, closing it when done.
-      Promise.map(files, filename => {
+      sequentially(files, filename => {
         const fullPath = folderName ? path.join(folderName, filename) : filename;
         return this._processFile(fullPath, prefix).then(fileBottle => {
           folderBottle.__log("write file: " + fullPath);
-          return folderBottle.writePromise(fileBottle);
+          return folderBottle.writePromise(fileBottle).then(() => fileBottle.finishPromise());
         });
-      }, { concurrency: 1 }).then(() => {
+      }).then(() => {
         folderBottle.end();
       }).catch(error => {
         this.emit("error", error);
