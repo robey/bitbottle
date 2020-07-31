@@ -22,9 +22,17 @@ export function fromHex(hex: string): AsyncIterator<Buffer> {
   return asyncify([ Buffer.from(hex, "hex") ]);
 }
 
-// export function readBottle(data: Buffer): Promise<Bottle> {
-//   return Bottle.read(byteReader([ data ]));
-// }
+export async function* asyncSegments(data: Buffer, size: number): AsyncIterator<Buffer> {
+  while (data.length > 0) {
+    if (data.length <= size) {
+      yield data;
+      return;
+    }
+    const chunk = data.slice(0, size);
+    data = data.slice(size);
+    yield chunk;
+  }
+}
 
 export function makeTempFolder(): string {
   let uniq: string;
@@ -58,4 +66,34 @@ function rmdirAll(root_path: string) {
 
   fs.chmodSync(root_path, 7 << 6);
   fs.rmdirSync(root_path);
+}
+
+
+// make a bunch of text-looking bytes that have a high chance of being snappy-friendly
+export function prngBytes(count: number): Buffer {
+  let seed = 1337;
+  const randFloat = () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+  const rand = (max: number) => Math.floor(randFloat() * max);
+
+  const words: string[] = [];
+
+  while (count > 0) {
+    if (words.length > 10 && rand(100) < 20) {
+      // 20% chance of repeating a word
+      const n = rand(Math.min(words.length, 100));
+      const word = words[words.length - n - 1];
+      words.push(word);
+      count -= word.length;
+    } else {
+      const len = 3 + rand(11);
+      const word = [...Array(len).keys()].map(_ => String.fromCodePoint(0x61 + rand(26))).join("");
+      words.push(word);
+      count -= len;
+    }
+  }
+
+  return Buffer.from(words.join(" ")).slice(0, count);
 }
