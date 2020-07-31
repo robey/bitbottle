@@ -51,16 +51,16 @@ export class Bottle {
     if (stream !== undefined) throw new Error("Expected end of bottle");
   }
 
-  async* write(): AsyncIterator<Buffer> {
+  async* write(blockSize?: number): AsyncIterator<Buffer> {
     yield this.cap.write();
     for await (const s of asyncIter(this.streams)) {
       if (s instanceof Bottle) {
         yield Buffer.from([ STREAM_BOTTLE ]);
-        yield* asyncIter(s.write());
+        yield* asyncIter(s.write(blockSize));
       } else {
         // raw stream
         yield Buffer.from([ STREAM_RAW ]);
-        yield* asyncIter(framed(s));
+        yield* asyncIter(framed(s, blockSize));
       }
     }
     yield Buffer.from([ STREAM_END ]);
