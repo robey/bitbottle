@@ -1,8 +1,8 @@
 import { asyncIter, PushAsyncIterator } from "ballvalve";
 import { Compression } from "./compressed_bottle";
-import { EncryptionInfo } from "./encrypted_bottle";
+import { EncryptionInfo, Encryption } from "./encrypted_bottle";
 import { FileMetadata } from "./file_bottle";
-import { Hash, Verified } from "./signed_bottle";
+import { Hash, Verified, SignedStatus } from "./signed_bottle";
 
 // events that are streamed from reading/writing an archive
 
@@ -18,12 +18,13 @@ export interface AsyncEvent {
 
 export interface FileEvent extends AsyncEvent {
   event: typeof EVENT_FILE;
+  displayName: string;
   metadata: FileMetadata;
   content?: AsyncIterator<Buffer>;
 }
 
-export function fileEvent(metadata: FileMetadata, content?: AsyncIterator<Buffer>): FileEvent {
-  return { event: EVENT_FILE, metadata, content };
+export function fileEvent(displayName: string, metadata: FileMetadata, content?: AsyncIterator<Buffer>): FileEvent {
+  return { event: EVENT_FILE, displayName, metadata, content };
 }
 
 export interface EncryptedEvent extends AsyncEvent {
@@ -79,4 +80,25 @@ export function countStream(
       yield data;
     }
   }());
+}
+
+// for debugging, generate a pretty string from an event
+export function eventToString(e: AsyncEvent): string {
+  switch (e.event) {
+    case EVENT_FILE:
+      return `file: ${(e as FileEvent).displayName}`;
+    case EVENT_BYTES:
+      return `bytes(${(e as BytesEvent).name}) = ${(e as BytesEvent).bytes}`;
+    case EVENT_COMPRESSED:
+      return `compressed: ${Compression[(e as CompressedEvent).method]}`;
+    case EVENT_ENCRYPTED:
+      return `encrypted: ${Encryption[(e as EncryptedEvent).info.method]}`;
+    case EVENT_SIGNED: {
+      const se = e as SignedEvent;
+      const by = se.verified.signedBy ? ` by ${se.verified.signedBy}` : "";
+      return `signed: ${Hash[se.method]} ${SignedStatus[se.verified.status]}${by}`;
+    }
+    default:
+      return "?";
+  }
 }
