@@ -1,8 +1,8 @@
 {
   "name": "lib4bottle",
-  "version": "1.0.0",
+  "version": "0.9.0",
   "description": "read and write the 4bottle archive format",
-  "main": "./lib/lib4bottle.js",
+  "main": "./lib/index.js",
   "keywords": [
     "archive"
   ],
@@ -14,32 +14,35 @@
   },
   "license": "Apache-2.0",
   "scripts": {
-    "build": "./package.js && eslint src test/src && babel --source-maps --out-dir lib src && babel --source-maps --out-dir test/lib test/src",
-    "clean": "rm -rf lib test/lib",
-    "distclean": "npm run clean && rm -rf node_modules",
-    "prepublish": "npm run build",
-    "test": "mocha -R spec --colors test/lib"
-  },
-  "directories": {
-    "doc": "docs"
+    "build": "tsc",
+    "clean": "rm -rf lib",
+    "distclean": "npm run clean && rm -rf node_modules npm-debug.log",
+    "prepare": "tsc",
+    "test": "npm run build && mocha -R spec --colors --recursive lib/test"
   },
   "dependencies": {
-    "bluebird": "latest",
-    "posix": "^2.0.0",
-    "js-scrypt": "latest",
-    "snappy": "*",
-    "sprintf": "*",
-    "stream-toolkit": "^2.0.0",
-    "xz": "^1.1.1"
+    "argon2": "^0.26.2",
+    "ballvalve": "^2.2.3",
+    "big-integer": "^1.6.48",
+    "js-scrypt": "^0.2.0",
+    "posix": "^4.2.0",
+    "snappy": "^6.3.4",
+    "xz": "^2.0.2"
   },
   "devDependencies": {
-    "babel": "latest",
-    "mocha": "*",
-    "mocha-sprinkles": "*",
-    "should": "*",
-    "source-map-support": "*",
-    "json5": "*"
+    "@types/mocha": "^2.2.48",
+    "@types/node": "^14.0.5",
+    "@types/snappy": "^6.0.0",
+    "@types/source-map-support": "^0.5.2",
+    "mocha": "^7.1.2",
+    "should": "^13.2.1",
+    "source-map-support": "^0.5.3",
+    "typescript": "^3.9.3"
   },
+  "engines": {
+    "node": ">=12.0"
+  },
+  "types": "./lib/index.d.ts",
   "files": [
     "docs",
     "lib",

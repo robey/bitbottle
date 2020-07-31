@@ -1,5 +1,8 @@
-.plz/
-lib/
-node_modules/
+/.vscode
+/lib
+/magic.moved
+/node_modules
+/test/lib
+*.code-workspace
 *.sublime-project
 *.sublime-workspace
