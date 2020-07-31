@@ -100,6 +100,7 @@ export enum DecryptStatus {
 }
 
 export interface EncryptionInfo {
+  method: Encryption;
   status: DecryptStatus;
   recipients?: string[];
   reason?: string;
@@ -158,40 +159,41 @@ export async function writeEncryptedBottle(bottle: AsyncIterator<Buffer>, option
 export async function readEncryptedBottle(bottle: Bottle, options: EncryptReadOptions): Promise<DecryptedBottle> {
   if (bottle.cap.type != BottleType.ENCRYPTED) throw new Error("Not an encrypted bottle");
   const headerOptions = decodeHeader(bottle.cap.header);
+  const method = headerOptions.method;
   const params = PARAMS[headerOptions.method];
 
   let key: Buffer;
   if (headerOptions.recipients) {
     const recipients = headerOptions.recipients;
     const keys = await readKeys(bottle, recipients);
-    if (!options.decryptKey) return { info: { status: DecryptStatus.NO_RECIPIENT, recipients } };
+    if (!options.decryptKey) return { info: { method, status: DecryptStatus.NO_RECIPIENT, recipients } };
     try {
       key = await options.decryptKey(keys);
     } catch (error) {
-      return { info: { status: DecryptStatus.NO_RECIPIENT, recipients, reason: error.message.toString() } };
+      return { info: { method, status: DecryptStatus.NO_RECIPIENT, recipients, reason: error.message.toString() } };
     }
   } else if (headerOptions.argonOptions) {
-    if (!options.getPassword) return { info: { status: DecryptStatus.NEED_PASSWORD } };
+    if (!options.getPassword) return { info: { method, status: DecryptStatus.NEED_PASSWORD } };
     try {
       key = await argon2.hash(await options.getPassword(), Object.assign({
         type: "argon2i",
         hashLength: params.keyLength,
       }, headerOptions.argonOptions));
     } catch (error) {
-      return { info: { status: DecryptStatus.NEED_PASSWORD, reason: error.message.toString() } };
+      return { info: { method, status: DecryptStatus.NEED_PASSWORD, reason: error.message.toString() } };
     }
   } else {
-    if (!options.getKey) return { info: { status: DecryptStatus.NEED_KEY } };
+    if (!options.getKey) return { info: { method, status: DecryptStatus.NEED_KEY } };
     try {
       key = await options.getKey();
     } catch (error) {
-      return { info: { status: DecryptStatus.NEED_KEY, reason: error.message.toString() } };
+      return { info: { method, status: DecryptStatus.NEED_KEY, reason: error.message.toString() } };
     }
   }
 
   const blockSize = Math.pow(2, headerOptions.blockSizeBits);
   const s = decryptStream(await bottle.nextDataStream(), headerOptions.method, key, blockSize);
-  return { info: { status: DecryptStatus.OK }, bottle: await Bottle.read(byteReader(s)) };
+  return { info: { method, status: DecryptStatus.OK }, bottle: await Bottle.read(byteReader(s)) };
 }
 
 function encodeHeader(h: HeaderOptions): Header {
